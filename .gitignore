@@ -3,3 +3,12 @@ node_modules
 .env
 
 /generated/prisma
+cloudflared.exe
+ngrok.exe
+uploads/
+exports/
+captions/
+*.mp4
+*.mp3
+*.wav
+node_modules/
