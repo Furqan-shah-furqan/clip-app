@@ -1,3 +1,10 @@
+const { execSync } = require("child_process");
+try {
+  const v = execSync("yt-dlp --version").toString().trim();
+  console.log("yt-dlp version:", v);
+} catch {
+  console.error("yt-dlp NOT found");
+}
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
