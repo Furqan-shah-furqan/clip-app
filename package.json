@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "server/server.js",
   "scripts": {
+    "build": "npm install && npx prisma generate && chmod +x ./scripts/install-deps.sh && ./scripts/install-deps.sh",
     "start": "node server/server.js",
     "dev": "node server/server.js",
     "prisma:generate": "prisma generate",
