@@ -1,0 +1,7 @@
+{
+  userId: 'cmo9s5bws0000w01wv1qwpl2b',
+  socialAccountId: 'cmo9s5bz90002w01wnnms5401',
+  clipId: 'cmo9s5bzm0004w01wxk2r91w4'
+}
+
+port 6379

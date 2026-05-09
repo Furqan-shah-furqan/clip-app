@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Platform {
+  YOUTUBE
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+}
+
+enum ScheduleStatus {
+  DRAFT
+  QUEUED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  RETRYING
+  CANCELLED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String?         @unique
+  name           String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  socialAccounts SocialAccount[]
+  clips          Clip[]
+  scheduledPosts ScheduledPost[]
+}
+
+model SocialAccount {
+  id                    String      @id @default(cuid())
+  userId                String
+  platform              Platform
+  platformUserId        String?
+  platformUsername      String?
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  tokenExpiresAt        DateTime?
+  metaJson              Json?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts        ScheduledPost[]
+
+  @@index([userId, platform])
+}
+
+model Clip {
+  id              String          @id @default(cuid())
+  userId          String
+  title           String?
+  localPath       String?
+  storageUrl      String?
+  fileName        String?
+  mimeType        String?
+  durationSeconds Float?
+  aspectRatio     String?
+  fileSize        Int?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts  ScheduledPost[]
+
+  @@index([userId])
+}
+
+model ScheduledPost {
+  id               String          @id @default(cuid())
+  userId           String
+  socialAccountId  String
+  clipId           String
+  platform         Platform
+  title            String
+  caption          String?
+  hashtags         String?
+  visibility       String?
+  scheduledFor     DateTime
+  status           ScheduleStatus  @default(QUEUED)
+  platformPostId   String?
+  errorMessage     String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  publishedAt      DateTime?
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount    SocialAccount   @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  clip             Clip            @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  publishAttempts  PublishAttempt[]
+
+  @@index([userId, status])
+  @@index([scheduledFor])
+  @@index([socialAccountId])
+  @@index([clipId])
+}
+
+model PublishAttempt {
+  id                  String         @id @default(cuid())
+  scheduledPostId     String
+  attemptNumber       Int
+  requestPayloadJson  Json?
+  responsePayloadJson Json?
+  status              String
+  errorMessage        String?
+  createdAt           DateTime       @default(now())
+
+  scheduledPost       ScheduledPost  @relation(fields: [scheduledPostId], references: [id], onDelete: Cascade)
+
+  @@index([scheduledPostId])
+}

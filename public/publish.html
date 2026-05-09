@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClipFlow Publish Center</title>
+    <link rel="stylesheet" href="./publish.css" />
+  </head>
+  <body>
+    <main class="publish-page">
+      <header class="publish-topbar">
+        <div class="brand-block">
+          <div class="brand-mark">CF</div>
+          <div>
+            <p class="eyebrow">ClipFlow Studio</p>
+            <h1>Publish Center</h1>
+          </div>
+        </div>
+
+        <div class="topbar-actions">
+          <a class="ghost-btn" href="./index.html">← Back to App</a>
+          <button id="refreshBtn" class="primary-btn" type="button">
+            Refresh
+          </button>
+        </div>
+      </header>
+
+      <section class="status-grid">
+        <article class="stat-card">
+          <span class="stat-label">YouTube Accounts</span>
+          <strong id="accountsCount">0</strong>
+          <small>Connected channels</small>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">Queued</span>
+          <strong id="queuedCount">0</strong>
+          <small>Waiting to publish</small>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">Published</span>
+          <strong id="publishedCount">0</strong>
+          <small>Uploaded videos</small>
+        </article>
+
+        <article class="stat-card">
+          <span class="stat-label">Failed</span>
+          <strong id="failedCount">0</strong>
+          <small>Need retry</small>
+        </article>
+      </section>
+
+      <section class="publish-layout">
+        <aside class="publish-card compose-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Create Schedule</p>
+              <h2>Create Publish Schedule</h2>
+            </div>
+            <span class="youtube-pill">YouTube</span>
+          </div>
+          <div id="selectedClipPreview" class="selected-clip-card is-empty">
+            <div class="selected-clip-media">
+              <video
+                id="selectedClipVideo"
+                class="selected-clip-video"
+                muted
+                playsinline
+                controls
+                hidden
+              ></video>
+
+              <div id="selectedClipFallback" class="selected-clip-fallback">
+                <span>No clip selected</span>
+              </div>
+            </div>
+
+            <div class="selected-clip-info">
+              <p class="selected-clip-label">Selected Clip</p>
+              <h3 id="selectedClipTitle">No clip selected yet</h3>
+              <p id="selectedClipMeta">
+                Choose a clip or use the Publish button from caption editor.
+              </p>
+            </div>
+          </div>
+
+          <form id="scheduleForm" class="schedule-form">
+            <label class="field">
+              <span>Connected Account</span>
+              <select id="accountSelect" required>
+                <option value="">Loading accounts...</option>
+              </select>
+            </label>
+
+            <div class="youtube-connect-wrap">
+              <div class="instagram-connect-wrap">
+                <button
+                  id="connectInstagramBtn"
+                  class="connect-instagram-btn"
+                  type="button"
+                >
+                  + Connect Instagram Account
+                </button>
+
+                <p id="instagramConnectHint" class="instagram-connect-hint">
+                  This opens Instagram Business Login. Choose your business
+                  Instagram account.
+                </p>
+              </div>
+              <button
+                id="connectYoutubeBtn"
+                class="connect-youtube-btn"
+                type="button"
+              >
+                + Connect Another YouTube Account
+              </button>
+
+              <p id="youtubeConnectHint" class="youtube-connect-hint">
+                This opens Google login. Choose the Google account that owns the
+                YouTube channel you want to upload to.
+              </p>
+            </div>
+
+            <label class="field">
+              <span>Clip</span>
+              <select id="clipSelect">
+                <option value="">Loading clips...</option>
+              </select>
+            </label>
+
+            <input id="manualClipId" type="hidden" />
+
+            <label class="field">
+              <span>Title</span>
+              <input
+                id="titleInput"
+                type="text"
+                maxlength="100"
+                placeholder="Enter YouTube title"
+                required
+              />
+            </label>
+
+            <label class="field">
+              <span>Description / Caption</span>
+              <textarea
+                id="captionInput"
+                rows="5"
+                placeholder="Write YouTube description..."
+              ></textarea>
+            </label>
+
+            <label class="field">
+              <span>Hashtags</span>
+              <input
+                id="hashtagsInput"
+                type="text"
+                placeholder="#clipflow #shorts #youtube"
+              />
+            </label>
+
+            <div class="two-col">
+              <label class="field">
+                <span>Visibility</span>
+                <select id="visibilitySelect">
+                  <option value="public" selected>Public</option>
+                  <option value="private">Private</option>
+                  <option value="unlisted">Unlisted</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Schedule Time</span>
+                <input id="scheduledForInput" type="datetime-local" required />
+              </label>
+            </div>
+
+            <button class="submit-btn" type="submit">
+              Schedule Post
+            </button>
+
+            <p id="formMessage" class="form-message"></p>
+          </form>
+        </aside>
+
+        <section class="publish-card history-card">
+          <div class="card-head">
+            <div>
+              <p class="eyebrow">Publish History</p>
+              <h2>Schedules</h2>
+            </div>
+
+            <div class="history-filters">
+              <select id="statusFilter">
+                <option value="ALL">All Status</option>
+                <option value="QUEUED">Queued</option>
+                <option value="PROCESSING">Processing</option>
+                <option value="PUBLISHED">Published</option>
+                <option value="FAILED">Failed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="scheduleList" class="schedule-list">
+            <div class="empty-state">Loading schedules...</div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="editModal" class="modal-backdrop" hidden>
+      <div class="edit-modal">
+        <div class="modal-head">
+          <h3>Edit Schedule</h3>
+          <button id="closeEditModalBtn" class="icon-btn" type="button">
+            ×
+          </button>
+        </div>
+
+        <form id="editForm" class="schedule-form">
+          <input id="editScheduleId" type="hidden" />
+
+          <label class="field">
+            <span>Title</span>
+            <input id="editTitleInput" type="text" maxlength="100" required />
+          </label>
+
+          <label class="field">
+            <span>Description / Caption</span>
+            <textarea id="editCaptionInput" rows="4"></textarea>
+          </label>
+
+          <label class="field">
+            <span>Hashtags</span>
+            <input id="editHashtagsInput" type="text" />
+          </label>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Visibility</span>
+              <select id="editVisibilitySelect">
+                <option value="public">Public</option>
+                <option value="private">Private</option>
+                <option value="unlisted">Unlisted</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Schedule Time</span>
+              <input
+                id="editScheduledForInput"
+                type="datetime-local"
+                required
+              />
+            </label>
+          </div>
+
+          <button class="submit-btn" type="submit">Save Changes</button>
+        </form>
+      </div>
+    </div>
+
+    <script src="./publish.js"></script>
+  </body>
+</html>
