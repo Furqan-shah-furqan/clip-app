@@ -1418,7 +1418,7 @@ function showUploadRequiredForSmartClips(data) {
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
   body.maxClips = 3;
-  body.minScore = 80;
+  body.minScore = 60;
 
   const controller = new AbortController();
   const timeoutMs = 3 * 60 * 1000; // 3 min, not 7
@@ -1439,7 +1439,7 @@ async function generateSmartClipsFromSource() {
     }
 
     const clips = (Array.isArray(data.clips) ? data.clips : []).filter(
-      (clip) => Number(clip.smartScore || clip.score || 0) >= 80,
+      (clip) => Number(clip.smartScore || clip.score || 0) >= 60,
     );
 
     return clips.map((clip, index) => ({
