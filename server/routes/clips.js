@@ -310,6 +310,66 @@ function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSou
     previewText: suggestion.previewText || suggestion.text || "",
   };
 }
+async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
+  const safeStart = Math.max(0, Number(startSec) || 0);
+  const safeEnd = Math.max(safeStart + 8, Number(endSec) || safeStart + 30);
+  const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
+  const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
+  const outputTemplate = `${tempBase}.%(ext)s`;
+  const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
+
+  const ytDlpPath = process.env.YTDLP_PATH || "yt-dlp";
+
+  const args = [
+    "--no-playlist", "--force-ipv4", "--no-check-certificates", "--no-warnings",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "-f", "18/b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/best",
+    "--download-sections", section,
+    "--force-keyframes-at-cuts",
+    "--merge-output-format", "mp4",
+    "--socket-timeout", "15",
+    "--retries", "3",
+    "-o", outputTemplate,
+    sourceUrl,
+  ];
+
+  await runCommand(ytDlpPath, args, { timeoutMs: 90000 });
+
+  const files = fs.readdirSync(uploadsDir)
+    .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
+    .map((f) => path.join(uploadsDir, f))
+    .filter((f) => fs.existsSync(f));
+
+  const mp4 = files.find((f) => f.endsWith(".mp4")) || files[0];
+  if (!mp4) throw new Error("yt-dlp section download failed");
+  return mp4;
+}
+
+function runCommand(command, args = [], options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 180000);
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "", settled = false;
+
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill("SIGKILL"); } catch {}
+      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+
+    child.stdout.on("data", (d) => { stdout += d.toString(); });
+    child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.on("error", (err) => { if (settled) return; settled = true; clearTimeout(timeout); reject(err); });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(stderr || stdout || `${command} exited with code ${code}`));
+    });
+  });
+}
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
@@ -418,21 +478,50 @@ router.post("/smart-generate", async (req, res) => {
         message: `No smart clips scored ${safeMinScore}+.`,
       });
     }
+    // ── YouTube → download sections + generate clips ──
+if (normalizedSourceType === "youtube") {
+  const tempSectionFiles = [];
+  try {
+    for (let i = 0; i < suggestions.length; i++) {
+      if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
-    // ── YouTube → return needsUpload (can't download on cloud) ──
-    if (normalizedSourceType === "youtube") {
-      return res.json({
-        success: false,
-        needsUpload: true,
-        source: "transcript",
-        message: "YouTube transcript analyzed! Upload the source video to generate clips from these moments.",
-        segmentCount: transcriptSegments.length,
-        minScore: safeMinScore,
-        suggestions,
-        clips: [],
+      const suggestion = suggestions[i];
+      const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+      const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+
+      let sectionPath;
+      try {
+        sectionPath = await downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index: i });
+      } catch (err) {
+        return res.json({
+          success: false,
+          needsUpload: true,
+          source: "transcript",
+          message: "YouTube blocked clip download. Upload the source video to generate these smart clips.",
+          segmentCount: transcriptSegments.length,
+          suggestions,
+          clips: [],
+        });
+      }
+
+      tempSectionFiles.push(sectionPath);
+
+      const durationSec = Math.max(8, endSec - startSec);
+      const result = await smartGenerateClip({
+        inputPath: sectionPath,
+        startTime: "00:00:00",
+        endTime: secondsToTime(durationSec),
+        aspectRatio: aspectRatio || "9:16",
       });
-    }
 
+      clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+    }
+  } finally {
+    for (const f of tempSectionFiles) {
+      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
+    }
+  }
+}
     // ── Local upload → generate clips with FFmpeg ──
     fs.mkdirSync(exportsDir, { recursive: true });
     const clips = [];
