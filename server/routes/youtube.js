@@ -1,11 +1,6 @@
 const express = require("express");
-const { spawn } = require("child_process");
-
+const axios = require("axios");
 const router = express.Router();
-
-function isValidYouTubeUrl(url) {
-  return /^https?:\/\/(www\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)/.test(url);
-}
 
 function extractYouTubeId(url) {
   try {
@@ -21,97 +16,78 @@ function extractYouTubeId(url) {
   return "";
 }
 
-function buildEmbedUrl(url) {
-  const id = extractYouTubeId(url);
+function isValidYouTubeUrl(url) {
+  return /^https?:\/\/(www\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)/.test(url);
+}
+
+function buildEmbedUrl(id) {
   return id ? `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1` : "";
 }
 
-function formatDuration(seconds) {
-  const total = Math.floor(seconds || 0);
-  const hrs = Math.floor(total / 3600);
-  const mins = Math.floor((total % 3600) / 60);
-  const secs = total % 60;
-  if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
+function parseDuration(iso) {
+  const match = (iso || "").match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  return (parseInt(match[1] || 0) * 3600) + (parseInt(match[2] || 0) * 60) + parseInt(match[3] || 0);
 }
 
-function getYtDlpPath() {
-  return process.env.YTDLP_PATH || "yt-dlp";
+function formatDuration(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+async function fetchYouTubeMeta(videoId) {
+  const apiKey = process.env.YOUTUBE_API_KEY;
+  if (!apiKey) throw new Error("YOUTUBE_API_KEY not set");
+
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`;
+  const { data } = await axios.get(url);
+
+  const item = data.items?.[0];
+  if (!item) throw new Error("Video not found");
+
+  const title = item.snippet.title;
+  const thumbnail = item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "";
+  const duration = parseDuration(item.contentDetails.duration);
+
+  return { title, thumbnail, duration };
 }
 
 router.get("/info", async (req, res) => {
   const { url } = req.query;
   if (!url || !isValidYouTubeUrl(url)) return res.status(400).json({ error: "Invalid YouTube URL" });
 
-  const args = ["--no-playlist", "--print", "%(title)s|||%(duration)s|||%(thumbnail)s", "--no-download", url];
-  let stdout = "", stderr = "", responded = false;
+  try {
+    const videoId = extractYouTubeId(url);
+    if (!videoId) return res.status(400).json({ error: "Could not extract video ID" });
 
-  const proc = spawn(getYtDlpPath(), args, { windowsHide: true });
+    const { title, thumbnail, duration } = await fetchYouTubeMeta(videoId);
 
-  proc.stdout.on("data", (d) => { stdout += d.toString(); });
-  proc.stderr.on("data", (d) => { stderr += d.toString(); });
-
-  proc.on("close", (code) => {
-    if (responded) return;
-    responded = true;
-
-    if (code !== 0) {
-      return res.status(400).json({
-        error: "Could not fetch video info.",
-        details: stderr.slice(0, 300)
-      });
-    }
-
-    const [title = "Unknown", duration = "0", thumbnail = ""] = stdout.trim().split("|||");
     return res.json({
-      title: title.trim(),
-      duration: parseInt(duration, 10) || 0,
-      thumbnail: thumbnail.trim(),
-      videoId: extractYouTubeId(url),
-      embedUrl: buildEmbedUrl(url)
+      title,
+      duration,
+      thumbnail,
+      videoId,
+      embedUrl: buildEmbedUrl(videoId)
     });
-  });
-
-  proc.on("error", (err) => {
-    if (responded) return;
-    responded = true;
-    return res.status(500).json({ error: "yt-dlp not found or failed.", details: err.message });
-  });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/fetch", async (req, res) => {
   const { url } = req.body || {};
   if (!url || !isValidYouTubeUrl(url)) return res.status(400).json({ error: "Invalid YouTube URL" });
 
-  const args = ["--no-playlist", "--print", "%(title)s|||%(duration)s|||%(thumbnail)s", "--no-download", url];
-  let stdout = "", stderr = "", responded = false;
-
-  const proc = spawn(getYtDlpPath(), args, { windowsHide: true });
-
-  proc.stdout.on("data", (d) => { stdout += d.toString(); });
-  proc.stderr.on("data", (d) => { stderr += d.toString(); });
-
-  proc.on("close", (code) => {
-    if (responded) return;
-    responded = true;
-
-    if (code !== 0) {
-      return res.status(400).json({
-        error: "Could not import YouTube preview.",
-        details: stderr.slice(0, 300)
-      });
-    }
-
-    const [title = "Unknown", duration = "0", thumbnail = ""] = stdout.trim().split("|||");
+  try {
     const videoId = extractYouTubeId(url);
-    const embedUrl = buildEmbedUrl(url);
+    if (!videoId) return res.status(400).json({ error: "Could not extract video ID" });
 
-    if (!videoId || !embedUrl) {
-      return res.status(400).json({ error: "Could not prepare YouTube preview." });
-    }
-
-    const parsedDuration = parseInt(duration, 10) || 0;
+    const { title, thumbnail, duration } = await fetchYouTubeMeta(videoId);
+    const embedUrl = buildEmbedUrl(videoId);
 
     return res.json({
       success: true,
@@ -121,26 +97,22 @@ router.post("/fetch", async (req, res) => {
         source: "youtube",
         sourceType: "youtube",
         sourceUrl: url,
-        originalName: title.trim() || "YouTube Video",
+        originalName: title || "YouTube Video",
         fileName: "",
         filePath: "",
         mimeType: "video/youtube",
         size: 0,
-        duration: parsedDuration,
-        thumbnail: thumbnail.trim(),
+        duration,
+        thumbnail,
         videoId,
         embedUrl,
-        metaText: `${formatDuration(parsedDuration)} • YouTube import ready`,
+        metaText: `${formatDuration(duration)} • YouTube import ready`,
         createdAt: new Date().toISOString()
       }
     });
-  });
-
-  proc.on("error", (err) => {
-    if (responded) return;
-    responded = true;
-    return res.status(500).json({ error: "yt-dlp not found or failed.", details: err.message });
-  });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
