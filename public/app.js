@@ -1417,7 +1417,7 @@ function showUploadRequiredForSmartClips(data) {
 
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
-  body.maxClips = 3;
+  body.maxClips = 1;
   body.minScore = 60;
 
   const controller = new AbortController();
@@ -1471,7 +1471,7 @@ async function generateSmartClipsFromSource() {
 }
 
 smartClipBtn?.addEventListener("click", async () => {
-  let stopCrawl = null; // ← declare outside try
+  let stopCrawl = null;
 
   try {
     if (!state.uploadedProject) {
@@ -1485,7 +1485,7 @@ smartClipBtn?.addEventListener("click", async () => {
     _currentProgress = 0;
 
     updateProgress(0, "Finding viral moments...", 300);
-    stopCrawl = startProgressCrawl(88, "Finding and generating smart clips..."); // ← ceiling 88 not 90
+    stopCrawl = startProgressCrawl(88, "Finding and generating smart clips...");
 
     const newClips = await generateSmartClipsFromSource();
 
@@ -1493,10 +1493,8 @@ smartClipBtn?.addEventListener("click", async () => {
     stopCrawl = null;
 
     if (!newClips.length) {
-      updateProgress(0, "No clips scored 80+");
-      alert(
-        "No smart clips scored 80 or above. Try another video or a longer source.",
-      );
+      updateProgress(0, "No clips scored 50+");
+      alert("No smart clips found. Try another video.");
       return;
     }
 
@@ -1504,35 +1502,23 @@ smartClipBtn?.addEventListener("click", async () => {
     state.generatedClips = [...newClips, ...state.generatedClips];
     state.generatedClip = state.generatedClips[0] || null;
 
-    for (let i = 0; i < newClips.length; i += 1) {
+    for (let i = 0; i < newClips.length; i++) {
       await loadCaptionsForClip(newClips[i], i);
     }
 
     renderGeneratedClips();
     persistStudioSession();
+    await animateProgressTo(100, `Generated ${newClips.length} smart clip${newClips.length > 1 ? "s" : ""} ✓`);
 
-    await animateProgressTo(
-      100,
-      `Generated ${newClips.length} smart clip${newClips.length > 1 ? "s" : ""} ✓`,
-    );
   } catch (error) {
-    // ← stopCrawl ALWAYS called here if it started
-    if (stopCrawl) {
-      stopCrawl();
-      stopCrawl = null;
-    }
-
+    if (stopCrawl) { stopCrawl(); stopCrawl = null; }
     const cleanMessage = getCleanSmartClipError(error);
     updateProgress(0, cleanMessage || "Smart clipping failed");
-
-    if (cleanMessage === "NEEDS_UPLOAD") {
-      return;
+    if (cleanMessage !== "NEEDS_UPLOAD") {
+      alert(cleanMessage || "Smart clipping failed.");
     }
   } finally {
-    // ← safety net
-    if (stopCrawl) {
-      stopCrawl();
-    }
+    if (stopCrawl) { stopCrawl(); }
     smartClipBtn.disabled = false;
     smartClipBtn.textContent = "Get clips in 1 click";
   }

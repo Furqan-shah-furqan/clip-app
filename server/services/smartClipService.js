@@ -13,7 +13,9 @@ function getFFmpegPath() {
 }
 
 function toSeconds(t) {
-  const parts = String(t || "0").split(":").map(Number);
+  const parts = String(t || "0")
+    .split(":")
+    .map(Number);
   if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
   if (parts.length === 2) return parts[0] * 60 + parts[1];
   return parts[0] || 0;
@@ -36,29 +38,46 @@ function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio }) {
 
     const args = [
       "-y",
-      "-ss", String(toSeconds(startTime)),
-      "-i", inputPath,
-      "-t", String(duration),
-      "-vf", `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`,
-      "-c:v", "libx264",
-      "-preset", "fast",
-      "-crf", "23",
-      "-c:a", "aac",
-      "-movflags", "+faststart",
-      outputPath
+      "-ss",
+      String(toSeconds(startTime)),
+      "-i",
+      inputPath,
+      "-t",
+      String(duration),
+      "-vf",
+      `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "ultrafast", // ← fastest
+      "-crf",
+      "28", // ← lower quality but much faster
+      "-c:a",
+      "aac",
+      "-b:a",
+      "128k",
+      "-movflags",
+      "+faststart",
+      "-threads",
+      "0", // ← use all CPU cores
+      outputPath,
     ];
 
     const { spawn } = require("child_process");
     const child = spawn(ffmpegPath, args, { windowsHide: true });
 
     let stderr = "";
-    child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.stderr.on("data", (d) => {
+      stderr += d.toString();
+    });
 
     child.on("close", (code) => {
       if (code === 0 && fs.existsSync(outputPath)) {
         resolve({ fileName, outputPath });
       } else {
-        reject(new Error(`FFmpeg failed (code ${code}): ${stderr.slice(-300)}`));
+        reject(
+          new Error(`FFmpeg failed (code ${code}): ${stderr.slice(-300)}`),
+        );
       }
     });
 
