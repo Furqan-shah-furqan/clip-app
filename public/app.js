@@ -604,18 +604,18 @@ function showClipControls() {
 }
 
 function getAutoSmartClipCount() {
-  return 3;
-}
-function getAutoSmartClipCount() {
   const duration = Number(
     state.videoDurationSeconds || state.uploadedProject?.duration || 0,
   );
 
   if (!duration || duration < 90) return 1;
-  if (duration < 240) return 2;
-  if (duration < 600) return 3;
-  if (duration < 1200) return 5;
-  return 7;
+  if (duration < 300) return 2;      // < 5 min → 2
+  if (duration < 600) return 3;      // < 10 min → 3
+  if (duration < 1200) return 4;     // < 20 min → 4
+  if (duration < 1800) return 5;     // < 30 min → 5
+  if (duration < 2700) return 6;     // < 45 min → 6
+  if (duration < 3600) return 7;     // < 60 min → 7
+  return 8;                          // 60+ min → 8
 }
 
 function updateClipPlanner() {
@@ -1240,25 +1240,18 @@ async function generateSingleClip(startTime, endTime, clipIndex = 0) {
     hook: autoHookForClip(clipIndex),
   };
 }
-function buildSmartSuggestBody(maxClips = 5) {
-  if (!state.uploadedProject) {
-    throw new Error("Please fetch or upload a video first.");
-  }
+function buildSmartSuggestBody() {
+  if (!state.uploadedProject) throw new Error("Please fetch or upload a video first.");
+
+  const maxClips = getAutoSmartClipCount();
 
   const body = {
     maxClips,
-    minScore: 80,
+    minScore: 50,
     clipLengthSec: state.selectedDuration || 30,
-    minDurationSec: Math.max(
-      25,
-      Math.min(45, Number(state.selectedDuration || 30) - 8),
-    ),
-    maxDurationSec: Math.max(
-      45,
-      Math.min(90, Number(state.selectedDuration || 60) + 25),
-    ),
-    videoDurationSec:
-      state.videoDurationSeconds || Number(state.uploadedProject.duration || 0),
+    minDurationSec: Math.max(25, Math.min(45, Number(state.selectedDuration || 30) - 8)),
+    maxDurationSec: Math.max(45, Math.min(90, Number(state.selectedDuration || 60) + 25)),
+    videoDurationSec: state.videoDurationSeconds || Number(state.uploadedProject.duration || 0),
   };
 
   if (state.uploadedProject?.source === "youtube") {
@@ -1417,7 +1410,7 @@ function showUploadRequiredForSmartClips(data) {
 
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
-  body.maxClips = 1;
+ body.maxClips = getAutoSmartClipCount();
   body.minScore = 60;
 
   const controller = new AbortController();
