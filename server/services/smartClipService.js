@@ -1,62 +1,41 @@
 const path = require("path");
-const { spawn } = require("child_process");
+const ffmpeg = require("fluent-ffmpeg");
 const { exportsDir } = require("../utils/paths");
 
 function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio }) {
   return new Promise((resolve, reject) => {
-    const pythonBin = process.env.PYTHON_BIN || "python";
-    const scriptPath = path.join(__dirname, "../../python/smart_reframe.py");
+    const ratio = aspectRatio || "9:16";
+    const [rW, rH] = ratio.split(":").map(Number);
+    const fileName = `smart_clip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`;
+    const outputPath = path.join(exportsDir, fileName);
 
-    const args = [
-      scriptPath,
-      inputPath,
-      exportsDir,
-      startTime,
-      endTime,
-      aspectRatio || "9:16"
-    ];
+    // Target vertical dimensions
+    const targetW = 720;
+    const targetH = Math.round((targetW * rH) / rW);
 
-    const child = spawn(pythonBin, args, {
-      cwd: path.join(__dirname, "../../"),
-      shell: false
-    });
-
-    let stdout = "";
-    let stderr = "";
-
-    child.stdout.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    child.stderr.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    child.on("close", (code) => {
-      try {
-        const lines = stdout.trim().split("\n");
-        const lastLine = lines[lines.length - 1] || "{}";
-        const parsed = JSON.parse(lastLine);
-
-        if (code !== 0 || !parsed.success) {
-          return reject(new Error(parsed.error || stderr || "Smart reframe failed"));
-        }
-
-        resolve({
-          fileName: parsed.fileName,
-          outputPath: parsed.outputPath
-        });
-      } catch (err) {
-        reject(new Error(stderr || stdout || err.message));
-      }
-    });
-
-    child.on("error", (err) => {
-      reject(err);
-    });
+    ffmpeg(inputPath)
+      .setStartTime(startTime)
+      .setDuration(calcDuration(startTime, endTime))
+      .videoFilter([
+        `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase`,
+        `crop=${targetW}:${targetH}`,
+      ])
+      .outputOptions(["-c:v libx264", "-c:a aac", "-movflags +faststart"])
+      .output(outputPath)
+      .on("end", () => resolve({ fileName, outputPath }))
+      .on("error", (err) => reject(new Error(`FFmpeg failed: ${err.message}`)))
+      .run();
   });
 }
 
-module.exports = {
-  smartGenerateClip
-};
+function calcDuration(startTime, endTime) {
+  const toSec = (t) => {
+    const parts = String(t || "0").split(":").map(Number);
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return parts[0] || 0;
+  };
+  return Math.max(1, toSec(endTime) - toSec(startTime));
+}
+
+module.exports = { smartGenerateClip };

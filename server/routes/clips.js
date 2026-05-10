@@ -382,38 +382,50 @@ function parseTranscriptVtt(vttText = "") {
   return segments;
 }
 
+const { YoutubeTranscript } = require("youtube-transcript");
+
 async function getYouTubeSmartTranscript(sourceUrl) {
-  if (!sourceUrl || !isValidYouTubeUrl(sourceUrl))
+  if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) {
     throw new Error("Valid YouTube source URL is required for smart clipping");
-  fs.mkdirSync(captionsDir, { recursive: true });
-  const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const outputBase = path.join(captionsDir, `youtube-smart-${stamp}`);
-  const args = [
-    ...buildYtDlpCommonArgs(),
-    "--skip-download",
-    "--write-auto-subs",
-    "--write-subs",
-    "--sub-langs",
-    "en.*",
-    "--sub-format",
-    "vtt",
-    "-o",
-    `${outputBase}.%(ext)s`,
-    sourceUrl,
-  ];
-  await runCommand("yt-dlp", args);
-  const files = fs
-    .readdirSync(captionsDir)
-    .filter(
-      (file) =>
-        file.startsWith(`youtube-smart-${stamp}`) &&
-        file.toLowerCase().endsWith(".vtt"),
-    )
-    .map((file) => path.join(captionsDir, file));
-  if (!files.length)
-    throw new Error("No English YouTube transcript found for smart clipping");
-  const vttText = fs.readFileSync(files[0], "utf8");
-  return parseTranscriptVtt(vttText);
+  }
+
+  const videoId = extractYouTubeId(sourceUrl);
+  if (!videoId) throw new Error("Could not extract YouTube video ID");
+
+  try {
+    const transcript = await YoutubeTranscript.fetchTranscript(videoId, {
+      lang: "en",
+    });
+    if (!transcript || !transcript.length)
+      throw new Error("No transcript found");
+
+    return transcript.map((item) => ({
+      start: (item.offset || 0) / 1000,
+      end: ((item.offset || 0) + (item.duration || 3000)) / 1000,
+      text: String(item.text || "")
+        .replace(/\n/g, " ")
+        .trim(),
+    }));
+  } catch (err) {
+    throw new Error(`YouTube transcript failed: ${err.message}`);
+  }
+}
+function extractYouTubeId(url) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be"))
+      return parsed.pathname.replace("/", "").trim();
+    if (parsed.searchParams.get("v")) return parsed.searchParams.get("v");
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const shortsIndex = parts.indexOf("shorts");
+    const liveIndex = parts.indexOf("live");
+    if (shortsIndex !== -1 && parts[shortsIndex + 1])
+      return parts[shortsIndex + 1];
+    if (liveIndex !== -1 && parts[liveIndex + 1]) return parts[liveIndex + 1];
+  } catch {
+    return "";
+  }
+  return "";
 }
 
 function buildYtDlpCommonArgs() {
@@ -983,13 +995,14 @@ router.post("/smart-generate", async (req, res) => {
           });
         } catch (error) {
           if (isYouTubeDownloadBlockedError(error)) {
+            // YouTube video download not supported on cloud server
+            // Return suggestions so user can upload source video
             return res.json({
               success: false,
               needsUpload: true,
               source: "transcript",
-              error: "YOUTUBE_DOWNLOAD_BLOCKED",
               message:
-                "YouTube blocked clip download. Upload the source video to generate these smart clips.",
+                "YouTube transcript analyzed. Upload the source video to generate clips from these moments.",
               segmentCount: transcriptSegments.length,
               minScore: safeMinScore,
               suggestions,
