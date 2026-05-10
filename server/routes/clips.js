@@ -103,48 +103,56 @@ function cleanSmartClipError(error) {
   return raw || "Smart clipping failed. Try uploading the source video directly.";
 }
 
-// ── YouTube transcript via API (no yt-dlp) ──────────────────────────────────
-async function getYouTubeSmartTranscript(sourceUrl) {
-  if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) {
-    throw new Error("Valid YouTube source URL is required");
-  }
+function runCommand(command, args = [], options = {}) {
+  const timeoutMs = Number(options.timeoutMs || 180000);
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "", settled = false;
 
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      try { child.kill("SIGKILL"); } catch {}
+      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+
+    child.stdout.on("data", (d) => { stdout += d.toString(); });
+    child.stderr.on("data", (d) => { stderr += d.toString(); });
+    child.on("error", (err) => { if (settled) return; settled = true; clearTimeout(timeout); reject(err); });
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(stderr || stdout || `${command} exited with code ${code}`));
+    });
+  });
+}
+
+// ── YouTube transcript via YouTube Data API ──────────────────────────────────
+async function getYouTubeSmartTranscript(sourceUrl) {
+  if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) throw new Error("Valid YouTube source URL is required");
   const videoId = extractYouTubeId(sourceUrl);
   if (!videoId) throw new Error("Could not extract YouTube video ID");
-
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("YOUTUBE_API_KEY not set");
 
   try {
     const axios = require("axios");
-
-    // Get caption tracks
     const captionsRes = await axios.get(
       `https://www.googleapis.com/youtube/v3/captions?part=snippet&videoId=${videoId}&key=${apiKey}`
     );
-
     const tracks = captionsRes.data.items || [];
-    const enTrack = tracks.find(
-      (t) => t.snippet.language === "en" || t.snippet.trackKind === "asr"
-    );
-
-    if (!enTrack) {
-      // No captions → use title/description as fallback segments
-      return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
-    }
-
-    // Download caption track
+    const enTrack = tracks.find((t) => t.snippet.language === "en" || t.snippet.trackKind === "asr");
+    if (!enTrack) return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
     const captionRes = await axios.get(
       `https://www.googleapis.com/youtube/v3/captions/${enTrack.id}?tfmt=vtt&key=${apiKey}`,
       { responseType: "text" }
     );
-
     const segments = parseTranscriptVtt(captionRes.data);
     if (segments.length) return segments;
-
     return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
   } catch (err) {
-    // Fallback to video metadata
     return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
   }
 }
@@ -181,18 +189,13 @@ function vttTimeToSeconds(value = "") {
 
 async function getFallbackSegmentsFromVideoMeta(videoId, apiKey) {
   const axios = require("axios");
-
   const res = await axios.get(
     `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`
   );
-
   const item = res.data.items?.[0];
   if (!item) throw new Error("Video not found");
-
   const description = item.snippet.description || "";
   const title = item.snippet.title || "";
-
-  // Build fake segments from description paragraphs
   const lines = [title, ...description.split(/\n+/)].filter((l) => l.trim().length > 20);
   const segments = [];
   let t = 0;
@@ -201,10 +204,10 @@ async function getFallbackSegmentsFromVideoMeta(videoId, apiKey) {
     segments.push({ start: t, end: t + dur, text: line.trim() });
     t += dur + 1;
   }
-
   if (!segments.length) throw new Error("No usable content found for this video");
   return segments;
 }
+
 // ── Local video transcript ───────────────────────────────────────────────────
 function resolveSmartInputVideo(inputPath = "") {
   if (!inputPath) return null;
@@ -221,7 +224,6 @@ async function getLocalSmartTranscript(inputPath) {
   const videoPath = resolveSmartInputVideo(inputPath);
   if (!videoPath) throw new Error("Input video file not found for smart clipping");
 
-  // Try Python whisper transcription
   const pythonCandidates = [process.env.PYTHON_PATH, "python3", "python"].filter(Boolean);
   const TRANSCRIBE_SCRIPT = path.join(rootDir, "python", "transcribe_whisper.py");
 
@@ -247,11 +249,10 @@ async function getLocalSmartTranscript(inputPath) {
     }
   }
 
-  // Fallback: generate mock segments based on video duration
-  return generateFallbackSegments(videoPath);
+  return generateFallbackSegments();
 }
 
-function generateFallbackSegments(videoPath) {
+function generateFallbackSegments() {
   const MOCK_PHRASES = [
     "This is a powerful moment worth clipping.",
     "Here is where the key insight happens.",
@@ -265,51 +266,16 @@ function generateFallbackSegments(videoPath) {
   const segments = [];
   let t = 0;
   let idx = 0;
-  const estimatedDuration = 300;
-  while (t < estimatedDuration) {
+  while (t < 300) {
     const dur = 3 + Math.random() * 4;
-    segments.push({
-      start: t,
-      end: t + dur,
-      text: MOCK_PHRASES[idx % MOCK_PHRASES.length],
-    });
+    segments.push({ start: t, end: t + dur, text: MOCK_PHRASES[idx % MOCK_PHRASES.length] });
     t += dur + 1;
     idx++;
   }
   return segments;
 }
 
-function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
-  const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
-  const startTime = suggestion.start || secondsToTime(suggestion.startSec || 0);
-  const endTime = suggestion.end || secondsToTime(suggestion.endSec || 0);
-  const duration = Math.max(0, timeToSeconds(endTime) - timeToSeconds(startTime));
-
-  return {
-    message: "Smart clip generated successfully",
-    fileName: result.fileName,
-    outputPath: result.outputPath,
-    filePath: result.outputPath,
-    downloadUrl: `/api/files/download/${result.fileName}`,
-    previewUrl: `/api/files/download/${result.fileName}`,
-    startTime,
-    endTime,
-    startSec: suggestion.startSec,
-    endSec: suggestion.endSec,
-    duration,
-    durationSec: duration,
-    size: outputStat?.size || 0,
-    sourceType: normalizedSourceType,
-    hook: suggestion.title || `Smart Clip #${index + 1}`,
-    title: suggestion.title || `Smart Clip #${index + 1}`,
-    smartScore: suggestion.score || 0,
-    score: suggestion.score || 0,
-    smartReason: suggestion.reason || "Smart transcript moment",
-    reason: suggestion.reason || "Smart transcript moment",
-    signals: suggestion.signals || [],
-    previewText: suggestion.previewText || suggestion.text || "",
-  };
-}
+// ── YouTube section download ─────────────────────────────────────────────────
 async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
   const safeStart = Math.max(0, Number(startSec) || 0);
   const safeEnd = Math.max(safeStart + 8, Number(endSec) || safeStart + 30);
@@ -317,7 +283,6 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
   const outputTemplate = `${tempBase}.%(ext)s`;
   const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
-
   const ytDlpPath = process.env.YTDLP_PATH || "yt-dlp";
 
   const args = [
@@ -345,30 +310,34 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   return mp4;
 }
 
-function runCommand(command, args = [], options = {}) {
-  const timeoutMs = Number(options.timeoutMs || 180000);
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "", stderr = "", settled = false;
+function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
+  const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
+  const startTime = suggestion.start || secondsToTime(suggestion.startSec || 0);
+  const endTime = suggestion.end || secondsToTime(suggestion.endSec || 0);
+  const duration = Math.max(0, timeToSeconds(endTime) - timeToSeconds(startTime));
 
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      try { child.kill("SIGKILL"); } catch {}
-      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s`));
-    }, timeoutMs);
-
-    child.stdout.on("data", (d) => { stdout += d.toString(); });
-    child.stderr.on("data", (d) => { stderr += d.toString(); });
-    child.on("error", (err) => { if (settled) return; settled = true; clearTimeout(timeout); reject(err); });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr || stdout || `${command} exited with code ${code}`));
-    });
-  });
+  return {
+    message: "Smart clip generated successfully",
+    fileName: result.fileName,
+    outputPath: result.outputPath,
+    filePath: result.outputPath,
+    downloadUrl: `/api/files/download/${result.fileName}`,
+    previewUrl: `/api/files/download/${result.fileName}`,
+    startTime, endTime,
+    startSec: suggestion.startSec,
+    endSec: suggestion.endSec,
+    duration, durationSec: duration,
+    size: outputStat?.size || 0,
+    sourceType: normalizedSourceType,
+    hook: suggestion.title || `Smart Clip #${index + 1}`,
+    title: suggestion.title || `Smart Clip #${index + 1}`,
+    smartScore: suggestion.score || 0,
+    score: suggestion.score || 0,
+    smartReason: suggestion.reason || "Smart transcript moment",
+    reason: suggestion.reason || "Smart transcript moment",
+    signals: suggestion.signals || [],
+    previewText: suggestion.previewText || suggestion.text || "",
+  };
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
@@ -437,7 +406,7 @@ router.post("/smart-generate", async (req, res) => {
 
     const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
     const safeMaxClips = Math.max(1, Math.min(3, Number(maxClips) || 3));
-    const safeMinScore = Math.max(1, Math.min(100, Number(minScore) || 80));
+    const safeMinScore = Math.max(1, Math.min(100, Number(minScore) || 50));
 
     if (normalizedSourceType === "youtube" && (!sourceUrl || !isValidYouTubeUrl(sourceUrl))) {
       return res.status(400).json({ error: "Valid YouTube source URL is required.", clips: [] });
@@ -478,71 +447,72 @@ router.post("/smart-generate", async (req, res) => {
         message: `No smart clips scored ${safeMinScore}+.`,
       });
     }
-    // ── YouTube → download sections + generate clips ──
-if (normalizedSourceType === "youtube") {
-  const tempSectionFiles = [];
-  try {
-    for (let i = 0; i < suggestions.length; i++) {
-      if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
-      const suggestion = suggestions[i];
-      const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-      const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-      let sectionPath;
-      try {
-        sectionPath = await downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index: i });
-      } catch (err) {
-        return res.json({
-          success: false,
-          needsUpload: true,
-          source: "transcript",
-          message: "YouTube blocked clip download. Upload the source video to generate these smart clips.",
-          segmentCount: transcriptSegments.length,
-          suggestions,
-          clips: [],
-        });
-      }
-
-      tempSectionFiles.push(sectionPath);
-
-      const durationSec = Math.max(8, endSec - startSec);
-      const result = await smartGenerateClip({
-        inputPath: sectionPath,
-        startTime: "00:00:00",
-        endTime: secondsToTime(durationSec),
-        aspectRatio: aspectRatio || "9:16",
-      });
-
-      clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-    }
-  } finally {
-    for (const f of tempSectionFiles) {
-      try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
-    }
-  }
-}
-    // ── Local upload → generate clips with FFmpeg ──
-    fs.mkdirSync(exportsDir, { recursive: true });
+    // ── declare clips here — before any branch uses it ──
     const clips = [];
+    fs.mkdirSync(exportsDir, { recursive: true });
 
-    for (let i = 0; i < suggestions.length; i++) {
-      if (Date.now() - startedAt > maxSmartGenerateMs) {
-        throw new Error("Smart clipping timed out. Try a shorter video.");
+    // ── YouTube → download + generate ──
+    if (normalizedSourceType === "youtube") {
+      const tempSectionFiles = [];
+      try {
+        for (let i = 0; i < suggestions.length; i++) {
+          if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
+
+          const suggestion = suggestions[i];
+          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+
+          let sectionPath;
+          try {
+            sectionPath = await downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index: i });
+          } catch (err) {
+            return res.json({
+              success: false,
+              needsUpload: true,
+              source: "transcript",
+              message: "YouTube blocked clip download. Upload the source video to generate these smart clips.",
+              segmentCount: transcriptSegments.length,
+              suggestions,
+              clips: [],
+            });
+          }
+
+          tempSectionFiles.push(sectionPath);
+
+          const durationSec = Math.max(8, endSec - startSec);
+          const result = await smartGenerateClip({
+            inputPath: sectionPath,
+            startTime: "00:00:00",
+            endTime: secondsToTime(durationSec),
+            aspectRatio: aspectRatio || "9:16",
+          });
+
+          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+        }
+      } finally {
+        for (const f of tempSectionFiles) {
+          try { if (fs.existsSync(f)) fs.unlinkSync(f); } catch {}
+        }
       }
+    } else {
+      // ── Local upload → FFmpeg ──
+      for (let i = 0; i < suggestions.length; i++) {
+        if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
-      const suggestion = suggestions[i];
-      const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-      const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+        const suggestion = suggestions[i];
+        const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+        const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
 
-      const result = await smartGenerateClip({
-        inputPath,
-        startTime: secondsToTime(startSec),
-        endTime: secondsToTime(endSec),
-        aspectRatio: aspectRatio || "9:16",
-      });
+        const result = await smartGenerateClip({
+          inputPath,
+          startTime: secondsToTime(startSec),
+          endTime: secondsToTime(endSec),
+          aspectRatio: aspectRatio || "9:16",
+        });
 
-      clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+      }
     }
 
     return res.json({
@@ -570,7 +540,6 @@ if (normalizedSourceType === "youtube") {
 router.post("/generate", async (req, res) => {
   try {
     const { inputPath, sourceType, startTime, endTime, aspectRatio } = req.body;
-
     if (!startTime || !endTime) return res.status(400).json({ error: "Missing required fields" });
     if (!inputPath) return res.status(400).json({ error: "Input video file is required" });
 
@@ -579,16 +548,14 @@ router.post("/generate", async (req, res) => {
 
     const result = await smartGenerateClip({ inputPath, startTime, endTime, aspectRatio: aspectRatio || "9:16" });
     const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
-    const clipDurationSec = timeToSeconds(endTime) - timeToSeconds(startTime);
 
     return res.json({
       message: "Smart clip generated successfully",
       fileName: result.fileName,
       outputPath: result.outputPath,
       downloadUrl: `/api/files/download/${result.fileName}`,
-      startTime,
-      endTime,
-      duration: clipDurationSec,
+      startTime, endTime,
+      duration: timeToSeconds(endTime) - timeToSeconds(startTime),
       size: outputStat?.size || 0,
     });
   } catch (error) {
