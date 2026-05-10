@@ -1272,6 +1272,62 @@ function buildSmartSuggestBody(maxClips = 5) {
 
   return body;
 }
+async function handleUploadForSmartClips(input, suggestions) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    updateProgress(0, "Uploading source video...");
+
+    const formData = new FormData();
+    formData.append("video", file);
+    const result = await uploadWithXHR(`${API_BASE}/clips/upload`, formData);
+
+    state.uploadedProject = result.project;
+
+    updateProgress(90, "Generating clips from your moments...");
+
+    const body = {
+      sourceType: "upload",
+      inputPath: result.project.filePath,
+      segments: suggestions,
+      maxClips: 3,
+      minScore: 0,
+      clipLengthSec: state.selectedDuration || 30,
+    };
+
+    const data = await apiFetch(`${API_BASE}/clips/smart-generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    const clips = Array.isArray(data.clips) ? data.clips : [];
+
+    if (!clips.length) {
+      updateProgress(0, "No clips generated. Try another video.");
+      return;
+    }
+
+    state.generatedClips = [...clips, ...state.generatedClips];
+    state.generatedClip = state.generatedClips[0] || null;
+
+    for (let i = 0; i < clips.length; i++) {
+      await loadCaptionsForClip(clips[i], i);
+    }
+
+    renderGeneratedClips();
+    persistStudioSession();
+
+    await animateProgressTo(
+      100,
+      `Generated ${clips.length} smart clip${clips.length > 1 ? "s" : ""} ✓`,
+    );
+  } catch (error) {
+    updateProgress(0, error.message || "Upload failed");
+    alert(error.message || "Upload failed");
+  }
+}
 
 function formatSmartReason(suggestion = {}) {
   const parts = [];
@@ -1285,35 +1341,62 @@ function formatSmartReason(suggestion = {}) {
 function showUploadRequiredForSmartClips(data) {
   const message =
     data?.message ||
-    "YouTube blocked clip download. Upload the source video to generate these smart clips.";
+    "YouTube transcript analyzed! Upload the source video to generate these smart clips.";
 
   updateProgress(0, message);
 
   if (smartClipBtn) {
     smartClipBtn.disabled = false;
-    smartClipBtn.textContent = "Upload source video to continue";
+    smartClipBtn.textContent = "Get clips in 1 click";
   }
 
   const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
   if (suggestions.length && generatedClipsGrid) {
-    generatedClipsGrid.innerHTML = suggestions
-      .slice(0, 5)
-      .map((item, index) => {
-        const score = Math.round(Number(item.score || 0));
-        const title = escapeHtml(
-          item.title || item.hook || `Smart Moment #${index + 1}`,
-        );
-        const reason = escapeHtml(
-          item.reason || item.smartReason || "Strong transcript moment",
-        );
-        const preview = escapeHtml(item.previewText || item.text || "");
-        const start = escapeHtml(
-          item.start || secondsToTime(item.startSec || 0),
-        );
-        const end = escapeHtml(item.end || secondsToTime(item.endSec || 0));
-
-        return `
+    generatedClipsGrid.innerHTML = `
+      <div style="
+        padding: 20px;
+        background: #111;
+        border-radius: 12px;
+        margin-bottom: 16px;
+        border: 1px solid #333;
+      ">
+        <p style="color:#facc15;font-weight:600;margin:0 0 8px;">
+          ✅ Found ${suggestions.length} viral moments from transcript
+        </p>
+        <p style="color:#aaa;margin:0 0 16px;font-size:14px;">
+          ${message}
+        </p>
+        <label style="
+          display:inline-block;
+          padding:10px 20px;
+          background:#fff;
+          color:#000;
+          border-radius:8px;
+          cursor:pointer;
+          font-weight:600;
+        ">
+          Upload Source Video
+          <input type="file" accept=".mp4,.mov,.mkv,.webm" style="display:none"
+            onchange="handleUploadForSmartClips(this, ${JSON.stringify(suggestions).replace(/"/g, "&quot;")})">
+        </label>
+      </div>
+      ${suggestions
+        .slice(0, 5)
+        .map((item, index) => {
+          const score = Math.round(Number(item.score || 0));
+          const title = escapeHtml(
+            item.title || item.hook || `Smart Moment #${index + 1}`,
+          );
+          const reason = escapeHtml(
+            item.reason || item.smartReason || "Strong transcript moment",
+          );
+          const start = escapeHtml(
+            item.start || secondsToTime(item.startSec || 0),
+          );
+          const end = escapeHtml(item.end || secondsToTime(item.endSec || 0));
+          const preview = escapeHtml(item.previewText || item.text || "");
+          return `
           <article class="smart-upload-needed-card">
             <div class="smart-upload-needed-top">
               <strong>${title}</strong>
@@ -1324,11 +1407,12 @@ function showUploadRequiredForSmartClips(data) {
             ${preview ? `<div class="smart-upload-preview">${preview}</div>` : ""}
           </article>
         `;
-      })
-      .join("");
+        })
+        .join("")}
+    `;
   }
 
-  throw new Error(message);
+  throw new Error("NEEDS_UPLOAD");
 }
 
 async function generateSmartClipsFromSource() {
@@ -1362,9 +1446,13 @@ async function generateSmartClipsFromSource() {
       ...clip,
       filePath: clip.filePath || clip.outputPath || "",
       outputPath: clip.outputPath || clip.filePath || "",
-      startTime: clip.startTime || clip.start || secondsToTime(clip.startSec || 0),
+      startTime:
+        clip.startTime || clip.start || secondsToTime(clip.startSec || 0),
       endTime: clip.endTime || clip.end || secondsToTime(clip.endSec || 0),
-      duration: clip.duration != null ? Number(clip.duration) : Math.max(0, Number(clip.durationSec || 0)),
+      duration:
+        clip.duration != null
+          ? Number(clip.duration)
+          : Math.max(0, Number(clip.durationSec || 0)),
       hook: clip.hook || clip.title || `Smart Clip #${index + 1}`,
       smartScore: Number(clip.smartScore || clip.score || 0),
       smartReason: clip.smartReason || formatSmartReason(clip),
@@ -1372,7 +1460,9 @@ async function generateSmartClipsFromSource() {
     }));
   } catch (error) {
     if (error.name === "AbortError") {
-      throw new Error("Smart clipping timed out after 3 minutes. Try uploading the source video directly.");
+      throw new Error(
+        "Smart clipping timed out after 3 minutes. Try uploading the source video directly.",
+      );
     }
     throw error;
   } finally {
@@ -1404,7 +1494,9 @@ smartClipBtn?.addEventListener("click", async () => {
 
     if (!newClips.length) {
       updateProgress(0, "No clips scored 80+");
-      alert("No smart clips scored 80 or above. Try another video or a longer source.");
+      alert(
+        "No smart clips scored 80 or above. Try another video or a longer source.",
+      );
       return;
     }
 
@@ -1419,20 +1511,28 @@ smartClipBtn?.addEventListener("click", async () => {
     renderGeneratedClips();
     persistStudioSession();
 
-    await animateProgressTo(100, `Generated ${newClips.length} smart clip${newClips.length > 1 ? "s" : ""} ✓`);
+    await animateProgressTo(
+      100,
+      `Generated ${newClips.length} smart clip${newClips.length > 1 ? "s" : ""} ✓`,
+    );
   } catch (error) {
     // ← stopCrawl ALWAYS called here if it started
-    if (stopCrawl) { stopCrawl(); stopCrawl = null; }
+    if (stopCrawl) {
+      stopCrawl();
+      stopCrawl = null;
+    }
 
     const cleanMessage = getCleanSmartClipError(error);
     updateProgress(0, cleanMessage || "Smart clipping failed");
 
-    if (!cleanMessage?.includes("Upload the source video")) {
-      alert(cleanMessage || "Smart clipping failed.");
+    if (cleanMessage === "NEEDS_UPLOAD") {
+      return;
     }
   } finally {
     // ← safety net
-    if (stopCrawl) { stopCrawl(); }
+    if (stopCrawl) {
+      stopCrawl();
+    }
     smartClipBtn.disabled = false;
     smartClipBtn.textContent = "Get clips in 1 click";
   }
@@ -1491,8 +1591,6 @@ function getCleanSmartClipError(error) {
     raw || "Smart clipping failed. Try another video or upload the source file."
   );
 }
-
-
 
 // ─── Hooks tab ────────────────────────────────────────────────────────────────
 generateHooksBtn?.addEventListener("click", () => {
