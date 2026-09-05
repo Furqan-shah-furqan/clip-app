@@ -321,6 +321,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
   const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
   const outputTemplate = `${tempBase}.%(ext)s`;
+  const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
   const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
   const ffmpegDir = path.join(rootDir, "bin");
   const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
