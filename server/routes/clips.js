@@ -330,14 +330,17 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const cookieFile = path.join(rootDir, "cookies.txt");
+  const renderSecretCookie = "/etc/secrets/cookies.txt";
   let tempCookiePath = null;
-  if (process.env.YOUTUBE_COOKIES) {
+  if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length < 5000) {
     try {
       tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
       fs.writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES, "utf8");
     } catch {}
   }
-  const activeCookies = tempCookiePath || (fs.existsSync(cookieFile) ? cookieFile : null);
+  const activeCookies = fs.existsSync(renderSecretCookie)
+    ? renderSecretCookie
+    : (tempCookiePath || (fs.existsSync(cookieFile) ? cookieFile : null));
 
   const args = [
     "--no-playlist", "--no-check-certificates", "--no-warnings",
