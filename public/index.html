@@ -70,6 +70,7 @@
                   Get clips in 1 click
                 </button>
 
+
                 <div
                   class="yt-info-preview opus-info-preview"
                   id="ytInfoPreview"
@@ -145,6 +146,33 @@
 
   <div class="clips-view clips-story-row" id="generatedClipsGrid">
     <div class="empty-state">No smart clips generated yet.</div>
+  </div>
+</section>
+
+<section class="opus-projects-panel">
+  <div class="opus-projects-topbar">
+    <div class="opus-project-tabs" role="tablist" aria-label="Project views">
+      <button class="opus-project-tab active" type="button" data-project-view="all">
+        All projects <span id="allProjectsCount">(0)</span>
+      </button>
+      <button class="opus-project-tab" type="button" data-project-view="saved">
+        Saved projects <span id="savedProjectsCount">(0)</span>
+      </button>
+    </div>
+
+    <div class="opus-project-tools">
+      <span class="opus-storage-meter">0 GB / 0 GB</span>
+      <button class="opus-project-pill" type="button" id="saveProjectBtn">
+        <span></span> Auto-save
+      </button>
+      <button class="opus-project-pill" type="button" id="refreshProjectsBtn">
+        <span></span> Refresh
+      </button>
+    </div>
+  </div>
+
+  <div class="opus-project-grid" id="projectHistoryList">
+    <div class="empty-state">No projects yet.</div>
   </div>
 </section>
             </article>

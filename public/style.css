@@ -4111,3 +4111,301 @@ body::-webkit-scrollbar {
   width: 20px !important;
   height: 13px !important;
 }
+
+/* Opus-style projects shelf */
+.opus-save-project-btn {
+  display: none;
+}
+
+.opus-projects-panel {
+  width: min(1180px, calc(100vw - 56px));
+  margin: 38px auto 0;
+  padding: 0 0 28px;
+  color: #ffffff;
+}
+
+.opus-projects-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.opus-project-tabs {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.opus-project-tab {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.opus-project-tab.active {
+  color: #ffffff;
+}
+
+.opus-project-tab span {
+  color: inherit;
+  opacity: 0.78;
+}
+
+.opus-project-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.opus-storage-meter {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.opus-project-pill {
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 7px;
+  padding: 11px 16px;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.opus-project-pill span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.opus-project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(218px, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.opus-project-card {
+  position: relative;
+  min-width: 0;
+  color: #ffffff;
+}
+
+.opus-project-thumb {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #1b1b1f, #070708);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+  display: grid;
+  place-items: center;
+}
+
+.opus-project-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 25%, rgba(0, 0, 0, 0.78));
+  pointer-events: none;
+}
+
+.opus-project-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.opus-project-thumb > span {
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.opus-project-thumb small {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  background: rgba(22, 22, 24, 0.82);
+  color: rgba(255, 255, 255, 0.86);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.opus-project-progress-badge {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 3;
+  min-width: 146px;
+  min-height: 42px;
+  border-radius: 9px;
+  border: 1.5px solid #22f2dc;
+  background: rgba(3, 17, 18, 0.86);
+  color: #22f2dc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 0 24px rgba(34, 242, 220, 0.2);
+}
+
+.opus-project-progress-badge span {
+  font-size: 17px;
+}
+
+.opus-project-progress-badge strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.opus-project-progress-badge em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.opus-project-card > strong {
+  display: block;
+  margin-top: 12px;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.opus-project-card > p {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.opus-project-card > em {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.opus-project-card-actions {
+  position: absolute;
+  right: 9px;
+  bottom: 51px;
+  z-index: 4;
+  display: flex;
+  gap: 7px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: 0.18s ease;
+}
+
+.opus-project-card:hover .opus-project-card-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.opus-project-card-actions button {
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #080808;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.opus-project-card-actions button:last-child {
+  background: rgba(20, 20, 22, 0.78);
+  color: #ffffff;
+}
+
+.opus-project-empty {
+  grid-column: 1 / -1;
+  min-height: 150px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.52);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+@media (max-width: 860px) {
+  .opus-projects-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .opus-project-tools {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .opus-projects-panel {
+    width: min(100%, calc(100vw - 28px));
+  }
+
+  .opus-project-tabs {
+    gap: 16px;
+  }
+
+  .opus-project-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.clip-video-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  color: inherit;
+}
+
+.clip-video-link video {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.clip-icon-btns a.clip-icon-btn {
+  text-decoration: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clip-icon-btns a.clip-icon-btn:visited {
+  color: inherit;
+}

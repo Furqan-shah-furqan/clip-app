@@ -47,11 +47,33 @@ function resolveInputVideo(inputPath = "") {
 
 function getFileStamp(filePath) {
   const stat = fs.statSync(filePath);
+  const base = path.basename(filePath);
   return crypto
     .createHash("md5")
-    .update(`${filePath}|${stat.size}|${stat.mtimeMs}`)
+    .update(`${base}|${stat.size}`)
     .digest("hex")
     .slice(0, 12);
+}
+
+function findExistingCaptionArtifacts(videoPath) {
+  const parsed = path.parse(path.basename(videoPath));
+  const baseName = parsed.name;
+  if (!fs.existsSync(captionsDir)) return null;
+  const files = fs.readdirSync(captionsDir);
+  const jsonMatch = files.find((f) => f.startsWith(baseName) && f.endsWith(".json"));
+  if (jsonMatch) {
+    const jsonPath = path.join(captionsDir, jsonMatch);
+    const segs = readExistingSegments(jsonPath);
+    if (segs && segs.length) {
+      const vttMatch = files.find((f) => f.startsWith(baseName) && f.endsWith(".vtt"));
+      return {
+        vttPath: vttMatch ? path.join(captionsDir, vttMatch) : null,
+        jsonPath,
+        segments: segs,
+      };
+    }
+  }
+  return null;
 }
 
 function getArtifactPaths(videoPath) {
@@ -83,7 +105,8 @@ function runCommand(command, args, options = {}) {
 
 async function extractAudioToWav(videoPath, wavPath) {
   ensureDir(path.dirname(wavPath));
-  await runCommand("ffmpeg", [
+  const ffmpegCmd = process.env.FFMPEG_PATH || "ffmpeg";
+  await runCommand(ffmpegCmd, [
     "-y", "-i", videoPath,
     "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
     wavPath,
@@ -91,7 +114,15 @@ async function extractAudioToWav(videoPath, wavPath) {
 }
 
 async function runPythonTranscription(wavPath) {
-  const pythonCandidates = [process.env.PYTHON_PATH, "python", "py"].filter(Boolean);
+  const python311 = "C:\\Users\\xpert computers\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
+  const defaultVenvPython = path.resolve(rootDir, ".venv", "Scripts", "python.exe");
+  const pythonCandidates = [
+    process.env.PYTHON_PATH,
+    fs.existsSync(python311) ? python311 : null,
+    fs.existsSync(defaultVenvPython) ? defaultVenvPython : null,
+    "python",
+    "py",
+  ].filter(Boolean);
   let lastError = null;
   for (const candidate of pythonCandidates) {
     try {
@@ -136,6 +167,12 @@ function readExistingSegments(jsonPath) {
 
 async function ensureCaptionFiles(videoPath) {
   ensureDir(captionsDir);
+
+  const existing = findExistingCaptionArtifacts(videoPath);
+  if (existing) {
+    return existing;
+  }
+
   const { wavPath, vttPath, jsonPath } = getArtifactPaths(videoPath);
 
   if (fs.existsSync(vttPath) && fs.existsSync(jsonPath)) {
@@ -156,6 +193,19 @@ async function ensureCaptionFiles(videoPath) {
 function splitSegmentsIntoPseudoWords(segments = []) {
   const words = [];
   segments.forEach((segment) => {
+    if (Array.isArray(segment.words) && segment.words.length) {
+      segment.words.forEach((w) => {
+        const text = String(w.word || "").trim();
+        if (text) {
+          words.push({
+            word: text,
+            start: Number(w.start) || Number(segment.start) || 0,
+            end: Number(w.end) || Number(segment.end) || 0,
+          });
+        }
+      });
+      return;
+    }
     const text = String(segment.text || "").trim();
     if (!text) return;
     const parts = text.split(/\s+/).filter(Boolean);
@@ -249,7 +299,7 @@ router.post("/burn", async (req, res) => {
         details: `Could not resolve: ${rawPath}`,
       });
     }
-
+    console.log("BURN STYLE fontSize:", style?.fontSize, "animStyle:", style?.animationStyle || style?.sourceAnimationStyle);
     console.log("BURN START:", resolvedPath, "segments:", segments.length);
     ensureDir(exportsDir);
 

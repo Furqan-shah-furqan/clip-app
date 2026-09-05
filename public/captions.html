@@ -1,9 +1,9 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Caption Editor — ClipFlow</title>
+    <title>Caption Editor — ClipFlow Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,716 +12,602 @@
     />
     <link rel="stylesheet" href="captions.css" />
   </head>
-  <body class="caption-editor-page">
-    <!-- ─── TOPBAR ─────────────────────────────────────────── -->
-    <header class="ce-topbar" id="ceTopbar">
-      <div class="ce-topbar-left">
-        <button class="ce-back-btn" id="backBtn" type="button">
-          <span class="ce-back-arrow">←</span>
-          <span>Back</span>
-        </button>
-        <div class="ce-topbar-divider"></div>
-        <div class="ce-topbar-title-block">
-          <span class="ce-kicker">Caption Editor</span>
-          <strong class="ce-clip-title" id="clipTitleDisplay"
-            >Selected Clip</strong
-          >
-        </div>
-      </div>
+  <body class="caption-editor-page theme-dark">
+    <!-- Ambient glowing lights matching home page -->
+    <div class="scene scene-a"></div>
+    <div class="scene scene-b"></div>
+    <div class="scene scene-c"></div>
 
-      <div class="ce-topbar-center">
-        <div class="ce-status-chip">
-          <span class="ce-status-dot"></span>
-          <span class="ce-status-label">Live Sync</span>
-        </div>
-      </div>
-
-      <div class="ce-topbar-right">
-        <label class="ce-theme-toggle" aria-label="Toggle theme">
-          <input type="checkbox" id="themeToggle" />
-          <span class="ce-toggle-track">
-            <span class="ce-toggle-thumb"></span>
-          </span>
-          <span class="ce-toggle-label" id="modePill">Light</span>
-        </label>
-        <button
-          class="ce-btn ce-btn--primary"
-          id="saveAndBackBtn"
-          type="button"
-        >
-          Save &amp; Return
-        </button>
-      </div>
-    </header>
-
-    <main class="ce-shell">
-      <!-- ─── NO CLIP STATE ─────────────────────────────────── -->
-      <div id="noClipState" class="ce-empty-state" style="display: none">
-        <div class="ce-empty-icon">
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          >
-            <path
-              d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
-            />
-          </svg>
-        </div>
-        <h3 class="ce-empty-title">No clip selected</h3>
-        <p class="ce-empty-sub">
-          Go back to the studio and open a generated clip in the caption editor.
-        </p>
-        <button class="ce-btn ce-btn--primary" id="goBackBtn" type="button">
-          Go to Studio
-        </button>
-      </div>
-
-      <!-- ─── EDITOR SHELL ───────────────────────────────────── -->
-      <div class="ce-layout" id="editorShell">
-        <!-- LEFT: PREVIEW PANEL -->
-        <aside class="ce-preview-panel">
-          <div class="ce-phone-stage">
-            <!-- iPhone 16-inspired frame -->
-            <div class="ce-phone-frame">
-              <div class="ce-phone-bezel">
-                <div class="ce-phone-notch">
-                  <div class="ce-phone-island"></div>
-                </div>
-                <div class="ce-phone-screen">
-                  <div class="caption-video-wrap" id="captionVideoWrap">
-                    <video
-                      id="captionVideo"
-                      class="caption-editor-video"
-                      controls
-                      playsinline
-                      preload="metadata"
-                    ></video>
-                    <div class="caption-video-overlay" id="captionOverlay">
-                      <span
-                        class="caption-video-text"
-                        id="captionOverlayText"
-                      ></span>
-                    </div>
-                  </div>
-                </div>
-                <div class="ce-phone-home-bar"></div>
-              </div>
-              <!-- Side buttons -->
-              <div class="ce-phone-btn ce-phone-btn--vol-up"></div>
-              <div class="ce-phone-btn ce-phone-btn--vol-down"></div>
-              <div class="ce-phone-btn ce-phone-btn--power"></div>
-            </div>
+    <!-- ─── 15PX MARGIN WRAPPER & COMPLETELY BLACK MAIN CONTAINER ─── -->
+    <div class="ce-main-container">
+      <!-- ─── TOPBAR (Tab bar removed completely) ────────────────── -->
+      <header class="ce-topbar">
+        <div class="ce-topbar-left">
+          <button class="ce-back-btn" id="backBtn" type="button" title="Back to Studio" onclick="if(typeof goBack==='function'){goBack();}else{window.location.href='index.html';}">
+            <span class="ce-back-arrow">←</span>
+            <span>Back</span>
+          </button>
+          <div class="ce-topbar-divider"></div>
+          <div class="ce-topbar-title-block">
+            <span class="ce-kicker">Caption Studio</span>
+            <h2 class="ce-clip-title" id="clipTitleDisplay">Selected Clip</h2>
           </div>
+        </div>
 
-          <div class="ce-preview-meta">
-            <div class="ce-meta-item">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <span>Real-time overlay</span>
-            </div>
-            <div class="ce-meta-dot"></div>
-            <div class="ce-meta-item">
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <span>Export ready</span>
-            </div>
+        <div class="ce-topbar-center">
+          <div class="ce-status-chip">
+            <span class="ce-status-dot"></span>
+            <span class="ce-status-label" id="captionStatusLabel">Style Studio · Realtime Parity</span>
           </div>
-        </aside>
+          <button class="ce-sync-btn" id="syncAudioCaptionsBtn" type="button" title="Sync Real Whisper AI Audio Captions">
+            <span class="sync-icon">✦</span>
+            <span>Sync Audio</span>
+          </button>
+        </div>
 
-        <!-- RIGHT: WORKSPACE -->
-        <section class="ce-workspace">
-          <!-- Workspace top bar -->
-          <div class="ce-workspace-topbar">
-            <div
-              class="ce-tab-switcher"
-              role="tablist"
-              aria-label="Caption editor panels"
-            >
-              <button
-                class="ce-tab is-active"
-                id="timelineTabBtn"
-                type="button"
-                role="tab"
-                aria-selected="true"
-                data-tab="timeline"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <line x1="3" y1="6" x2="21" y2="6" />
-                  <line x1="3" y1="12" x2="21" y2="12" />
-                  <line x1="3" y1="18" x2="21" y2="18" />
-                </svg>
-                Timeline
-              </button>
-              <button
-                class="ce-tab"
-                id="styleTabBtn"
-                type="button"
-                role="tab"
-                aria-selected="false"
-                data-tab="style"
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <circle cx="13.5" cy="6.5" r="2.5" />
-                  <circle cx="6.5" cy="12" r="2.5" />
-                  <circle cx="13.5" cy="17.5" r="2.5" />
-                </svg>
-                Style Controls
-              </button>
-            </div>
+        <div class="ce-topbar-right">
+          <label class="ce-theme-toggle" aria-label="Toggle theme">
+            <input type="checkbox" id="themeToggle" checked />
+            <span class="ce-toggle-track">
+              <span class="ce-toggle-thumb"></span>
+            </span>
+            <span class="ce-toggle-label" id="modePill">Dark</span>
+          </label>
 
-            <div class="ce-timeline-actions" id="timelineActions">
-              <span class="ce-timeline-label">Timeline</span>
-              <button
-                class="ce-btn ce-btn--ghost ce-btn--sm"
-                id="addSegmentBtn"
-                type="button"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
-                </svg>
-                Add
-              </button>
-              <button
-                class="ce-btn ce-btn--ghost ce-btn--sm"
-                id="regenerateCaptionsBtn"
-                type="button"
-              >
-                <svg
-                  width="13"
-                  height="13"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-                Regenerate
-              </button>
-            </div>
+          <button class="ce-btn ce-btn--publish" id="publishNavBtn" type="button">
+            <span class="publish-dot"></span>
+            <span>Publish</span>
+          </button>
+
+          <button class="ce-btn ce-btn--primary" id="saveAndBackBtn" type="button" onclick="if(typeof goBack==='function'){goBack();}else{window.location.href='index.html';}">
+            Save &amp; Return
+          </button>
+        </div>
+      </header>
+
+      <!-- ─── EDITOR SHELL ────────────────────────────────────── -->
+      <main class="ce-shell">
+        <!-- NO CLIP STATE -->
+        <div id="noClipState" class="ce-empty-state" style="display: none">
+          <div class="ce-empty-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+            </svg>
           </div>
+          <h3 class="ce-empty-title">No clip selected</h3>
+          <p class="ce-empty-sub">
+            Go back to the studio and open a generated clip in the caption editor.
+          </p>
+          <button class="ce-btn ce-btn--primary" id="goBackBtn" type="button" onclick="window.location.href='index.html';">
+            Go to Studio
+          </button>
+        </div>
 
-          <!-- ─── TIMELINE PANEL ─────────────────────────────── -->
-          <section
-            class="caption-tab-panel is-active"
-            id="timelinePanel"
-            data-panel="timeline"
-            aria-hidden="false"
-          >
-            <div id="captionLoadingState" class="ce-loading-card">
-              <div class="ce-loading-ring"></div>
-              <div class="caption-loading-copy">Generating captions…</div>
-            </div>
-
-            <div
-              class="caption-segments-list"
-              id="captionSegmentsList"
-              style="display: none"
-            ></div>
-          </section>
-
-          <!-- ─── STYLE PANEL ────────────────────────────────── -->
-          <section
-            class="caption-tab-panel"
-            id="stylePanel"
-            data-panel="style"
-            aria-hidden="true"
-            hidden
-          >
-
-            <div class="caption-style-groups ce-style-grid">
-              <!-- 1. TYPOGRAPHY -->
-              <section class="ce-card" style="grid-area: typography">
-                <div class="ce-card-head">
-                  <h4 class="ce-card-title">Typography</h4>
-                </div>
-
-                <div class="ce-field">
-                  <label class="ce-label" for="capFontFamily"
-                    >Font Family</label
-                  >
-                  <div class="ce-select-wrap">
-                    <select id="capFontFamily" class="ce-select">
-                      <option value="'Montserrat', sans-serif">
-                        Montserrat
-                      </option>
-                      <option value="Inter, sans-serif">Inter</option>
-                      <option value="'Poppins', sans-serif">Poppins</option>
-                      <option value="'Oswald', sans-serif">Oswald</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Courier New', monospace">
-                        Courier New
-                      </option>
-                      <option value="'Arial Black', sans-serif">
-                        Arial Black
-                      </option>
-                      <option value="Impact, sans-serif">Impact</option>
-                    </select>
-                    <span class="ce-select-caret">⌄</span>
+        <!-- MAIN LAYOUT: Phone on Left, Style Controls directly on Right -->
+        <div class="ce-layout" id="editorShell">
+          <!-- LEFT: MOBILE PREVIEW PANEL (246px x 535px) -->
+          <aside class="ce-preview-panel">
+            <div class="ce-phone-stage">
+              <div class="ce-phone-frame">
+                <div class="ce-phone-bezel">
+                  <div class="ce-phone-notch">
+                    <div class="ce-phone-island"></div>
                   </div>
-                </div>
+                  <div class="ce-phone-screen">
+                    <div class="caption-video-wrap" id="captionVideoWrap">
+                      <!-- ✦ 4K Quality Toggle -->
+                      <div class="ce-quality-badge-wrap">
+                        <button class="ce-quality-enhancer is-active" id="qualityEnhancerBtn" type="button" title="4K Quality (Click to toggle)">4K</button>
+                      </div>
 
-                <div class="ce-field">
-                  <label class="ce-label" for="capFontSize">
-                    Font Size —
-                    <strong><span id="capFontSizeVal">28</span>px</strong>
-                  </label>
-                  <input
-                    class="ce-range"
-                    type="range"
-                    id="capFontSize"
-                    min="14"
-                    max="72"
-                    value="28"
-                  />
-                </div>
+                      <video
+                        id="captionVideo"
+                        class="caption-editor-video"
+                        controls
+                        playsinline
+                        preload="metadata"
+                      ></video>
 
-                <div class="ce-field">
-                  <label class="ce-label" for="capAnimStyle"
-                    >Word Animation</label
-                  >
-                  <div class="ce-select-wrap">
-                    <select id="capAnimStyle" class="ce-select">
-                      <option value="none">None — Static</option>
-                      <option value="classic">Classic — Fade</option>
-                      <option value="elevate">Elevate — Float Up</option>
-                      <option value="reveal">Reveal — Blur Fade</option>
-                      <option value="highlight">Highlight — Bold Pop</option>
-                      <option value="neon">Neon — Glow</option>
-                      <option value="cinematic">Cinematic — Film Strip</option>
-                      <option value="pop">Pop — Bounce In</option>
-                      <option value="typewriter">Typewriter — Step In</option>
-                      <option value="oneword">One Word — Show One</option>
-                      <option value="twoword">Two Word — Show Two</option>
-                      <option value="wordcolor">
-                        Word Color — Color Change
-                      </option>
-                      <option value="wordappend">
-                        Word Append — Append In
-                      </option>
-                      <option value="highlightimpact">
-                        Highlight Impact — Impactful Word
-                      </option>
-                    </select>
-                    <span class="ce-select-caret">⌄</span>
-                  </div>
-                </div>
-              </section>
-
-              <!-- 2. COLORS -->
-              <section class="ce-card" style="grid-area: colors">
-                <div class="ce-card-head">
-                  <h4 class="ce-card-title">Colors</h4>
-                </div>
-
-                <div class="ce-color-block">
-                  <div class="ce-color-row">
-                    <label class="ce-label" for="capTextColor">Text</label>
-                    <input
-                      type="color"
-                      id="capTextColor"
-                      class="ce-color-input"
-                      value="#ffffff"
-                    />
-                  </div>
-                  <div class="ce-swatches">
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#ffffff"
-                      style="--sw: #ffffff"
-                      title="White"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#111111"
-                      style="--sw: #111111"
-                      title="Black"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#F5D76E"
-                      style="--sw: #f5d76e"
-                      title="Gold"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#90CDF4"
-                      style="--sw: #90cdf4"
-                      title="Sky"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#4ade80"
-                      style="--sw: #4ade80"
-                      title="Green"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#00ffff"
-                      style="--sw: #00ffff"
-                      title="Cyan"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capTextColor"
-                      data-value="#F6A6C1"
-                      style="--sw: #f6a6c1"
-                      title="Blush"
-                    ></button>
-                  </div>
-                </div>
-
-                <div class="ce-color-block">
-                  <div class="ce-color-row">
-                    <label class="ce-label" for="capBgColor">Background</label>
-                    <input
-                      type="color"
-                      id="capBgColor"
-                      class="ce-color-input"
-                      value="#000000"
-                    />
-                  </div>
-                  <div class="ce-swatches">
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#000000"
-                      style="--sw: #000000"
-                      title="Black"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#ffffff"
-                      style="--sw: #ffffff"
-                      title="White"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#1a1a2e"
-                      style="--sw: #1a1a2e"
-                      title="Navy"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#2B2B35"
-                      style="--sw: #2b2b35"
-                      title="Slate"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#F5D76E"
-                      style="--sw: #f5d76e"
-                      title="Gold"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#e53e3e"
-                      style="--sw: #e53e3e"
-                      title="Red"
-                    ></button>
-                    <button
-                      class="color-swatch-btn"
-                      type="button"
-                      data-target="capBgColor"
-                      data-value="#0a0a0a"
-                      style="--sw: #0a0a0a"
-                      title="Near-black"
-                    ></button>
-                  </div>
-                </div>
-
-                <div class="ce-field">
-                  <label class="ce-label" for="capBgOpacity">
-                    Opacity —
-                    <strong><span id="capBgOpacityVal">70</span>%</strong>
-                  </label>
-                  <input
-                    class="ce-range"
-                    type="range"
-                    id="capBgOpacity"
-                    min="0"
-                    max="100"
-                    value="70"
-                  />
-                </div>
-              </section>
-
-              <!-- 3. PRESETS -->
-              <section class="ce-card" style="grid-area: presets">
-                <div class="ce-card-head">
-                  <h4 class="ce-card-title">Style Presets</h4>
-                  <span class="ce-hint"
-                    >Tap to apply — fully replaces current style</span
-                  >
-                </div>
-                <div class="presets-grid" id="presetsGrid"></div>
-              </section>
-
-              <!-- 4. PLACEMENT -->
-              <section class="ce-card" style="grid-area: placement">
-                <div class="ce-card-head">
-                  <h4 class="ce-card-title">Placement</h4>
-                </div>
-                <label class="ce-label">Caption Position</label>
-                <div class="ce-position-group" id="positionBtns">
-                  <button class="duration-btn" data-pos="top" type="button">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <line x1="3" y1="9" x2="21" y2="9" />
-                    </svg>
-                    Top
-                  </button>
-                  <button
-                    class="duration-btn active"
-                    data-pos="bottom"
-                    type="button"
-                  >
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <line x1="3" y1="15" x2="21" y2="15" />
-                    </svg>
-                    Bottom
-                  </button>
-                  <button class="duration-btn" data-pos="center" type="button">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <line x1="3" y1="12" x2="21" y2="12" />
-                    </svg>
-                    Center
-                  </button>
-                </div>
-              </section>
-
-              <!-- 5. SHADOW -->
-              <section class="ce-card" style="grid-area: shadow">
-                <div class="ce-card-head">
-                  <h4 class="ce-card-title">Shadow</h4>
-                </div>
-
-                <label class="ce-toggle-row">
-                  <input type="checkbox" id="capTextShadow" checked />
-                  <span class="ce-mini-track"
-                    ><span class="ce-mini-thumb"></span
-                  ></span>
-                  <span class="ce-toggle-text">Enable Text Shadow</span>
-                </label>
-
-                <div class="shadow-controls-grid" id="shadowControlsGrid">
-                  <div
-                    class="ce-color-block ce-shadow-color-block"
-                    style="grid-column: 1/-1"
-                  >
-                    <div class="ce-color-row">
-                      <label class="ce-label" for="capShadowColor"
-                        >Shadow Color</label
+                      <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
+                      <div
+                        class="caption-video-overlay"
+                        id="captionOverlay"
+                        title="Drag center to move · Drag corners to increase or decrease box size"
                       >
-                      <input
-                        type="color"
-                        id="capShadowColor"
-                        class="ce-color-input"
-                        value="#000000"
-                      />
+                        <!-- CapCut Bounding Box Frame & Corner Handles -->
+                        <div class="cap-box-frame" id="capBoxFrame">
+                          <div class="cap-box-info" id="capBoxInfo">
+                            <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
+                            <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
+                          <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
+                        </div>
+
+                        <span class="caption-video-text" id="captionOverlayText"></span>
+                      </div>
                     </div>
-                    <div class="ce-swatches">
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#000000"
-                        style="--sw: #000000"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#ffffff"
-                        style="--sw: #ffffff"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#222831"
-                        style="--sw: #222831"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#6B46C1"
-                        style="--sw: #6b46c1"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#00bcd4"
-                        style="--sw: #00bcd4"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#22c55e"
-                        style="--sw: #22c55e"
-                      ></button>
-                      <button
-                        class="color-swatch-btn"
-                        type="button"
-                        data-target="capShadowColor"
-                        data-value="#C53030"
-                        style="--sw: #c53030"
-                      ></button>
+                  </div>
+                  <div class="ce-phone-home-bar"></div>
+                </div>
+                <!-- Phone buttons -->
+                <div class="ce-phone-btn ce-phone-btn--vol-up"></div>
+                <div class="ce-phone-btn ce-phone-btn--vol-down"></div>
+                <div class="ce-phone-btn ce-phone-btn--power"></div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- RIGHT: DIRECT STYLE EDITING WORKSPACE -->
+          <section class="ce-workspace">
+            <div class="ce-style-grid">
+              <!-- CARD 1: TYPOGRAPHY, CADENCE & DURATION -->
+              <section class="ce-card ce-card--typo">
+                <div class="ce-card-head">
+                  <div class="ce-card-title-group">
+                    <span class="ce-card-icon">🔤</span>
+                    <h4 class="ce-card-title">Typography &amp; Cadence</h4>
+                  </div>
+                </div>
+
+                <div class="ce-field-row">
+                  <div class="ce-field">
+                    <label class="ce-label" for="capFontFamily">Font Family</label>
+                    <div class="ce-select-wrap">
+                      <select id="capFontFamily" class="ce-select">
+                        <option value="'Montserrat', sans-serif">Montserrat</option>
+                        <option value="Inter, sans-serif">Inter</option>
+                        <option value="'Poppins', sans-serif">Poppins</option>
+                        <option value="'Oswald', sans-serif">Oswald</option>
+                        <option value="Impact, sans-serif">Impact</option>
+                        <option value="'Arial Black', sans-serif">Arial Black</option>
+                        <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
+                        <option value="Georgia, serif">Georgia</option>
+                      </select>
+                      <span class="ce-select-caret">⌄</span>
                     </div>
                   </div>
 
                   <div class="ce-field">
-                    <label class="ce-label" for="capShadowBlur">
-                      Blur —
-                      <strong><span id="capShadowBlurVal">8</span>px</strong>
-                    </label>
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capFontSize">Font Size</label>
+                      <span class="ce-val-tag"><span id="capFontSizeVal">28</span>px</span>
+                    </div>
                     <input
                       class="ce-range"
                       type="range"
-                      id="capShadowBlur"
-                      min="0"
-                      max="30"
-                      value="8"
+                      id="capFontSize"
+                      min="12"
+                      max="72"
+                      value="28"
                     />
                   </div>
+                </div>
 
+                <!-- LETTER SPACING & LINE SPACING -->
+                <div class="ce-field-row">
                   <div class="ce-field">
-                    <label class="ce-label" for="capShadowOffsetX"
-                      >Offset X</label
-                    >
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capLetterSpacing">Letter Spacing</label>
+                      <span class="ce-val-tag"><span id="capLetterSpacingVal">0</span>px</span>
+                    </div>
                     <input
-                      class="ce-input-num"
-                      type="number"
-                      id="capShadowOffsetX"
-                      min="-20"
-                      max="20"
+                      class="ce-range"
+                      type="range"
+                      id="capLetterSpacing"
+                      min="-2"
+                      max="14"
+                      step="1"
                       value="0"
                     />
                   </div>
 
                   <div class="ce-field">
-                    <label class="ce-label" for="capShadowOffsetY"
-                      >Offset Y</label
-                    >
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capLineSpacing">Line Spacing</label>
+                      <span class="ce-val-tag" id="capLineSpacingVal">1.35x</span>
+                    </div>
                     <input
-                      class="ce-input-num"
-                      type="number"
-                      id="capShadowOffsetY"
-                      min="-20"
-                      max="20"
-                      value="2"
+                      class="ce-range"
+                      type="range"
+                      id="capLineSpacing"
+                      min="0.8"
+                      max="2.4"
+                      step="0.05"
+                      value="1.35"
+                    />
+                  </div>
+                </div>
+
+                <!-- WORDS IN A ROW OPTION -->
+                <div class="ce-field ce-field--words-per-row">
+                  <div class="ce-label-with-val">
+                    <label class="ce-label">Words in a Row</label>
+                    <span class="ce-hint">Words per line</span>
+                  </div>
+                  <div class="ce-pill-group" id="wordsPerRowGroup">
+                    <button class="ce-pill-opt is-active" type="button" data-words="0">Auto</button>
+                    <button class="ce-pill-opt" type="button" data-words="1">1 Word</button>
+                    <button class="ce-pill-opt" type="button" data-words="2">2 Words</button>
+                    <button class="ce-pill-opt" type="button" data-words="3">3 Words</button>
+                    <button class="ce-pill-opt" type="button" data-words="4">4 Words</button>
+                    <button class="ce-pill-opt" type="button" data-words="5">5 Words</button>
+                  </div>
+                  <input type="hidden" id="capWordsPerRow" value="0" />
+                </div>
+
+                <!-- LETTER CASE / TEXT TRANSFORM -->
+                <div class="ce-field ce-field--case">
+                  <div class="ce-label-with-val">
+                    <label class="ce-label">Letter Case</label>
+                    <span class="ce-hint">Hormozi / Viral</span>
+                  </div>
+                  <div class="ce-pill-group" id="textTransformGroup">
+                    <button class="ce-pill-opt is-active" type="button" data-case="none">Normal</button>
+                    <button class="ce-pill-opt" type="button" data-case="uppercase">ALL CAPS</button>
+                    <button class="ce-pill-opt" type="button" data-case="capitalize">Title</button>
+                    <button class="ce-pill-opt" type="button" data-case="lowercase">lower</button>
+                  </div>
+                  <input type="hidden" id="capTextTransform" value="none" />
+                </div>
+
+                <!-- WORD ANIMATION & SPEED/DURATION -->
+                <div class="ce-field-row">
+                  <div class="ce-field">
+                    <label class="ce-label" for="capAnimStyle">Word Animation</label>
+                    <div class="ce-select-wrap">
+                      <select id="capAnimStyle" class="ce-select">
+                        <option value="none">None — Static</option>
+                        <option value="classic">Classic — Smooth Fade</option>
+                        <option value="pop">Pop — Bounce In</option>
+                        <option value="elevate">Elevate — Float Up</option>
+                        <option value="reveal">Reveal — Blur Fade</option>
+                        <option value="highlight">Highlight — Punchy Scale</option>
+                        <option value="neon">Neon — Cyan Glow</option>
+                        <option value="cinematic">Cinematic — Film Drift</option>
+                        <option value="typewriter">Typewriter — Snappy Step</option>
+                        <option value="oneword">One Word — Show One</option>
+                        <option value="twoword">Two Word — Show Two</option>
+                        <option value="wordcolor">Word Color — Rainbow Cycle</option>
+                        <option value="wordappend">Word Append — Step Reveal</option>
+                        <option value="highlightimpact">Highlight Impact — Impactful Cyan</option>
+                      </select>
+                      <span class="ce-select-caret">⌄</span>
+                    </div>
+                  </div>
+
+                  <div class="ce-field">
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capPresetDuration">Animation Speed</label>
+                      <span class="ce-val-tag"><span id="capPresetDurationVal">0.6</span>s</span>
+                    </div>
+                    <input
+                      class="ce-range"
+                      type="range"
+                      id="capPresetDuration"
+                      min="0.2"
+                      max="2.5"
+                      step="0.1"
+                      value="0.6"
                     />
                   </div>
                 </div>
               </section>
 
-              <!-- 6. ACTIONS -->
-              
+              <!-- CARD 2: COLORS, SHADOW & STROKE -->
+              <section class="ce-card ce-card--colors">
+                <div class="ce-card-head">
+                  <div class="ce-card-title-group">
+                    <span class="ce-card-icon">🎨</span>
+                    <h4 class="ce-card-title">Colors &amp; Outline</h4>
+                  </div>
+                </div>
+
+                <div class="ce-color-rows-grid">
+                  <!-- Text Color -->
+                  <div class="ce-color-block">
+                    <div class="ce-color-row">
+                      <span class="ce-label">Text Color</span>
+                      <input
+                        type="color"
+                        id="capTextColor"
+                        class="ce-color-input"
+                        value="#ffffff"
+                      />
+                    </div>
+                    <div class="ce-swatches">
+                      <button class="color-swatch-btn active" type="button" data-target="capTextColor" data-value="#ffffff" style="--sw: #ffffff" title="White"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#f5d76e" style="--sw: #f5d76e" title="Gold"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#00e5ff" style="--sw: #00e5ff" title="Cyan"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#4ade80" style="--sw: #4ade80" title="Green"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#ff6e5e" style="--sw: #ff6e5e" title="Coral"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#111111" style="--sw: #111111" title="Black"></button>
+                    </div>
+                  </div>
+
+                  <!-- Background Color & Opacity -->
+                  <div class="ce-color-block">
+                    <div class="ce-color-row">
+                      <span class="ce-label">Background</span>
+                      <input
+                        type="color"
+                        id="capBgColor"
+                        class="ce-color-input"
+                        value="#000000"
+                      />
+                    </div>
+                    <div class="ce-swatches">
+                      <button class="color-swatch-btn active" type="button" data-target="capBgColor" data-value="#000000" style="--sw: #000000" title="Black"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#1a1b1d" style="--sw: #1a1b1d" title="Charcoal"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#252629" style="--sw: #252629" title="Dark Gray"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#f5d76e" style="--sw: #f5d76e" title="Gold"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#ffffff" style="--sw: #ffffff" title="White"></button>
+                    </div>
+                    <div class="ce-field-row" style="margin-top: 4px; gap: 8px;">
+                      <div class="ce-field ce-field--compact" style="flex: 1;">
+                        <div class="ce-label-with-val">
+                          <label class="ce-label" for="capBgOpacity">Bg Opacity</label>
+                          <span class="ce-val-tag"><span id="capBgOpacityVal">70</span>%</span>
+                        </div>
+                        <input
+                          class="ce-range"
+                          type="range"
+                          id="capBgOpacity"
+                          min="0"
+                          max="100"
+                          value="70"
+                        />
+                      </div>
+                      <div class="ce-field ce-field--compact" style="flex: 1;">
+                        <div class="ce-label-with-val">
+                          <label class="ce-label" for="capBoxPadding">Box Padding</label>
+                          <span class="ce-val-tag"><span id="capBoxPaddingVal">14</span>px</span>
+                        </div>
+                        <input
+                          class="ce-range"
+                          type="range"
+                          id="capBoxPadding"
+                          min="4"
+                          max="40"
+                          value="14"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- STROKE & GLOW CONTROLS -->
+                <div class="ce-field-row">
+                  <div class="ce-field">
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capStrokeWidth">Outline Stroke</label>
+                      <span class="ce-val-tag"><span id="capStrokeWidthVal">0</span>px</span>
+                    </div>
+                    <div class="ce-inline-input-group">
+                      <input
+                        class="ce-range"
+                        type="range"
+                        id="capStrokeWidth"
+                        min="0"
+                        max="10"
+                        step="1"
+                        value="0"
+                      />
+                      <input
+                        type="color"
+                        id="capStrokeColor"
+                        class="ce-color-input ce-color-input--sm"
+                        value="#000000"
+                        title="Stroke Color"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="ce-field">
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capGlowIntensity">Neon Glow</label>
+                      <span class="ce-val-tag"><span id="capGlowIntensityVal">0</span>px</span>
+                    </div>
+                    <input
+                      class="ce-range"
+                      type="range"
+                      id="capGlowIntensity"
+                      min="0"
+                      max="30"
+                      step="2"
+                      value="0"
+                    />
+                  </div>
+                </div>
+
+                <!-- Text Shadow Controls -->
+                <div class="ce-shadow-subcard">
+                  <div class="ce-shadow-head">
+                    <label class="ce-toggle-row">
+                      <input type="checkbox" id="capTextShadow" checked />
+                      <span class="ce-mini-track"><span class="ce-mini-thumb"></span></span>
+                      <span class="ce-toggle-text">Text Shadow</span>
+                    </label>
+
+                    <div class="ce-inline-color-pick">
+                      <input
+                        type="color"
+                        id="capShadowColor"
+                        class="ce-color-input ce-color-input--sm"
+                        value="#000000"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="shadow-controls-grid" id="shadowControlsGrid">
+                    <div class="ce-field ce-field--compact">
+                      <div class="ce-label-with-val">
+                        <label class="ce-label" for="capShadowBlur">Blur</label>
+                        <span class="ce-val-tag"><span id="capShadowBlurVal">8</span>px</span>
+                      </div>
+                      <input
+                        class="ce-range"
+                        type="range"
+                        id="capShadowBlur"
+                        min="0"
+                        max="30"
+                        value="8"
+                      />
+                    </div>
+
+                    <div class="ce-field-offsets">
+                      <label class="ce-offset-item">
+                        <span>Off X</span>
+                        <input
+                          class="ce-input-num"
+                          type="number"
+                          id="capShadowOffsetX"
+                          min="-20"
+                          max="20"
+                          value="0"
+                        />
+                      </label>
+                      <label class="ce-offset-item">
+                        <span>Off Y</span>
+                        <input
+                          class="ce-input-num"
+                          type="number"
+                          id="capShadowOffsetY"
+                          min="-20"
+                          max="20"
+                          value="2"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- CARD 3: POSITION & FREEFORM PLACEMENT -->
+              <section class="ce-card ce-card--placement">
+                <div class="ce-card-head">
+                  <div class="ce-card-title-group">
+                    <span class="ce-card-icon">📍</span>
+                    <h4 class="ce-card-title">Position &amp; Tilt</h4>
+                  </div>
+                  <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
+                </div>
+
+                <div class="ce-placement-presets" id="positionBtns">
+                  <button class="duration-btn" data-pos="top" data-x="50" data-y="12" type="button">
+                    <span>Top</span>
+                  </button>
+                  <button class="duration-btn" data-pos="center" data-x="50" data-y="50" type="button">
+                    <span>Center</span>
+                  </button>
+                  <button class="duration-btn active" data-pos="bottom" data-x="50" data-y="82" type="button">
+                    <span>Bottom</span>
+                  </button>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="15" type="button">
+                    <span>Top-Left</span>
+                  </button>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="82" type="button">
+                    <span>Bottom-Left</span>
+                  </button>
+                  <button class="duration-btn" data-pos="custom" data-x="50" data-y="82" id="resetCenterBtn" type="button">
+                    <span>Reset Center</span>
+                  </button>
+                </div>
+
+                <!-- X and Y Sliders -->
+                <div class="ce-coord-sliders">
+                  <div class="ce-field ce-field--compact">
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capPosX">Horizontal (X)</label>
+                      <span class="ce-val-tag" id="capPosXVal">50%</span>
+                    </div>
+                    <input
+                      class="ce-range"
+                      type="range"
+                      id="capPosX"
+                      min="5"
+                      max="95"
+                      value="50"
+                    />
+                  </div>
+
+                  <div class="ce-field ce-field--compact">
+                    <div class="ce-label-with-val">
+                      <label class="ce-label" for="capPosY">Vertical (Y)</label>
+                      <span class="ce-val-tag" id="capPosYVal">82%</span>
+                    </div>
+                    <input
+                      class="ce-range"
+                      type="range"
+                      id="capPosY"
+                      min="5"
+                      max="95"
+                      value="82"
+                    />
+                  </div>
+                </div>
+
+                <!-- ROTATION / TILT ANGLE -->
+                <div class="ce-field ce-field--compact" style="margin-top: 4px;">
+                  <div class="ce-label-with-val">
+                    <label class="ce-label" for="capRotateAngle">Rotation / Tilt</label>
+                    <span class="ce-val-tag"><span id="capRotateAngleVal">0</span>°</span>
+                  </div>
+                  <input
+                    class="ce-range"
+                    type="range"
+                    id="capRotateAngle"
+                    min="-15"
+                    max="15"
+                    step="1"
+                    value="0"
+                  />
+                </div>
+
+                <div class="ce-drag-hint">
+                  <span class="hint-icon">💡</span>
+                  <span>Click &amp; drag the caption overlay on the phone preview to place it anywhere!</span>
+                </div>
+              </section>
+
+              <!-- CARD 4: PRESETS & EXPORT ACTIONS -->
+              <section class="ce-card ce-card--presets">
+                <div class="ce-card-head">
+                  <div class="ce-card-title-group">
+                    <span class="ce-card-icon">⚡</span>
+                    <h4 class="ce-card-title">Presets &amp; Export</h4>
+                  </div>
+                  <span class="ce-hint">1-click styles</span>
+                </div>
+
+                <div class="presets-grid" id="presetsGrid"></div>
+
+                <div class="ce-export-actions-area">
+                  <button
+                    id="exportCaptionedVideoBtn"
+                    class="ce-btn ce-btn--export-hero"
+                    type="button"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Download Video With Captions</span>
+                  </button>
+                </div>
+              </section>
             </div>
-            <!-- /ce-style-grid -->
           </section>
-          <!-- /stylePanel -->
-        </section>
-        <!-- /ce-workspace -->
-      </div>
-      <!-- /ce-layout -->
-    </main>
+        </div>
+      </main>
+    </div>
+
     <script src="captions.js"></script>
   </body>
 </html>

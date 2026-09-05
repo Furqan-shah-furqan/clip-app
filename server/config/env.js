@@ -26,13 +26,16 @@ module.exports = {
 
   GOOGLE_CLIENT_ID: required("GOOGLE_CLIENT_ID"),
   GOOGLE_CLIENT_SECRET: required("GOOGLE_CLIENT_SECRET"),
-  GOOGLE_REDIRECT_URI: required("GOOGLE_REDIRECT_URI"),
+  GOOGLE_REDIRECT_URI: optional(
+    "GOOGLE_REDIRECT_URI",
+    process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/youtube/callback` : "http://localhost:3000/api/auth/youtube/callback"
+  ),
 
   INSTAGRAM_APP_ID: optional("INSTAGRAM_APP_ID"),
   INSTAGRAM_APP_SECRET: optional("INSTAGRAM_APP_SECRET"),
   INSTAGRAM_REDIRECT_URI: optional(
     "INSTAGRAM_REDIRECT_URI",
-    "https://germicide-udder-dense.ngrok-free.dev/api/auth/instagram/callback",
+    process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/instagram/callback` : "http://localhost:3000/api/auth/instagram/callback"
   ),
   INSTAGRAM_GRAPH_BASE_URL: optional(
     "INSTAGRAM_GRAPH_BASE_URL",

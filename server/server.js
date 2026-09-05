@@ -1,14 +1,60 @@
+const path = require("path");
+const fs = require("fs");
 const { execSync } = require("child_process");
+
+const localBin = path.resolve(__dirname, "../bin");
+if (fs.existsSync(localBin) && !process.env.PATH.includes(localBin)) {
+  process.env.PATH = `${localBin}${path.delimiter}${process.env.PATH}`;
+}
+
+const isWindows = process.platform === "win32";
+
+if (isWindows) {
+  if (!process.env.FFMPEG_PATH && fs.existsSync(path.join(localBin, "ffmpeg.exe"))) {
+    process.env.FFMPEG_PATH = path.join(localBin, "ffmpeg.exe");
+  }
+  if (!process.env.YTDLP_PATH && fs.existsSync(path.join(localBin, "yt-dlp.exe"))) {
+    process.env.YTDLP_PATH = path.join(localBin, "yt-dlp.exe");
+  }
+  const venvPython = path.resolve(__dirname, "../.venv/Scripts/python.exe");
+  if (fs.existsSync(venvPython)) {
+    process.env.PYTHON_PATH = venvPython;
+    const venvScripts = path.dirname(venvPython);
+    if (!process.env.PATH.includes(venvScripts)) {
+      process.env.PATH = `${venvScripts}${path.delimiter}${process.env.PATH}`;
+    }
+  }
+} else {
+  // Linux / Docker / Cloud Environment
+  const linuxVenvPython = path.resolve(__dirname, "../.venv/bin/python");
+  if (fs.existsSync(linuxVenvPython)) {
+    process.env.PYTHON_PATH = linuxVenvPython;
+  } else if (!process.env.PYTHON_PATH || !fs.existsSync(process.env.PYTHON_PATH)) {
+    process.env.PYTHON_PATH = "python3";
+  }
+}
+
+// Fallback: If PYTHON_PATH was set from Windows .env on a Linux machine, use python3
+if (process.env.PYTHON_PATH && !fs.existsSync(process.env.PYTHON_PATH) && !isWindows) {
+  process.env.PYTHON_PATH = "python3";
+}
+
 try {
   const v = execSync("yt-dlp --version").toString().trim();
   console.log("yt-dlp version:", v);
 } catch {
   console.error("yt-dlp NOT found");
 }
+
+try {
+  const fv = execSync("ffmpeg -version").toString().split("\n")[0];
+  console.log("ffmpeg version:", fv);
+} catch {
+  console.error("ffmpeg NOT found");
+}
+
 const express = require("express");
-const path = require("path");
 const cors = require("cors");
-const fs = require("fs");
 const os = require("os");
 const { execFile } = require("child_process");
 
@@ -118,6 +164,19 @@ function normalizeBurnStyle(style = {}) {
     bgColor: style.bgColor || "#000000",
     bgOpacity: clampNumber(style.bgOpacity, 0, 100, 70),
     position: style.position || "bottom",
+    positionX:
+      style.positionX != null && Number.isFinite(Number(style.positionX))
+        ? Number(style.positionX)
+        : 50,
+    positionY:
+      style.positionY != null && Number.isFinite(Number(style.positionY))
+        ? Number(style.positionY)
+        : style.position === "top"
+          ? 12
+          : style.position === "center"
+            ? 50
+            : 82,
+    wordsPerRow: Number(style.wordsPerRow) || 0,
     textShadow: Boolean(style.textShadow),
     shadowColor: style.shadowColor || "#000000",
     shadowBlur: clampNumber(style.shadowBlur, 0, 80, 8),
@@ -175,7 +234,9 @@ function buildAssOverrideTags(style = {}) {
   const fontName =
     rawFont.split(",")[0].replace(/["']/g, "").trim() || "Montserrat";
 
-  const alignment = mapPosition(s.position);
+  const posX = Math.round((s.playResX || 1080) * ((s.positionX ?? 50) / 100));
+  const posY = Math.round((s.playResY || 1920) * ((s.positionY ?? 82) / 100));
+
   const bold = Number(s.fontWeight) >= 700 ? 1 : 0;
   const spacing = Number(s.letterSpacing) || 0;
 
@@ -206,7 +267,7 @@ function buildAssOverrideTags(style = {}) {
 
   const blur = shadowEnabled ? Math.max(0.4, shadowBlur / 8) : 0;
 
-  return `{\\fn${fontName}\\an${alignment}\\fs${Math.round(Number(s.fontSize) || 28)}\\b${bold}\\fsp${spacing}\\bord${outline}\\shad${shadow}\\blur${Number(blur.toFixed(2))}\\1c${textColor}\\1a${textAlpha}\\3c${outlineColor}\\3a${outlineAlpha}\\4c${shadowColor}\\4a${shadowAlpha}}`;
+  return `{\\fn${fontName}\\an5\\pos(${posX},${posY})\\fs${Math.round(Number(s.fontSize) || 28)}\\b${bold}\\fsp${spacing}\\bord${outline}\\shad${shadow}\\blur${Number(blur.toFixed(2))}\\1c${textColor}\\1a${textAlpha}\\3c${outlineColor}\\3a${outlineAlpha}\\4c${shadowColor}\\4a${shadowAlpha}}`;
 }
 
 function getBurnAnimationMode(style = {}) {
@@ -568,7 +629,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Static file serving
 app.use(express.static(path.join(rootDir, "public")));
 app.use("/captions", express.static(captionsDir));
-app.use("/exports", express.static(exportsDir));
+app.use("/exports", express.static(path.join(rootDir, "exports")));
 app.use("/uploads", express.static(uploadsDir));
 
 // API routes

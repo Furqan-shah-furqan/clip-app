@@ -112,55 +112,84 @@ async function exchangeFacebookCodeForLongLivedToken(code) {
 }
 
 async function fetchInstagramBusinessProfile({ accessToken }) {
-  const response = await axios.get(`${INSTAGRAM_GRAPH_BASE_URL}/me/accounts`, {
-    params: {
-      fields:
-        "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url}",
-      access_token: accessToken,
-    },
-    timeout: 30000,
-  });
+  const graphVersion = "v25.0";
 
-  const pages = Array.isArray(response.data?.data) ? response.data.data : [];
+  // 1. Check granted permissions
+  const permissionsUrl =
+    `https://graph.facebook.com/${graphVersion}/me/permissions` +
+    `?access_token=${encodeURIComponent(accessToken)}`;
 
-  const pageWithInstagram = pages.find((page) => {
-    return page?.instagram_business_account?.id;
-  });
+  const permissionsResponse = await fetch(permissionsUrl);
+  const permissionsData = await permissionsResponse.json();
 
-  if (!pageWithInstagram) {
+  console.log("INSTAGRAM DEBUG - /me/permissions:");
+  console.log(JSON.stringify(permissionsData, null, 2));
+
+  // 2. Try normal /me/accounts first
+  const pagesUrl =
+    `https://graph.facebook.com/${graphVersion}/me/accounts` +
+    `?fields=id,name,access_token,tasks,instagram_business_account{id,username,profile_picture_url}` +
+    `&access_token=${encodeURIComponent(accessToken)}`;
+
+  const pagesResponse = await fetch(pagesUrl);
+  const pagesData = await pagesResponse.json();
+
+  console.log("INSTAGRAM DEBUG - /me/accounts:");
+  console.log(JSON.stringify(pagesData, null, 2));
+
+  if (!pagesResponse.ok) {
     throw new Error(
-      "No Instagram business account found. Connect your Instagram professional account to a Facebook Page, then try again.",
+      pagesData?.error?.message || "Failed to fetch Facebook Pages"
     );
   }
 
-  const instagramAccount = pageWithInstagram.instagram_business_account;
+  let pages = Array.isArray(pagesData.data) ? pagesData.data : [];
+
+  let pageWithInstagram = pages.find(
+    (page) => page.instagram_business_account?.id
+  );
+
+  // 3. Fallback: use direct Page ID from .env
+  if (!pageWithInstagram && process.env.INSTAGRAM_PAGE_ID) {
+    const directPageUrl =
+      `https://graph.facebook.com/${graphVersion}/${process.env.INSTAGRAM_PAGE_ID}` +
+      `?fields=id,name,access_token,instagram_business_account{id,username,profile_picture_url}` +
+      `&access_token=${encodeURIComponent(accessToken)}`;
+
+    const directPageResponse = await fetch(directPageUrl);
+    const directPageData = await directPageResponse.json();
+
+    console.log("INSTAGRAM DEBUG - direct page fallback:");
+    console.log(JSON.stringify(directPageData, null, 2));
+
+    if (!directPageResponse.ok) {
+      throw new Error(
+        directPageData?.error?.message || "Failed to fetch direct Facebook Page"
+      );
+    }
+
+    if (directPageData.instagram_business_account?.id) {
+      pageWithInstagram = directPageData;
+    }
+  }
+
+  if (!pageWithInstagram) {
+    throw new Error(
+      "No Instagram business account found. /me/accounts returned empty and direct Page fallback did not find Instagram."
+    );
+  }
+
+  const ig = pageWithInstagram.instagram_business_account;
 
   return {
-    id: String(instagramAccount.id),
-    username:
-      instagramAccount.username ||
-      instagramAccount.name ||
-      "Instagram Account",
-    name:
-      instagramAccount.name ||
-      instagramAccount.username ||
-      "Instagram Account",
-    profilePictureUrl: instagramAccount.profile_picture_url || "",
-    facebookPage: {
-      id: String(pageWithInstagram.id),
-      name: pageWithInstagram.name || "Facebook Page",
-      accessToken: pageWithInstagram.access_token || accessToken,
-    },
-    raw: {
-      instagramAccount,
-      facebookPage: {
-        id: pageWithInstagram.id,
-        name: pageWithInstagram.name,
-      },
-    },
+    id: ig.id,
+    username: ig.username || "",
+    profilePictureUrl: ig.profile_picture_url || "",
+    pageId: pageWithInstagram.id,
+    pageName: pageWithInstagram.name,
+    pageAccessToken: pageWithInstagram.access_token,
   };
 }
-
 async function exchangeInstagramCodeForLongLivedToken(code) {
   return exchangeFacebookCodeForLongLivedToken(code);
 }

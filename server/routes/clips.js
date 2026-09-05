@@ -77,6 +77,39 @@ function ensureValidClipWindow(startTime, endTime) {
   return { startSec, endSec, durationSec: endSec - startSec };
 }
 
+
+function readProjects() {
+  try {
+    if (!fs.existsSync(projectsFile)) return [];
+    const raw = fs.readFileSync(projectsFile, "utf8");
+    const data = raw ? JSON.parse(raw) : [];
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeProjects(projects) {
+  fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), "utf8");
+}
+
+function upsertProject(project) {
+  const projects = readProjects();
+  const id = String(project.id || `project_${Date.now()}`);
+  const now = new Date().toISOString();
+  const payload = {
+    ...project,
+    id,
+    updatedAt: now,
+    createdAt: project.createdAt || now,
+  };
+  const index = projects.findIndex((item) => String(item.id) === id);
+  if (index >= 0) projects[index] = { ...projects[index], ...payload };
+  else projects.unshift(payload);
+  writeProjects(projects.slice(0, 100));
+  return payload;
+}
+
 function saveProject(project) {
   let projects = [];
   try {
@@ -224,7 +257,13 @@ async function getLocalSmartTranscript(inputPath) {
   const videoPath = resolveSmartInputVideo(inputPath);
   if (!videoPath) throw new Error("Input video file not found for smart clipping");
 
-  const pythonCandidates = [process.env.PYTHON_PATH, "python3", "python"].filter(Boolean);
+  const python311 = "C:\\Users\\xpert computers\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
+  const pythonCandidates = [
+    process.env.PYTHON_PATH,
+    fs.existsSync(python311) ? python311 : null,
+    "python3",
+    "python",
+  ].filter(Boolean);
   const TRANSCRIBE_SCRIPT = path.join(rootDir, "python", "transcribe_whisper.py");
 
   if (fs.existsSync(TRANSCRIBE_SCRIPT)) {
@@ -283,22 +322,29 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
   const outputTemplate = `${tempBase}.%(ext)s`;
   const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
-  const ytDlpPath = process.env.YTDLP_PATH || "yt-dlp";
+  const ytDlpPath = process.env.YTDLP_PATH || path.join(rootDir, "bin", "yt-dlp.exe");
+  const ffmpegDir = path.join(rootDir, "bin");
+
+  const videoId = extractYouTubeId(sourceUrl);
+  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const args = [
     "--no-playlist", "--force-ipv4", "--no-check-certificates", "--no-warnings",
+    "--extractor-args", "youtube:player_client=android,web",
+    "--js-runtimes", "node",
     "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "-f", "18/b[ext=mp4][height<=720]/best[ext=mp4][height<=720]/best",
+    "-f", "bv*[height<=720]+ba/b[height<=720]/bv*+ba/best",
+    ...(fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe")) ? ["--ffmpeg-location", ffmpegDir] : []),
     "--download-sections", section,
     "--force-keyframes-at-cuts",
     "--merge-output-format", "mp4",
     "--socket-timeout", "15",
     "--retries", "3",
     "-o", outputTemplate,
-    sourceUrl,
+    targetUrl,
   ];
 
-  await runCommand(ytDlpPath, args, { timeoutMs: 90000 });
+  await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
 
   const files = fs.readdirSync(uploadsDir)
     .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
@@ -539,29 +585,162 @@ router.post("/smart-generate", async (req, res) => {
 
 router.post("/generate", async (req, res) => {
   try {
-    const { inputPath, sourceType, startTime, endTime, aspectRatio } = req.body;
-    if (!startTime || !endTime) return res.status(400).json({ error: "Missing required fields" });
-    if (!inputPath) return res.status(400).json({ error: "Input video file is required" });
+    const { inputPath, sourceType, sourceUrl, startTime, endTime, aspectRatio } = req.body || {};
+
+    if (!startTime || !endTime) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
+
+    if (normalizedSourceType === "youtube" && (!sourceUrl || !isValidYouTubeUrl(sourceUrl))) {
+      return res.status(400).json({ error: "Valid YouTube source URL is required" });
+    }
+
+    if (normalizedSourceType !== "youtube" && !inputPath) {
+      return res.status(400).json({ error: "Input video file is required" });
+    }
 
     ensureValidClipWindow(startTime, endTime);
     fs.mkdirSync(exportsDir, { recursive: true });
 
-    const result = await smartGenerateClip({ inputPath, startTime, endTime, aspectRatio: aspectRatio || "9:16" });
+    let result;
+    let tempSectionPath = null;
+
+    try {
+      if (normalizedSourceType === "youtube") {
+        const startSec = timeToSeconds(startTime);
+        const endSec = timeToSeconds(endTime);
+        const durationSec = Math.max(1, endSec - startSec);
+
+        tempSectionPath = await downloadYouTubeSectionForSmartClipping({
+          sourceUrl,
+          startSec,
+          endSec,
+          index: Date.now(),
+        });
+
+        result = await smartGenerateClip({
+          inputPath: tempSectionPath,
+          startTime: "00:00:00",
+          endTime: secondsToTime(durationSec),
+          aspectRatio: aspectRatio || "9:16",
+        });
+      } else {
+        result = await smartGenerateClip({
+          inputPath,
+          startTime,
+          endTime,
+          aspectRatio: aspectRatio || "9:16",
+        });
+      }
+    } finally {
+      if (tempSectionPath) {
+        try {
+          if (fs.existsSync(tempSectionPath)) fs.unlinkSync(tempSectionPath);
+        } catch {}
+      }
+    }
+
     const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
+    const clipDurationSec = timeToSeconds(endTime) - timeToSeconds(startTime);
 
     return res.json({
       message: "Smart clip generated successfully",
       fileName: result.fileName,
       outputPath: result.outputPath,
       downloadUrl: `/api/files/download/${result.fileName}`,
-      startTime, endTime,
-      duration: timeToSeconds(endTime) - timeToSeconds(startTime),
+      previewUrl: `/api/files/download/${result.fileName}`,
+      startTime,
+      endTime,
+      duration: clipDurationSec,
       size: outputStat?.size || 0,
+      sourceType: normalizedSourceType,
     });
   } catch (error) {
-    console.error("GENERATE ERROR:", error);
-    return res.status(500).json({ error: "Clip generation failed", details: error.message });
+    console.error("SMART GENERATE ERROR:", error);
+    return res.status(500).json({
+      error: "Smart clip generation failed",
+      details: cleanSmartClipError ? cleanSmartClipError(error) : error.message,
+    });
   }
+});
+
+
+router.get("/projects", (req, res) => {
+  const projects = readProjects()
+    .map((project) => ({
+      id: project.id,
+      title: project.title || project.originalName || project.name || "Untitled Project",
+      source: project.source || project.sourceType || "unknown",
+      thumbnail: project.thumbnail || project.uploadedProject?.thumbnail || "",
+      videoId: project.videoId || project.uploadedProject?.videoId || "",
+      duration: project.duration || project.uploadedProject?.duration || 0,
+      clipCount: Array.isArray(project.clips) ? project.clips.length : 0,
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt || project.createdAt,
+    }))
+    .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+
+  res.json({ success: true, projects });
+});
+
+router.get("/projects/:id", (req, res) => {
+  const project = readProjects().find((item) => String(item.id) === String(req.params.id));
+  if (!project) return res.status(404).json({ error: "Project not found" });
+  res.json({ success: true, project });
+});
+
+router.post("/projects/save", (req, res) => {
+  try {
+    const {
+      id,
+      title,
+      uploadedProject,
+      clips,
+      clipCaptions,
+      captionStyle,
+      videoDurationSeconds,
+      selectedDuration,
+    } = req.body || {};
+
+    if (!uploadedProject && !Array.isArray(clips)) {
+      return res.status(400).json({ error: "Nothing to save" });
+    }
+
+    const baseTitle =
+      title ||
+      uploadedProject?.originalName ||
+      uploadedProject?.title ||
+      `Clip Project ${new Date().toLocaleDateString()}`;
+
+    const saved = upsertProject({
+      id,
+      title: baseTitle,
+      source: uploadedProject?.source || uploadedProject?.sourceType || "unknown",
+      uploadedProject: uploadedProject || null,
+      clips: Array.isArray(clips) ? clips : [],
+      clipCaptions: clipCaptions || {},
+      captionStyle: captionStyle || {},
+      videoDurationSeconds: Number(videoDurationSeconds || uploadedProject?.duration || 0),
+      selectedDuration: Number(selectedDuration || 30),
+      thumbnail: uploadedProject?.thumbnail || "",
+      videoId: uploadedProject?.videoId || "",
+      duration: Number(uploadedProject?.duration || videoDurationSeconds || 0),
+    });
+
+    res.json({ success: true, project: saved });
+  } catch (error) {
+    console.error("SAVE PROJECT ERROR:", error);
+    res.status(500).json({ error: "Project save failed", details: error.message });
+  }
+});
+
+router.delete("/projects/:id", (req, res) => {
+  const before = readProjects();
+  const after = before.filter((item) => String(item.id) !== String(req.params.id));
+  writeProjects(after);
+  res.json({ success: true, deleted: before.length - after.length });
 });
 
 router.get("/suggest", (req, res) => {

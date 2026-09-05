@@ -9,6 +9,13 @@ from pathlib import Path
 import cv2
 
 
+def get_ffmpeg_cmd():
+    bin_ffmpeg = Path(__file__).resolve().parent.parent / "bin" / "ffmpeg.exe"
+    if bin_ffmpeg.exists():
+        return str(bin_ffmpeg)
+    return shutil.which("ffmpeg") or "ffmpeg"
+
+
 def run_cmd(cmd):
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
@@ -27,9 +34,9 @@ def parse_time_to_seconds(time_str: str) -> float:
 
 def get_target_size(aspect_ratio: str):
     if aspect_ratio == "9:16":
-        return 1080, 1920
+        return 720, 1280
     if aspect_ratio == "1:1":
-        return 1080, 1080
+        return 720, 720
     return 1280, 720
 
 
@@ -59,26 +66,48 @@ def clamp(v, lo, hi):
     return max(lo, min(v, hi))
 
 
-def detect_largest_face(face_cascade, frame):
+def detect_largest_face(face_cascade, profile_cascade, frame):
     h, w = frame.shape[:2]
     if w <= 0 or h <= 0:
         return None
 
-    detect_w = min(640, w)
+    detect_w = min(360, w)
     scale = detect_w / float(w)
     detect_h = max(1, int(h * scale))
 
-    small = cv2.resize(frame, (detect_w, detect_h), interpolation=cv2.INTER_AREA)
+    small = cv2.resize(frame, (detect_w, detect_h), interpolation=cv2.INTER_LINEAR)
     gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
 
     faces = face_cascade.detectMultiScale(
         gray,
         scaleFactor=1.10,
-        minNeighbors=5,
-        minSize=(48, 48)
+        minNeighbors=4,
+        minSize=(36, 36)
     )
 
-    if len(faces) == 0:
+    if (faces is None or len(faces) == 0) and profile_cascade is not None:
+        # Check profile (right)
+        p_faces = profile_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.10,
+            minNeighbors=4,
+            minSize=(36, 36)
+        )
+        if p_faces is not None and len(p_faces) > 0:
+            faces = p_faces
+        else:
+            # Check profile (left, by flipping horizontally)
+            flipped = cv2.flip(gray, 1)
+            flip_faces = profile_cascade.detectMultiScale(
+                flipped,
+                scaleFactor=1.10,
+                minNeighbors=4,
+                minSize=(36, 36)
+            )
+            if flip_faces is not None and len(flip_faces) > 0:
+                faces = [(detect_w - (fx + fw), fy, fw, fh) for (fx, fy, fw, fh) in flip_faces]
+
+    if faces is None or len(faces) == 0:
         return None
 
     faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
@@ -106,7 +135,7 @@ def trim_clip(input_path: str, start_time: str, end_time: str, trimmed_path: str
     duration = max(end_seconds - start_seconds, 1)
 
     cmd = [
-        "ffmpeg", "-y",
+        get_ffmpeg_cmd(), "-y",
         "-ss", str(start_seconds),
         "-i", input_path,
         "-t", str(duration),
@@ -143,7 +172,13 @@ def smart_reframe_video(trimmed_path: str, final_output: str, aspect_ratio: str)
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    if face_cascade.empty():
+    profile_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_profileface.xml"
+    )
+    if profile_cascade.empty():
+        profile_cascade = None
+
+    if face_cascade.empty() and profile_cascade is None:
         cap.release()
         writer.release()
         raise RuntimeError("Could not load OpenCV face detector")
@@ -158,7 +193,7 @@ def smart_reframe_video(trimmed_path: str, final_output: str, aspect_ratio: str)
 
     frame_index = 0
     last_detected_face = None
-    detection_interval = 5
+    detection_interval = 8
 
     while True:
         ok, frame = cap.read()
@@ -170,7 +205,7 @@ def smart_reframe_video(trimmed_path: str, final_output: str, aspect_ratio: str)
         should_detect = (frame_index % detection_interval == 0) or (last_detected_face is None)
 
         if should_detect:
-            face = detect_largest_face(face_cascade, frame)
+            face = detect_largest_face(face_cascade, profile_cascade, frame)
             if face:
                 last_detected_face = face
                 face_miss_count = 0
@@ -216,7 +251,7 @@ def smart_reframe_video(trimmed_path: str, final_output: str, aspect_ratio: str)
     writer.release()
 
     mux_cmd = [
-        "ffmpeg", "-y",
+        get_ffmpeg_cmd(), "-y",
         "-i", silent_path,
         "-i", trimmed_path,
         "-map", "0:v:0",
@@ -260,7 +295,7 @@ def main():
         print(json.dumps({
             "success": True,
             "fileName": os.path.basename(final_output),
-            "outputPath": final_output
+            "outputPath": str(Path(final_output).resolve())
         }))
     except Exception as e:
         print(json.dumps({

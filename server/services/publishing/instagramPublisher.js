@@ -54,7 +54,6 @@ function resolveLocalClipPath(clip = {}) {
     clip.filePath,
     clip.inputPath,
     clip.sourcePath,
-    clip.storageUrl,
   ].filter(Boolean);
 
   for (const rawPath of candidates) {
@@ -98,10 +97,21 @@ function getInstagramUserId(account = {}) {
 
 function getInstagramErrorMessage(error) {
   return (
+    error?.response?.data?.error?.error_user_msg ||
     error?.response?.data?.error?.message ||
     error?.response?.data?.message ||
     error?.message ||
     "Instagram publishing failed."
+  );
+}
+
+function getInstagramErrorPayload(error) {
+  return (
+    error?.response?.data ||
+    error?.error ||
+    {
+      message: getInstagramErrorMessage(error),
+    }
   );
 }
 
@@ -119,14 +129,22 @@ async function getVideoUrlForInstagram(scheduledPost) {
   const localPath = resolveLocalClipPath(scheduledPost.clip);
 
   const cloudinaryUpload = await uploadVideoToCloudinary(localPath, {
-    publicId: `${scheduledPost.id}-${scheduledPost.clipId || "clip"}`,
-    folder: "clipflow/instagram-reels",
+    folder: "clipflow/instagram",
+    publicId: `instagram-${scheduledPost.id || Date.now()}`,
   });
+
+  if (!isPublicHttpsUrl(cloudinaryUpload.secureUrl)) {
+    throw new Error(
+      `Cloudinary did not return a valid public HTTPS video URL: ${cloudinaryUpload.secureUrl}`
+    );
+  }
+
+  console.log("INSTAGRAM CLOUDINARY VIDEO URL:", cloudinaryUpload.secureUrl);
 
   return {
     videoUrl: cloudinaryUpload.secureUrl,
     cloudinaryUpload,
-    source: "cloudinary",
+    source: "cloudinary_upload",
   };
 }
 
@@ -136,20 +154,22 @@ async function createInstagramReelContainer({
   videoUrl,
   caption,
 }) {
+  const requestPayload = {
+    media_type: "REELS",
+    video_url: videoUrl,
+    caption,
+    share_to_feed: true,
+    access_token: accessToken,
+  };
+
   try {
     const response = await axios.post(
       `${INSTAGRAM_GRAPH_BASE_URL}/${instagramUserId}/media`,
       null,
       {
-        params: {
-          media_type: "REELS",
-          video_url: videoUrl,
-          caption,
-          share_to_feed: true,
-          access_token: accessToken,
-        },
+        params: requestPayload,
         timeout: 60000,
-      },
+      }
     );
 
     const creationId = response.data?.id;
@@ -158,9 +178,29 @@ async function createInstagramReelContainer({
       throw new Error("Instagram did not return a media container ID.");
     }
 
-    return response.data;
+    return {
+      data: response.data,
+      requestPayload: {
+        media_type: requestPayload.media_type,
+        video_url: requestPayload.video_url,
+        caption: requestPayload.caption,
+        share_to_feed: requestPayload.share_to_feed,
+      },
+    };
   } catch (error) {
-    throw new Error(getInstagramErrorMessage(error));
+    const message = getInstagramErrorMessage(error);
+    const payload = getInstagramErrorPayload(error);
+
+    const wrapped = new Error(message);
+    wrapped.responsePayload = payload;
+    wrapped.requestPayload = {
+      media_type: requestPayload.media_type,
+      video_url: requestPayload.video_url,
+      caption: requestPayload.caption,
+      share_to_feed: requestPayload.share_to_feed,
+    };
+
+    throw wrapped;
   }
 }
 
@@ -174,7 +214,7 @@ async function getInstagramContainerStatus({ creationId, accessToken }) {
           access_token: accessToken,
         },
         timeout: 30000,
-      },
+      }
     );
 
     return response.data || {};
@@ -199,6 +239,13 @@ async function waitForInstagramContainerReady({ creationId, accessToken }) {
     const statusCode = String(latestStatus.status_code || "").toUpperCase();
     const statusText = String(latestStatus.status || "");
 
+    console.log("INSTAGRAM CONTAINER STATUS:", {
+      attempt,
+      creationId,
+      statusCode,
+      statusText,
+    });
+
     if (statusCode === "FINISHED") {
       return {
         ready: true,
@@ -209,7 +256,7 @@ async function waitForInstagramContainerReady({ creationId, accessToken }) {
 
     if (statusCode === "ERROR" || statusCode === "EXPIRED") {
       throw new Error(
-        `Instagram media container failed. status_code=${statusCode}, status=${statusText}`,
+        `Instagram media container failed. status_code=${statusCode}, status=${statusText}`
       );
     }
 
@@ -217,7 +264,7 @@ async function waitForInstagramContainerReady({ creationId, accessToken }) {
   }
 
   throw new Error(
-    `Instagram media container was not ready after ${INSTAGRAM_CONTAINER_POLL_ATTEMPTS} checks.`,
+    `Instagram media container was not ready after ${INSTAGRAM_CONTAINER_POLL_ATTEMPTS} checks.`
   );
 }
 
@@ -236,7 +283,7 @@ async function publishInstagramContainer({
           access_token: accessToken,
         },
         timeout: 60000,
-      },
+      }
     );
 
     const mediaId = response.data?.id;
@@ -269,18 +316,19 @@ async function publishInstagramPost(scheduledPost) {
 
   const caption = cleanCaption(
     scheduledPost.caption || scheduledPost.title || "",
-    scheduledPost.hashtags || "",
+    scheduledPost.hashtags || ""
   );
 
   const videoSource = await getVideoUrlForInstagram(scheduledPost);
 
-  const container = await createInstagramReelContainer({
+  const containerResult = await createInstagramReelContainer({
     instagramUserId,
     accessToken,
     videoUrl: videoSource.videoUrl,
     caption,
   });
 
+  const container = containerResult.data;
   const creationId = container.id;
 
   const readyCheck = await waitForInstagramContainerReady({
@@ -306,6 +354,7 @@ async function publishInstagramPost(scheduledPost) {
       caption,
       creation_id: creationId,
       cloudinaryPublicId: videoSource.cloudinaryUpload?.publicId || null,
+      videoSource: videoSource.source,
     },
     responsePayload: {
       container,

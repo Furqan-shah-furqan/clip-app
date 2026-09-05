@@ -1,7 +1,13 @@
-node_modules
-# Keep environment variables out of version control
+node_modules/
 .env
-
+.env.*
+.venv/
+bin/
+*.zip
+*.bak
+clip-app/
+clipflow-studio@*
+test-*.js
 /generated/prisma
 cloudflared.exe
 ngrok.exe
@@ -11,4 +17,5 @@ captions/
 *.mp4
 *.mp3
 *.wav
-node_modules/
+*.log
+

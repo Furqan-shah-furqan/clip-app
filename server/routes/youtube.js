@@ -43,17 +43,41 @@ async function fetchYouTubeMeta(videoId) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("YOUTUBE_API_KEY not set");
 
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`;
-  const { data } = await axios.get(url);
+  const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`;
 
-  const item = data.items?.[0];
-  if (!item) throw new Error("Video not found");
+  try {
+    const { data } = await axios.get(apiUrl);
 
-  const title = item.snippet.title;
-  const thumbnail = item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url || "";
-  const duration = parseDuration(item.contentDetails.duration);
+    console.log("YouTube videoId:", videoId);
+    console.log("YouTube API response:", JSON.stringify(data, null, 2));
 
-  return { title, thumbnail, duration };
+    const item = data.items?.[0];
+
+    if (!item) {
+      throw new Error(
+        "Video not found. The video may be private, deleted, region blocked, or the URL video ID is unavailable."
+      );
+    }
+
+    const title = item.snippet.title;
+    const thumbnail =
+      item.snippet.thumbnails?.maxres?.url ||
+      item.snippet.thumbnails?.high?.url ||
+      item.snippet.thumbnails?.medium?.url ||
+      item.snippet.thumbnails?.default?.url ||
+      "";
+
+    const duration = parseDuration(item.contentDetails.duration);
+
+    const canonicalVideoId = item.id || videoId;
+    return { title, thumbnail, duration, canonicalVideoId };
+  } catch (err) {
+    if (err.response?.data?.error?.message) {
+      throw new Error(err.response.data.error.message);
+    }
+
+    throw err;
+  }
 }
 
 router.get("/info", async (req, res) => {
@@ -64,14 +88,16 @@ router.get("/info", async (req, res) => {
     const videoId = extractYouTubeId(url);
     if (!videoId) return res.status(400).json({ error: "Could not extract video ID" });
 
-    const { title, thumbnail, duration } = await fetchYouTubeMeta(videoId);
+    const { title, thumbnail, duration, canonicalVideoId } = await fetchYouTubeMeta(videoId);
+    const resolvedId = canonicalVideoId || videoId;
 
     return res.json({
       title,
       duration,
       thumbnail,
-      videoId,
-      embedUrl: buildEmbedUrl(videoId)
+      videoId: resolvedId,
+      canonicalUrl: `https://www.youtube.com/watch?v=${resolvedId}`,
+      embedUrl: buildEmbedUrl(resolvedId)
     });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -86,8 +112,10 @@ router.post("/fetch", async (req, res) => {
     const videoId = extractYouTubeId(url);
     if (!videoId) return res.status(400).json({ error: "Could not extract video ID" });
 
-    const { title, thumbnail, duration } = await fetchYouTubeMeta(videoId);
-    const embedUrl = buildEmbedUrl(videoId);
+    const { title, thumbnail, duration, canonicalVideoId } = await fetchYouTubeMeta(videoId);
+    const resolvedId = canonicalVideoId || videoId;
+    const embedUrl = buildEmbedUrl(resolvedId);
+    const canonicalUrl = `https://www.youtube.com/watch?v=${resolvedId}`;
 
     return res.json({
       success: true,
@@ -96,7 +124,7 @@ router.post("/fetch", async (req, res) => {
         id: `yt_${Date.now()}`,
         source: "youtube",
         sourceType: "youtube",
-        sourceUrl: url,
+        sourceUrl: canonicalUrl,
         originalName: title || "YouTube Video",
         fileName: "",
         filePath: "",
@@ -104,7 +132,7 @@ router.post("/fetch", async (req, res) => {
         size: 0,
         duration,
         thumbnail,
-        videoId,
+        videoId: resolvedId,
         embedUrl,
         metaText: `${formatDuration(duration)} • YouTube import ready`,
         createdAt: new Date().toISOString()

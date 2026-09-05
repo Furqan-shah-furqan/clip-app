@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: clip-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://clipuser:clippassword@postgres:5432/clipapp?schema=public
+      - REDIS_URL=redis://redis:6379
+      - APP_URL=http://localhost:3000
+      - TOKEN_ENCRYPTION_KEY=CHANGE_THIS_TO_A_32_CHAR_SECRET_KEY
+      # Cloudinary credentials (for cloud media hosting)
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+      # Google / YouTube OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      # Instagram OAuth
+      - INSTAGRAM_APP_ID=${INSTAGRAM_APP_ID:-}
+      - INSTAGRAM_APP_SECRET=${INSTAGRAM_APP_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - clip_uploads:/app/uploads
+      - clip_exports:/app/exports
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: clip-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clipuser
+      POSTGRES_PASSWORD: clippassword
+      POSTGRES_DB: clipapp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clipuser -d clipapp"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: clip-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
+  clip_uploads:
+  clip_exports:

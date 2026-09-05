@@ -1,4 +1,5 @@
 const PUBLISH_DRAFT_KEY = "clipflow-publish-draft";
+const API_BASE = "/api";
 const REALTIME_FAST_POLL_MS = 3000;
 const REALTIME_IDLE_POLL_MS = 10000;
 
@@ -102,14 +103,19 @@ function bindEvents() {
     startInstagramOAuthFromPublish,
   );
 
-  els.accountSelect?.addEventListener("change", () => {
-    if (els.accountSelect.value) {
-      localStorage.setItem(
-        "clipflow-selected-youtube-account-id",
-        els.accountSelect.value,
-      );
-    }
-  });
+els.accountSelect?.addEventListener("change", () => {
+  if (els.accountSelect.value) {
+    localStorage.setItem(
+      "clipflow-selected-publish-account-id",
+      els.accountSelect.value
+    );
+
+    localStorage.setItem(
+      "clipflow-selected-youtube-account-id",
+      els.accountSelect.value
+    );
+  }
+});
 
   if (els.closeEditModalBtn) {
     els.closeEditModalBtn.onclick = (event) => {
@@ -791,19 +797,19 @@ function isDemoYoutubeAccount(account = {}) {
 function renderAccounts() {
   if (!els.accountSelect) return;
 
-  localStorage.removeItem("clipflow-youtube-channel-link");
-
   const currentSelectedValue = els.accountSelect.value;
-  const lastSelectedAccountId = localStorage.getItem(
-    "clipflow-selected-youtube-account-id",
-  );
+  const lastSelectedAccountId =
+    localStorage.getItem("clipflow-selected-publish-account-id") ||
+    localStorage.getItem("clipflow-selected-youtube-account-id");
 
   const visibleAccounts = state.accounts.filter((account) => {
+    const platform = String(account.platform || "").toUpperCase();
+
     return (
       account &&
       account.id &&
       account.userId &&
-      String(account.platform || "").toUpperCase() === "YOUTUBE" &&
+      ["YOUTUBE", "INSTAGRAM"].includes(platform) &&
       !account.isSavedChannelLinkOnly &&
       !isDemoYoutubeAccount(account)
     );
@@ -811,21 +817,23 @@ function renderAccounts() {
 
   if (!visibleAccounts.length) {
     els.accountSelect.innerHTML = `
-      <option value="">No real YouTube account connected</option>
+      <option value="">No YouTube or Instagram account connected</option>
     `;
 
     if (els.youtubeConnectHint) {
       els.youtubeConnectHint.textContent =
-        "Click Connect Another YouTube Account, then choose the Google account that owns your target channel.";
+        "Connect a real YouTube or Instagram account before scheduling.";
     }
 
     return;
   }
 
   els.accountSelect.innerHTML = `
-    <option value="">Select YouTube account</option>
+    <option value="">Select publish account</option>
     ${visibleAccounts
       .map((account) => {
+        const platform = String(account.platform || "").toUpperCase();
+
         const label =
           account.platformUsername ||
           account.username ||
@@ -833,9 +841,11 @@ function renderAccounts() {
           account.platformUserId ||
           account.id;
 
+        const prefix = platform === "INSTAGRAM" ? "Instagram" : "YouTube";
+
         return `
           <option value="${escapeHtml(account.id)}">
-            ${escapeHtml(label)}
+            ${prefix} — ${escapeHtml(label)}
           </option>
         `;
       })
@@ -863,8 +873,8 @@ function renderAccounts() {
   if (visibleAccounts.length === 1) {
     els.accountSelect.value = visibleAccounts[0].id;
     localStorage.setItem(
-      "clipflow-selected-youtube-account-id",
-      visibleAccounts[0].id,
+      "clipflow-selected-publish-account-id",
+      visibleAccounts[0].id
     );
   }
 }
@@ -902,22 +912,23 @@ function renderClips() {
 }
 
 function renderStats() {
-  const youtubeSchedules = state.schedules.filter((schedule) => {
-    return String(schedule.platform || "").toUpperCase() === "YOUTUBE";
+  const realAccounts = state.accounts.filter((account) => {
+    return isRealUploadAccount(account);
   });
 
-  const queued = youtubeSchedules.filter((s) => s.status === "QUEUED").length;
-  const published = youtubeSchedules.filter(
-    (s) => s.status === "PUBLISHED",
-  ).length;
-  const failed = youtubeSchedules.filter((s) => s.status === "FAILED").length;
+  const queued = state.schedules.filter((s) => s.status === "QUEUED").length;
 
-  setText(els.accountsCount, state.accounts.length);
+  const published = state.schedules.filter(
+    (s) => s.status === "PUBLISHED"
+  ).length;
+
+  const failed = state.schedules.filter((s) => s.status === "FAILED").length;
+
+  setText(els.accountsCount, realAccounts.length);
   setText(els.queuedCount, queued);
   setText(els.publishedCount, published);
   setText(els.failedCount, failed);
 }
-
 function renderSchedules() {
   if (!els.scheduleList) return;
 
@@ -925,7 +936,9 @@ function renderSchedules() {
 
   const schedules = state.schedules
     .filter((schedule) => {
-      if (String(schedule.platform || "").toUpperCase() !== "YOUTUBE") {
+      const platform = String(schedule.platform || "").toUpperCase();
+
+      if (!["YOUTUBE", "INSTAGRAM"].includes(platform)) {
         return false;
       }
 
@@ -941,7 +954,7 @@ function renderSchedules() {
   if (!schedules.length) {
     els.scheduleList.innerHTML = `
       <div class="empty-state">
-        No YouTube schedules found.
+        No YouTube or Instagram schedules found.
       </div>
     `;
     return;
@@ -951,14 +964,16 @@ function renderSchedules() {
 }
 
 function renderScheduleItem(schedule) {
-  const title = schedule.title || "Untitled YouTube Post";
-  const status = schedule.status || "UNKNOWN";
+const platform = String(schedule.platform || "YOUTUBE").toUpperCase();
+const platformLabel = platform === "INSTAGRAM" ? "Instagram Reel" : "YouTube Post";
 
-  const accountName =
-    schedule.socialAccount?.platformUsername ||
-    schedule.socialAccount?.platformUserId ||
-    "YouTube account";
+const title = schedule.title || `Untitled ${platformLabel}`;
+const status = schedule.status || "UNKNOWN";
 
+const accountName =
+  schedule.socialAccount?.platformUsername ||
+  schedule.socialAccount?.platformUserId ||
+  `${platformLabel} account`;
   const clipName =
     schedule.clip?.title ||
     schedule.clip?.fileName ||

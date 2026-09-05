@@ -9,6 +9,7 @@ const state = {
   videoDurationSeconds: 0,
   clipsView: "story",
   activeModalClipIndex: null,
+  savedProjectId: null,
   // Per-clip captions: { [clipIndex]: [{start, end, text}] }
   clipCaptions: {},
   // Caption style (shared)
@@ -30,6 +31,8 @@ function persistStudioSession() {
     localStorage.setItem(
       STUDIO_SESSION_KEY,
       JSON.stringify({
+        uploadedProject: state.uploadedProject,
+        savedProjectId: state.savedProjectId,
         generatedClip: state.generatedClip,
         generatedClips: state.generatedClips,
         smartSuggestions: state.smartSuggestions,
@@ -51,6 +54,8 @@ function restoreStudioSession() {
 
   try {
     const data = JSON.parse(raw);
+    if (data.uploadedProject) state.uploadedProject = data.uploadedProject;
+    if (data.savedProjectId) state.savedProjectId = data.savedProjectId;
     if (Array.isArray(data.generatedClips))
       state.generatedClips = data.generatedClips;
     if (Array.isArray(data.smartSuggestions))
@@ -157,6 +162,12 @@ const startTimeInput = document.getElementById("startTime");
 const endTimeInput = document.getElementById("endTime");
 const aspectRatioInput = document.getElementById("aspectRatio");
 const smartClipBtn = document.getElementById("smartClipBtn");
+const saveProjectBtn = document.getElementById("saveProjectBtn");
+const refreshProjectsBtn = document.getElementById("refreshProjectsBtn");
+const projectHistoryList = document.getElementById("projectHistoryList");
+const allProjectsCount = document.getElementById("allProjectsCount");
+const savedProjectsCount = document.getElementById("savedProjectsCount");
+const projectViewTabs = document.querySelectorAll("[data-project-view]");
 const progressFill = document.getElementById("progressFill");
 const progressLabel = document.getElementById("progressLabel");
 const progressPercent = document.getElementById("progressPercent");
@@ -424,6 +435,8 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
       progressEta.textContent = "";
     }
   }
+
+  updateActiveProjectProgressCard();
 }
 
 function animateProgressTo(targetPercent, label = "Generating...") {
@@ -609,13 +622,13 @@ function getAutoSmartClipCount() {
   );
 
   if (!duration || duration < 90) return 1;
-  if (duration < 300) return 2;      // < 5 min → 2
-  if (duration < 600) return 3;      // < 10 min → 3
-  if (duration < 1200) return 4;     // < 20 min → 4
-  if (duration < 1800) return 5;     // < 30 min → 5
-  if (duration < 2700) return 6;     // < 45 min → 6
-  if (duration < 3600) return 7;     // < 60 min → 7
-  return 8;                          // 60+ min → 8
+  if (duration < 300) return 2; // < 5 min → 2
+  if (duration < 600) return 3; // < 10 min → 3
+  if (duration < 1200) return 4; // < 20 min → 4
+  if (duration < 1800) return 5; // < 30 min → 5
+  if (duration < 2700) return 6; // < 45 min → 6
+  if (duration < 3600) return 7; // < 60 min → 7
+  return 8; // 60+ min → 8
 }
 
 function updateClipPlanner() {
@@ -927,7 +940,15 @@ function editClipCaptions(index) {
   const clip = state.generatedClips[index];
   if (!clip) {
     console.error("Clip not found");
+    window.location.href = `captions.html?index=${index}`;
     return;
+  }
+
+  if (!clip.previewUrl && clip.fileName) {
+    clip.previewUrl = `/api/files/download/${encodeURIComponent(clip.fileName)}`;
+  }
+  if (!clip.downloadUrl && clip.fileName) {
+    clip.downloadUrl = `/api/files/download/${encodeURIComponent(clip.fileName)}`;
   }
 
   localStorage.setItem(
@@ -940,7 +961,7 @@ function editClipCaptions(index) {
     }),
   );
 
-  window.location.href = "captions.html";
+  window.location.href = `captions.html?index=${index}`;
 }
 
 // ─── Clip card rendering ──────────────────────────────────────────────────────
@@ -953,6 +974,7 @@ function renderGeneratedClips() {
   if (!generatedClipsGrid) return;
   applyClipsView();
   persistStudioSession();
+  renderProjectHistory(lastProjectsCache);
 
   if (!state.generatedClips.length) {
     generatedClipsGrid.innerHTML = `<div class="empty-state">No smart clips generated yet.</div>`;
@@ -979,9 +1001,24 @@ function renderGeneratedClips() {
       return `
       <article class="clip-card ${clip.smartScore ? "smart-generated-card" : ""}">
         <div class="clip-card-video">
-          ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
+  ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
+
+  ${
+    downloadUrl
+      ? `
+        <a
+          class="clip-video-link"
+          href="${downloadUrl}"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Open clip in new tab"
+        >
           <video src="${downloadUrl}" muted controls preload="metadata"></video>
-        </div>
+        </a>
+      `
+      : `<video muted controls preload="metadata"></video>`
+  }
+</div>
         <div class="clip-card-footer">
           <div class="clip-card-info">
             <span class="clip-card-num">#${num}</span>
@@ -991,11 +1028,50 @@ function renderGeneratedClips() {
             ${clip.previewText ? `<span class="smart-preview-line">${escapeHtml(clip.previewText)}</span>` : ""}
           </div>
           <div class="clip-icon-btns">
-            <button class="clip-icon-btn" data-action="preview"  data-index="${index}" title="Preview">${SVG_PLAY}</button>
-            <button class="clip-icon-btn edit" data-action="edit" data-index="${index}" title="Edit Captions">${SVG_EDIT}</button>
-            <button class="clip-icon-btn" data-action="download" data-index="${index}" title="Download">${SVG_DOWNLOAD}</button>
-            <button class="clip-icon-btn danger" data-action="delete" data-index="${index}" title="Delete">${SVG_DELETE}</button>
-          </div>
+  <a
+    class="clip-icon-btn"
+    href="${downloadUrl || "#"}"
+    target="_blank"
+    rel="noopener noreferrer"
+    data-action="preview"
+    data-index="${index}"
+    title="Preview / Open in new tab"
+  >
+    ${SVG_PLAY}
+  </a>
+
+  <a
+    class="clip-icon-btn edit"
+    href="captions.html?index=${index}"
+    data-action="edit"
+    data-index="${index}"
+    title="Edit Captions"
+  >
+    ${SVG_EDIT}
+  </a>
+
+  <a
+    class="clip-icon-btn"
+    href="${downloadUrl || "#"}"
+    target="_blank"
+    rel="noopener noreferrer"
+    data-action="download"
+    data-index="${index}"
+    title="Download / Open in new tab"
+  >
+    ${SVG_DOWNLOAD}
+  </a>
+
+  <button
+    type="button"
+    class="clip-icon-btn danger"
+    data-action="delete"
+    data-index="${index}"
+    title="Delete"
+  >
+    ${SVG_DELETE}
+  </button>
+</div>
         </div>
       </article>
     `;
@@ -1006,14 +1082,36 @@ function renderGeneratedClips() {
 generatedClipsGrid?.addEventListener("click", async (event) => {
   const btn = event.target.closest("[data-action]");
   if (!btn) return;
+
   const action = btn.dataset.action;
   const index = Number(btn.dataset.index);
+
   if (Number.isNaN(index)) return;
 
-  if (action === "preview") openClip(index);
-  if (action === "edit") editClipCaptions(index);
-  if (action === "download") downloadClip(index);
-  if (action === "delete") deleteClip(index);
+  // Keep normal left-click app actions working.
+  // Right-click menu will still show "Open link in new tab" for <a> buttons.
+  if (action === "preview") {
+    event.preventDefault();
+    openClip(index);
+    return;
+  }
+
+  if (action === "edit") {
+    event.preventDefault();
+    editClipCaptions(index);
+    return;
+  }
+
+  if (action === "download") {
+    event.preventDefault();
+    downloadClip(index);
+    return;
+  }
+
+  if (action === "delete") {
+    event.preventDefault();
+    deleteClip(index);
+  }
 });
 
 // Modal edit button
@@ -1034,15 +1132,26 @@ document.addEventListener("keydown", (event) => {
 
 // ─── YouTube fetch ────────────────────────────────────────────────────────────
 let _ytInfoTimer = null;
-ytUrlInput?.addEventListener("input", () => {
-  clearTimeout(_ytInfoTimer);
-  const url = ytUrlInput.value.trim();
-  if (!url) {
-    if (ytInfoPreview) ytInfoPreview.style.display = "none";
-    return;
-  }
-  _ytInfoTimer = setTimeout(() => fetchYtInfo(url), 600);
-});
+let _ytAutoFetchTimer = null;
+let _ytIsFetching = false;
+let _lastAutoFetchedUrl = "";
+
+function isValidYouTubeUrl(value = "") {
+  const url = String(value || "").trim();
+  if (!url) return false;
+
+  return (
+    /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(url) ||
+    /^(https?:\/\/)?(m\.)?youtube\.com\//i.test(url)
+  );
+}
+
+function setYoutubeFetchButtonHidden() {
+  if (!ytFetchBtn) return;
+  ytFetchBtn.style.display = "none";
+  ytFetchBtn.setAttribute("aria-hidden", "true");
+  ytFetchBtn.tabIndex = -1;
+}
 
 async function fetchYtInfo(url) {
   try {
@@ -1061,69 +1170,155 @@ async function fetchYtInfo(url) {
   } catch {}
 }
 
-ytFetchBtn?.addEventListener("click", async () => {
-  const url = ytUrlInput?.value.trim();
-  if (!url) {
-    alert("Please paste a YouTube URL first.");
+async function fetchYoutubeSource(url, options = {}) {
+  const cleanUrl = String(url || "").trim();
+
+  if (!cleanUrl) {
+    if (!options.silent) alert("Please paste a YouTube URL first.");
     return;
   }
 
-  ytFetchBtn.disabled = true;
+  if (!isValidYouTubeUrl(cleanUrl)) {
+    if (!options.silent) alert("Please paste a valid YouTube link.");
+    return;
+  }
+
+  if (_ytIsFetching) return;
+
+  _ytIsFetching = true;
+  _lastAutoFetchedUrl = cleanUrl;
+
+  if (ytFetchBtn) ytFetchBtn.disabled = true;
   if (ytFetchProgress) ytFetchProgress.style.display = "flex";
   if (ytProgressFill) ytProgressFill.style.width = "10%";
   if (ytProgressLabel) ytProgressLabel.textContent = "Fetching source info…";
-  updateProgress(10, "Fetching YouTube source…");
 
   try {
+    updateProgress(10, "Fetching YouTube source…");
+
     const result = await apiFetch(`${API_BASE}/youtube/fetch`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: cleanUrl }),
     });
 
     const project = result.project;
-    if (!project) throw new Error("Invalid fetch response");
+
+    if (!project) {
+      throw new Error("Invalid fetch response");
+    }
+
+    // Force YouTube metadata so clip generation never falls into the upload branch.
+    project.source = "youtube";
+    project.sourceType = "youtube";
+    project.sourceUrl = project.sourceUrl || project.youtubeUrl || cleanUrl;
+    project.youtubeUrl = project.youtubeUrl || project.sourceUrl || cleanUrl;
+    project.videoId = project.videoId || getVideoIdFromUrl(cleanUrl);
+
+    // Save previous completed project before switching to a new video.
+    upsertCurrentProjectToAllProjects();
 
     state.uploadedProject = project;
+    state.savedProjectId = null;
+    state.currentProjectCreatedAt = new Date().toISOString();
     state.generatedClip = null;
     state.generatedClips = [];
     state.smartSuggestions = [];
     state.clipCaptions = {};
+    state.videoDurationSeconds = Number(project.duration || 0);
 
     setFetchedSourceCard({
-      title: project.originalName || "Fetched video ready",
+      title: project.originalName || project.title || "Fetched video ready",
       thumb: project.thumbnail || "",
       meta: project.metaText || "Ready for clipping",
     });
 
     showClipControls();
-    renderGeneratedClips();
 
-    state.videoDurationSeconds = Number(project.duration || 0);
-    if (videoLengthText)
+    if (videoLengthText) {
       videoLengthText.textContent = formatTime(state.videoDurationSeconds);
-    if (startTimeInput && !startTimeInput.value)
+    }
+
+    if (startTimeInput && !startTimeInput.value) {
       startTimeInput.value = "00:00:00";
-    if (endTimeInput)
+    }
+
+    if (endTimeInput) {
       endTimeInput.value = secondsToTime(state.selectedDuration);
+    }
+
     updateClipPlanner();
 
     setProjectInfo(
-      project.originalName || "YouTube import ready",
+      project.originalName || project.title || "YouTube import ready",
       project.metaText || "Preview imported for editing",
     );
+
     if (ytProgressFill) ytProgressFill.style.width = "100%";
     if (ytProgressLabel) ytProgressLabel.textContent = "Source ready ✓";
+
     updateProgress(100, "YouTube source ready ✓");
+
+    renderGeneratedClips();
+    renderProjectHistory(lastProjectsCache);
+    persistStudioSession();
 
     setTimeout(resetYoutubeFetchUi, 500);
   } catch (error) {
-    if (ytProgressLabel)
+    console.error("YouTube fetch failed:", error);
+
+    if (ytProgressLabel) {
       ytProgressLabel.textContent = `Error: ${error.message}`;
+    }
+
     updateProgress(0, "YouTube fetch failed");
+    _lastAutoFetchedUrl = "";
+
+    if (!options.silent) {
+      alert(`YouTube fetch failed: ${error.message}`);
+    } else {
+      alert(`YouTube fetch failed: ${error.message}`);
+    }
+  } finally {
+    _ytIsFetching = false;
     if (ytFetchBtn) ytFetchBtn.disabled = false;
-    alert(`YouTube fetch failed: ${error.message}`);
   }
+}
+
+function scheduleYoutubeAutoFetch() {
+  clearTimeout(_ytInfoTimer);
+  clearTimeout(_ytAutoFetchTimer);
+
+  const url = ytUrlInput?.value?.trim() || "";
+
+  if (!url) {
+    if (ytInfoPreview) ytInfoPreview.style.display = "none";
+    return;
+  }
+
+  if (!isValidYouTubeUrl(url)) {
+    return;
+  }
+
+  _ytInfoTimer = setTimeout(() => fetchYtInfo(url), 250);
+
+  _ytAutoFetchTimer = setTimeout(() => {
+    const latestUrl = ytUrlInput?.value?.trim() || "";
+    if (!isValidYouTubeUrl(latestUrl)) return;
+    if (latestUrl === _lastAutoFetchedUrl) return;
+    fetchYoutubeSource(latestUrl, { silent: true });
+  }, 650);
+}
+
+setYoutubeFetchButtonHidden();
+ytUrlInput?.addEventListener("input", scheduleYoutubeAutoFetch);
+ytUrlInput?.addEventListener("paste", () => {
+  setTimeout(scheduleYoutubeAutoFetch, 0);
+});
+ytFetchBtn?.addEventListener("click", () => {
+  fetchYoutubeSource(ytUrlInput?.value?.trim() || "");
 });
 
 // ─── File upload ──────────────────────────────────────────────────────────────
@@ -1162,7 +1357,11 @@ videoInput?.addEventListener("change", async (e) => {
   if (!file) return;
 
   try {
+    upsertCurrentProjectToAllProjects();
+
     state.uploadedProject = null;
+    state.savedProjectId = null;
+    state.currentProjectCreatedAt = new Date().toISOString();
     state.generatedClip = null;
     state.generatedClips = [];
     state.smartSuggestions = [];
@@ -1182,6 +1381,7 @@ videoInput?.addEventListener("change", async (e) => {
     const result = await uploadWithXHR(`${API_BASE}/clips/upload`, formData);
 
     state.uploadedProject = result.project;
+    state.savedProjectId = null;
     setProjectInfo(file.name, formatBytes(file.size));
     renderGeneratedClips();
 
@@ -1204,21 +1404,953 @@ videoPreview?.addEventListener("loadedmetadata", () => {
   updateClipPlanner();
 });
 
+// ─── Opus-style project shelf / save ─────────────────────────────────────────
+let currentProjectView = "all";
+let lastProjectsCache = [];
+
+const ALL_PROJECTS_KEY = "clipflow_all_projects_v2";
+
+function getCurrentProjectTitle() {
+  return (
+    state.uploadedProject?.originalName ||
+    state.uploadedProject?.title ||
+    state.generatedClips?.[0]?.hook ||
+    "Untitled Clip Project"
+  );
+}
+
+function getCurrentProjectThumb() {
+  return (
+    state.uploadedProject?.thumbnail ||
+    state.uploadedProject?.thumbnailUrl ||
+    state.generatedClips?.[0]?.thumbnail ||
+    state.generatedClips?.[0]?.thumbnailUrl ||
+    ""
+  );
+}
+
+function formatProjectDate(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString();
+  } catch {
+    return "";
+  }
+}
+
+function normalizeString(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getVideoIdFromUrl(value = "") {
+  const raw = String(value || "");
+  if (!raw) return "";
+
+  try {
+    const url = new URL(raw);
+
+    if (url.hostname.includes("youtu.be")) {
+      return url.pathname.replace("/", "").trim();
+    }
+
+    if (url.searchParams.get("v")) {
+      return url.searchParams.get("v").trim();
+    }
+
+    const shortsMatch = url.pathname.match(/\/shorts\/([^/?#]+)/);
+    if (shortsMatch) return shortsMatch[1].trim();
+
+    const embedMatch = url.pathname.match(/\/embed\/([^/?#]+)/);
+    if (embedMatch) return embedMatch[1].trim();
+  } catch {
+    const match = raw.match(
+      /(?:v=|youtu\.be\/|shorts\/|embed\/)([a-zA-Z0-9_-]{6,})/,
+    );
+    if (match) return match[1].trim();
+  }
+
+  return "";
+}
+
+function getVideoIdFromThumb(value = "") {
+  const raw = String(value || "");
+  const match = raw.match(/\/vi\/([^/]+)\//);
+  return match ? match[1].trim() : "";
+}
+
+function getProjectVideoId(project = {}) {
+  return (
+    project.videoId ||
+    project.uploadedProject?.videoId ||
+    getVideoIdFromUrl(project.sourceUrl) ||
+    getVideoIdFromUrl(project.youtubeUrl) ||
+    getVideoIdFromUrl(project.videoUrl) ||
+    getVideoIdFromUrl(project.uploadedProject?.sourceUrl) ||
+    getVideoIdFromUrl(project.uploadedProject?.youtubeUrl) ||
+    getVideoIdFromThumb(project.thumbnail) ||
+    getVideoIdFromThumb(project.uploadedProject?.thumbnail) ||
+    ""
+  );
+}
+
+function getProjectTitle(project = {}) {
+  return (
+    project.title ||
+    project.name ||
+    project.originalName ||
+    project.uploadedProject?.originalName ||
+    project.uploadedProject?.title ||
+    project.clips?.[0]?.hook ||
+    "Untitled Project"
+  );
+}
+
+function getProjectThumb(project = {}) {
+  return (
+    project.thumbnail ||
+    project.thumbnailUrl ||
+    project.uploadedProject?.thumbnail ||
+    project.uploadedProject?.thumbnailUrl ||
+    project.clips?.[0]?.thumbnail ||
+    project.clips?.[0]?.thumbnailUrl ||
+    ""
+  );
+}
+
+function getProjectClipCount(project = {}) {
+  if (Array.isArray(project.clips)) return project.clips.length;
+  return Number(project.clipCount || 0);
+}
+
+function getProjectIdentity(project = {}) {
+  const videoId = normalizeString(getProjectVideoId(project));
+  if (videoId) return `video:${videoId}`;
+
+  const sourceUrl = normalizeString(
+    project.sourceUrl ||
+      project.youtubeUrl ||
+      project.videoUrl ||
+      project.uploadedProject?.sourceUrl ||
+      project.uploadedProject?.youtubeUrl ||
+      "",
+  );
+
+  if (sourceUrl) return `source:${sourceUrl}`;
+
+  const thumb = normalizeString(getProjectThumb(project)).split("?")[0];
+  const title = normalizeString(getProjectTitle(project));
+  const clipCount = getProjectClipCount(project);
+
+  if (thumb && title) return `thumb-title:${thumb}|${title}`;
+  if (title) return `title-clips:${title}|${clipCount}`;
+
+  return `id:${project.id || Math.random()}`;
+}
+
+function getProjectKey(project = {}) {
+  return getProjectIdentity(project);
+}
+
+function getProjectSourceLabel(project = {}) {
+  const source =
+    project.source ||
+    project.uploadedProject?.source ||
+    (getProjectVideoId(project) ? "youtube" : "Auto");
+
+  if (String(source).toLowerCase() === "youtube") return "YouTube";
+  if (String(source).toLowerCase() === "upload") return "Upload";
+  return String(source || "Auto");
+}
+
+function mergeProjectRecords(existing = {}, incoming = {}) {
+  const existingClips = Array.isArray(existing.clips) ? existing.clips : [];
+  const incomingClips = Array.isArray(incoming.clips) ? incoming.clips : [];
+
+  const existingIsSaved =
+    Boolean(existing.saved || existing.id) && !existing.localOnly;
+  const incomingIsSaved =
+    Boolean(incoming.saved || incoming.id) && !incoming.localOnly;
+  const preferIncomingId = incomingIsSaved || !existingIsSaved;
+
+  return {
+    ...existing,
+    ...incoming,
+    id: preferIncomingId
+      ? incoming.id || existing.id
+      : existing.id || incoming.id,
+    localOnly:
+      existingIsSaved || incomingIsSaved
+        ? false
+        : Boolean(incoming.localOnly ?? existing.localOnly),
+    saved: existingIsSaved || incomingIsSaved,
+    title: getProjectTitle(incoming) || getProjectTitle(existing),
+    thumbnail: getProjectThumb(incoming) || getProjectThumb(existing),
+    uploadedProject:
+      incoming.uploadedProject || existing.uploadedProject || null,
+    clips: incomingClips.length ? incomingClips : existingClips,
+    clipCount:
+      incomingClips.length ||
+      existingClips.length ||
+      Number(incoming.clipCount || existing.clipCount || 0),
+    clipCaptions: incoming.clipCaptions || existing.clipCaptions || {},
+    captionStyle:
+      incoming.captionStyle || existing.captionStyle || state.captionStyle,
+    videoDurationSeconds:
+      incoming.videoDurationSeconds ||
+      existing.videoDurationSeconds ||
+      incoming.uploadedProject?.duration ||
+      existing.uploadedProject?.duration ||
+      0,
+    selectedDuration:
+      incoming.selectedDuration ||
+      existing.selectedDuration ||
+      state.selectedDuration ||
+      30,
+    sourceUrl:
+      incoming.sourceUrl ||
+      existing.sourceUrl ||
+      incoming.uploadedProject?.sourceUrl ||
+      existing.uploadedProject?.sourceUrl ||
+      "",
+    videoId:
+      incoming.videoId ||
+      existing.videoId ||
+      incoming.uploadedProject?.videoId ||
+      existing.uploadedProject?.videoId ||
+      "",
+    source:
+      incoming.source ||
+      existing.source ||
+      incoming.uploadedProject?.source ||
+      existing.uploadedProject?.source ||
+      "youtube",
+    updatedAt:
+      incoming.updatedAt || existing.updatedAt || new Date().toISOString(),
+    createdAt:
+      existing.createdAt || incoming.createdAt || new Date().toISOString(),
+  };
+}
+
+function mergeProjectsByIdentity(projects = []) {
+  const map = new Map();
+  const order = [];
+
+  projects.forEach((project) => {
+    if (!project) return;
+
+    const clipCount = getProjectClipCount(project);
+    const title = normalizeString(getProjectTitle(project));
+
+    if (!title || title === "untitled project") return;
+    if (clipCount <= 0) return;
+
+    const key = getProjectIdentity(project);
+
+    if (!map.has(key)) {
+      map.set(key, project);
+      order.push(key);
+      return;
+    }
+
+    map.set(key, mergeProjectRecords(map.get(key), project));
+  });
+
+  return order.map((key) => map.get(key)).filter(Boolean);
+}
+
+function dedupeProjects(projects = []) {
+  return mergeProjectsByIdentity(projects);
+}
+
+function getLocalAllProjects() {
+  try {
+    const modern = JSON.parse(localStorage.getItem(ALL_PROJECTS_KEY) || "[]");
+    if (Array.isArray(modern) && modern.length) return modern;
+
+    const legacy = JSON.parse(
+      localStorage.getItem("clipflow_all_projects") || "[]",
+    );
+    return Array.isArray(legacy) ? legacy : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalAllProjects(projects = []) {
+  localStorage.setItem(
+    ALL_PROJECTS_KEY,
+    JSON.stringify(mergeProjectsByIdentity(projects)),
+  );
+}
+
+function getCleanSavedProjects(projects = []) {
+  return mergeProjectsByIdentity(
+    projects
+      .filter((project) => {
+        const clipCount = getProjectClipCount(project);
+        const hasTitle = normalizeString(getProjectTitle(project));
+        return clipCount > 0 && hasTitle;
+      })
+      .map((project) => ({
+        ...project,
+        saved: true,
+        localOnly: false,
+      })),
+  );
+}
+
+function getCurrentProjectSnapshot() {
+  if (!state.uploadedProject && !state.generatedClips.length) return null;
+
+  const clipCount = Number(state.generatedClips?.length || 0);
+
+  return {
+    id:
+      state.savedProjectId ||
+      `local-${getProjectVideoId(state.uploadedProject || {}) || Date.now()}`,
+    localOnly: !state.savedProjectId,
+    saved: Boolean(state.savedProjectId),
+    title: getCurrentProjectTitle(),
+    thumbnail: getCurrentProjectThumb(),
+    uploadedProject: state.uploadedProject,
+    clips: state.generatedClips || [],
+    clipCount,
+    clipCaptions: state.clipCaptions,
+    captionStyle: state.captionStyle,
+    videoDurationSeconds: state.videoDurationSeconds,
+    selectedDuration: state.selectedDuration,
+    videoId: state.uploadedProject?.videoId || "",
+    sourceUrl: state.uploadedProject?.sourceUrl || "",
+    source: state.uploadedProject?.source || "youtube",
+    status: clipCount > 0 ? "generated" : "generating",
+    createdAt: state.currentProjectCreatedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function upsertProjectToAllProjects(project) {
+  if (!project || getProjectClipCount(project) <= 0) return;
+
+  const localProjects = getLocalAllProjects();
+  const merged = mergeProjectsByIdentity([project, ...localProjects]);
+
+  saveLocalAllProjects(merged);
+}
+
+function upsertCurrentProjectToAllProjects() {
+  const current = getCurrentProjectSnapshot();
+  if (!current || getProjectClipCount(current) <= 0) return;
+
+  upsertProjectToAllProjects(current);
+}
+
+function removeProjectFromLocalAllProjects(project) {
+  const key = getProjectIdentity(project);
+  const localProjects = getLocalAllProjects().filter(
+    (item) => getProjectIdentity(item) !== key,
+  );
+
+  saveLocalAllProjects(localProjects);
+}
+
+function findLocalProjectByIdOrKey(projectId, projectKey) {
+  const safeId = String(projectId || "");
+  const safeKey = String(projectKey || "");
+
+  return getLocalAllProjects().find((project) => {
+    return (
+      String(project.id || "") === safeId || getProjectKey(project) === safeKey
+    );
+  });
+}
+
+function getProgressOverlayMarkup(percent = _currentProgress, eta = null) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+  const etaText = eta || (p > 0 && p < 100 ? "ETA calculating" : "Ready");
+
+  if (p <= 0 || p >= 100) return "";
+
+  return `
+    <div class="opus-project-progress-badge" data-active-project-progress>
+      <span>◷</span>
+      <strong>${p}%</strong>
+      <em>(${escapeHtml(etaText)})</em>
+    </div>
+  `;
+}
+
+function updateProjectTabs() {
+  projectViewTabs.forEach((tab) => {
+    tab.classList.toggle(
+      "active",
+      tab.dataset.projectView === currentProjectView,
+    );
+  });
+}
+
+function updateActiveProjectProgressCard() {
+  renderProjectHistory(lastProjectsCache);
+}
+
+function loadProjectIntoState(project = {}, options = {}) {
+  state.savedProjectId = options.saved ? project.id || null : null;
+  state.uploadedProject = project.uploadedProject || null;
+  state.generatedClips = Array.isArray(project.clips) ? project.clips : [];
+  state.generatedClip = state.generatedClips[0] || null;
+  state.clipCaptions = project.clipCaptions || {};
+  state.captionStyle = {
+    ...state.captionStyle,
+    ...(project.captionStyle || {}),
+  };
+  state.videoDurationSeconds = Number(
+    project.videoDurationSeconds ||
+      project.duration ||
+      project.uploadedProject?.duration ||
+      0,
+  );
+  state.selectedDuration = Number(
+    project.selectedDuration || state.selectedDuration || 30,
+  );
+
+  _currentProgress = state.generatedClips.length ? 100 : 0;
+
+  if (state.uploadedProject?.source === "youtube") {
+    if (ytUrlInput) ytUrlInput.value = state.uploadedProject.sourceUrl || "";
+    if (ytInfoPreview) ytInfoPreview.style.display = "flex";
+    if (ytThumb) ytThumb.src = state.uploadedProject.thumbnail || "";
+    if (ytTitle) {
+      ytTitle.textContent =
+        state.uploadedProject.originalName ||
+        state.uploadedProject.title ||
+        project.title ||
+        "YouTube video";
+    }
+    if (ytDuration) {
+      ytDuration.textContent = formatShortDuration(
+        state.videoDurationSeconds || 0,
+      );
+    }
+
+    setFetchedSourceCard({
+      title:
+        state.uploadedProject.originalName ||
+        state.uploadedProject.title ||
+        project.title ||
+        "YouTube video",
+      thumb: state.uploadedProject.thumbnail || "",
+      meta: `${state.generatedClips.length} clip${
+        state.generatedClips.length === 1 ? "" : "s"
+      } loaded`,
+    });
+  } else if (state.uploadedProject?.filePath) {
+    setPreviewVideo(`/uploads/${state.uploadedProject.fileName || ""}`);
+  }
+
+  setProjectInfo(
+    project.title || getCurrentProjectTitle(),
+    `${state.generatedClips.length} clip${
+      state.generatedClips.length === 1 ? "" : "s"
+    } loaded`,
+  );
+
+  showClipControls();
+  renderGeneratedClips();
+  updateClipPlanner();
+  persistStudioSession();
+}
+
+function buildProjectCard(project, savedProjects = [], currentSnapshot = null) {
+  const titleRaw = getProjectTitle(project);
+  const title = escapeHtml(titleRaw);
+  const thumb = escapeHtml(getProjectThumb(project));
+  const id = escapeHtml(project.id || "");
+  const projectKeyRaw = getProjectKey(project);
+  const projectKey = escapeHtml(projectKeyRaw);
+  const clipCount = getProjectClipCount(project);
+  const source = escapeHtml(getProjectSourceLabel(project));
+  const date = escapeHtml(
+    formatProjectDate(project.updatedAt || project.createdAt),
+  );
+
+  const isCurrent =
+    currentSnapshot && getProjectKey(currentSnapshot) === projectKeyRaw;
+
+  const isSaved =
+    Boolean(project.saved && !project.localOnly && project.id) ||
+    savedProjects.some(
+      (savedProject) => getProjectKey(savedProject) === projectKeyRaw,
+    );
+
+  let status = "Generated";
+
+  if (isCurrent && _currentProgress > 0 && _currentProgress < 100) {
+    status = "Generating";
+  } else if (isSaved) {
+    status = "Saved";
+  } else if (clipCount > 0) {
+    status = "Generated";
+  }
+
+  const openAction = isSaved && project.id ? "load" : "load-local";
+
+  const saveButton = isSaved
+    ? `<button type="button" disabled>Saved</button>`
+    : `<button
+        type="button"
+        data-history-action="${isCurrent ? "save-current" : "save-local"}"
+        data-project-id="${id}"
+        data-project-key="${projectKey}"
+      >
+        Save
+      </button>`;
+
+  const openButton =
+    clipCount > 0
+      ? `<button
+          type="button"
+          data-history-action="${openAction}"
+          data-project-id="${id}"
+          data-project-key="${projectKey}"
+        >
+          Open
+        </button>`
+      : "";
+
+  const deleteButton = `<button
+      type="button"
+      data-history-action="delete-any"
+      data-project-id="${id}"
+      data-project-key="${projectKey}"
+    >
+      Delete
+    </button>`;
+
+  return `
+    <article class="opus-project-card" data-project-id="${id}" data-project-key="${projectKey}">
+      <div class="opus-project-thumb">
+        ${thumb ? `<img src="${thumb}" alt="">` : `<span>CF</span>`}
+        <small>${escapeHtml(status)}</small>
+        ${
+          isCurrent && _currentProgress > 0 && _currentProgress < 100
+            ? getProgressOverlayMarkup()
+            : ""
+        }
+      </div>
+
+      <strong title="${title}">${title}</strong>
+      <p>${clipCount} clip${clipCount === 1 ? "" : "s"}${source ? ` • ${source}` : ""}</p>
+      ${date ? `<em>${date}</em>` : ""}
+
+      <div class="opus-project-card-actions">
+        ${saveButton}
+        ${openButton}
+        ${deleteButton}
+      </div>
+    </article>
+  `;
+}
+
+function renderProjectHistory(projects = lastProjectsCache) {
+  if (!projectHistoryList) return;
+
+  const backendSavedProjects = getCleanSavedProjects(projects);
+  const localAllProjects = getLocalAllProjects();
+  const currentSnapshot = getCurrentProjectSnapshot();
+
+  let allProjects = [...localAllProjects, ...backendSavedProjects];
+
+  if (currentSnapshot && getProjectClipCount(currentSnapshot) > 0) {
+    const currentKey = getProjectKey(currentSnapshot);
+
+    allProjects = allProjects.filter(
+      (project) => getProjectKey(project) !== currentKey,
+    );
+
+    allProjects.unshift(currentSnapshot);
+  }
+
+  allProjects = dedupeProjects(allProjects);
+  const savedProjects = dedupeProjects(backendSavedProjects);
+
+  if (allProjectsCount)
+    allProjectsCount.textContent = `(${allProjects.length})`;
+  if (savedProjectsCount)
+    savedProjectsCount.textContent = `(${savedProjects.length})`;
+
+  const projectsToRender =
+    currentProjectView === "saved" ? savedProjects : allProjects;
+
+  if (!projectsToRender.length) {
+    projectHistoryList.innerHTML = `
+      <div class="opus-project-empty">
+        No ${currentProjectView === "saved" ? "saved " : ""}projects yet.
+      </div>
+    `;
+    return;
+  }
+
+  projectHistoryList.innerHTML = projectsToRender
+    .map((project) => buildProjectCard(project, savedProjects, currentSnapshot))
+    .join("");
+}
+
+async function loadProjectHistory() {
+  if (!projectHistoryList) return;
+
+  renderProjectHistory(lastProjectsCache);
+
+  try {
+    const data = await apiFetch(`${API_BASE}/clips/projects`);
+    lastProjectsCache = Array.isArray(data.projects) ? data.projects : [];
+
+    const savedProjects = getCleanSavedProjects(lastProjectsCache);
+    const localProjects = getLocalAllProjects();
+    saveLocalAllProjects([...savedProjects, ...localProjects]);
+
+    renderProjectHistory(lastProjectsCache);
+  } catch (error) {
+    console.warn("Could not load backend projects:", error);
+    renderProjectHistory([]);
+  }
+}
+
+async function saveProjectPayload(projectPayload) {
+  const data = await apiFetch(`${API_BASE}/clips/projects/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(projectPayload),
+  });
+
+  const savedProject = {
+    ...(data.project || {}),
+    saved: true,
+    localOnly: false,
+  };
+
+  removeProjectFromLocalAllProjects(projectPayload);
+  upsertProjectToAllProjects(savedProject);
+
+  await loadProjectHistory();
+
+  return savedProject;
+}
+
+async function saveCurrentProject() {
+  if (!state.uploadedProject && !state.generatedClips.length) {
+    alert("Generate or upload something first.");
+    return;
+  }
+
+  if (!state.generatedClips.length) {
+    alert("Generate clips first, then save the project.");
+    return;
+  }
+
+  const oldText = saveProjectBtn?.innerHTML || saveProjectBtn?.textContent;
+
+  if (saveProjectBtn) {
+    saveProjectBtn.disabled = true;
+    saveProjectBtn.innerHTML = `<span></span> Saving...`;
+  }
+
+  try {
+    const projectPayload = {
+      id: state.savedProjectId || null,
+      title: getCurrentProjectTitle(),
+      thumbnail: getCurrentProjectThumb(),
+      uploadedProject: state.uploadedProject,
+      clips: state.generatedClips,
+      clipCount: state.generatedClips.length,
+      clipCaptions: state.clipCaptions,
+      captionStyle: state.captionStyle,
+      videoDurationSeconds: state.videoDurationSeconds,
+      selectedDuration: state.selectedDuration,
+      sourceUrl: state.uploadedProject?.sourceUrl || "",
+      videoId: state.uploadedProject?.videoId || "",
+      source: state.uploadedProject?.source || "youtube",
+      createdAt: state.currentProjectCreatedAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const savedProject = await saveProjectPayload(projectPayload);
+
+    state.savedProjectId = savedProject.id || state.savedProjectId;
+    state.currentProjectCreatedAt =
+      savedProject.createdAt ||
+      state.currentProjectCreatedAt ||
+      new Date().toISOString();
+
+    upsertCurrentProjectToAllProjects();
+    persistStudioSession();
+
+    await loadProjectHistory();
+  } catch (error) {
+    alert(error.message || "Project save failed.");
+  } finally {
+    if (saveProjectBtn) {
+      saveProjectBtn.disabled = false;
+      saveProjectBtn.innerHTML = oldText || `<span></span> Auto-save`;
+    }
+  }
+}
+
+async function saveLocalProject(projectId, projectKey) {
+  const localProject = findLocalProjectByIdOrKey(projectId, projectKey);
+
+  if (!localProject) {
+    alert("Project not found.");
+    return;
+  }
+
+  if (getProjectClipCount(localProject) <= 0) {
+    alert("This project has no clips to save.");
+    return;
+  }
+
+  const savedProject = await saveProjectPayload({
+    id: null,
+    title: getProjectTitle(localProject),
+    thumbnail: getProjectThumb(localProject),
+    uploadedProject: localProject.uploadedProject || null,
+    clips: Array.isArray(localProject.clips) ? localProject.clips : [],
+    clipCount: getProjectClipCount(localProject),
+    clipCaptions: localProject.clipCaptions || {},
+    captionStyle: localProject.captionStyle || state.captionStyle,
+    videoDurationSeconds:
+      localProject.videoDurationSeconds ||
+      localProject.uploadedProject?.duration ||
+      0,
+    selectedDuration:
+      localProject.selectedDuration || state.selectedDuration || 30,
+    sourceUrl:
+      localProject.sourceUrl || localProject.uploadedProject?.sourceUrl || "",
+    videoId:
+      localProject.videoId || localProject.uploadedProject?.videoId || "",
+    source:
+      localProject.source || localProject.uploadedProject?.source || "youtube",
+    createdAt: localProject.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  removeProjectFromLocalAllProjects(localProject);
+  upsertProjectToAllProjects(savedProject);
+
+  await loadProjectHistory();
+}
+
+async function openSavedProject(projectId) {
+  if (!projectId) {
+    alert("Saved project ID is missing.");
+    return;
+  }
+
+  const data = await apiFetch(
+    `${API_BASE}/clips/projects/${encodeURIComponent(projectId)}`,
+  );
+
+  const project = {
+    ...(data.project || {}),
+    saved: true,
+    localOnly: false,
+  };
+
+  loadProjectIntoState(project, { saved: true });
+  upsertProjectToAllProjects(project);
+  renderProjectHistory(lastProjectsCache);
+}
+
+function openLocalProject(projectId, projectKey) {
+  const localProject = findLocalProjectByIdOrKey(projectId, projectKey);
+
+  if (!localProject) {
+    alert("Local project not found.");
+    return;
+  }
+
+  loadProjectIntoState(localProject, { saved: false });
+  renderProjectHistory(lastProjectsCache);
+}
+
+async function deleteSavedProject(projectId) {
+  if (!confirm("Delete this saved project?")) return;
+
+  const projectToDelete = lastProjectsCache.find(
+    (project) => String(project.id) === String(projectId),
+  );
+
+  await apiFetch(
+    `${API_BASE}/clips/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: "DELETE",
+    },
+  );
+
+  if (projectToDelete) removeProjectFromLocalAllProjects(projectToDelete);
+
+  if (state.savedProjectId === projectId) {
+    state.savedProjectId = null;
+    persistStudioSession();
+  }
+
+  await loadProjectHistory();
+}
+
+async function deleteProjectEverywhere(projectId, projectKey) {
+  if (!confirm("Delete this project?")) return;
+
+  const safeProjectKey = String(projectKey || "");
+
+  const localProjects = getLocalAllProjects();
+  const filteredLocalProjects = localProjects.filter(
+    (project) => getProjectKey(project) !== safeProjectKey,
+  );
+
+  saveLocalAllProjects(filteredLocalProjects);
+
+  const backendProject = lastProjectsCache.find(
+    (project) =>
+      String(project.id || "") === String(projectId || "") ||
+      getProjectKey(project) === safeProjectKey,
+  );
+
+  if (backendProject?.id) {
+    try {
+      await apiFetch(
+        `${API_BASE}/clips/projects/${encodeURIComponent(backendProject.id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+    } catch (error) {
+      console.warn("Backend delete failed:", error);
+    }
+
+    lastProjectsCache = lastProjectsCache.filter(
+      (project) => project.id !== backendProject.id,
+    );
+  }
+
+  const currentSnapshot = getCurrentProjectSnapshot();
+  const currentKey = currentSnapshot ? getProjectKey(currentSnapshot) : "";
+
+  if (safeProjectKey && currentKey === safeProjectKey) {
+    state.savedProjectId = null;
+    state.uploadedProject = null;
+    state.generatedClip = null;
+    state.generatedClips = [];
+    state.smartSuggestions = [];
+    state.clipCaptions = {};
+    state.videoDurationSeconds = 0;
+
+    renderGeneratedClips();
+    updateProgress(0, "Ready");
+  }
+
+  persistStudioSession();
+  renderProjectHistory(lastProjectsCache);
+}
+
+saveProjectBtn?.addEventListener("click", saveCurrentProject);
+refreshProjectsBtn?.addEventListener("click", loadProjectHistory);
+
+projectViewTabs.forEach((tab) => {
+  tab.addEventListener("click", () => {
+    currentProjectView = tab.dataset.projectView || "all";
+    updateProjectTabs();
+    renderProjectHistory(lastProjectsCache);
+  });
+});
+
+projectHistoryList?.addEventListener("click", async (event) => {
+  const btn = event.target.closest("[data-history-action]");
+  if (!btn) return;
+
+  const projectId = btn.dataset.projectId || "";
+  const projectKey = btn.dataset.projectKey || "";
+  const action = btn.dataset.historyAction;
+
+  try {
+    if (action === "save-current") {
+      await saveCurrentProject();
+      return;
+    }
+
+    if (action === "save-local") {
+      await saveLocalProject(projectId, projectKey);
+      return;
+    }
+
+    if (action === "load") {
+      await openSavedProject(projectId);
+      return;
+    }
+
+    if (action === "load-local") {
+      openLocalProject(projectId, projectKey);
+      return;
+    }
+
+    if (action === "delete") {
+      await deleteSavedProject(projectId);
+      return;
+    }
+
+    if (action === "delete-any") {
+      await deleteProjectEverywhere(projectId, projectKey);
+      return;
+    }
+  } catch (error) {
+    alert(error.message || "Project action failed.");
+  }
+});
+
 // ─── Generate clips ───────────────────────────────────────────────────────────
 async function generateSingleClip(startTime, endTime, clipIndex = 0) {
+  if (!state.uploadedProject) {
+    throw new Error("Please fetch or upload a video first.");
+  }
+
+  const sourceUrl =
+    state.uploadedProject.sourceUrl ||
+    state.uploadedProject.youtubeUrl ||
+    ytUrlInput?.value?.trim() ||
+    "";
+
+  const isYoutubeSource = Boolean(
+    String(state.uploadedProject.source || "").toLowerCase() === "youtube" ||
+      String(state.uploadedProject.sourceType || "").toLowerCase() === "youtube" ||
+      sourceUrl ||
+      state.uploadedProject.videoId
+  );
+
   const body = {
     startTime,
     endTime,
     aspectRatio: aspectRatioInput?.value || "9:16",
   };
 
-  if (state.uploadedProject?.source === "youtube") {
+  if (isYoutubeSource) {
     body.sourceType = "youtube";
-    body.sourceUrl = state.uploadedProject.sourceUrl;
-    body.videoId = state.uploadedProject.videoId;
+    body.sourceUrl = sourceUrl;
+    body.videoId = state.uploadedProject.videoId || getVideoIdFromUrl(sourceUrl);
+
+    if (!body.sourceUrl && !body.videoId) {
+      throw new Error("YouTube source URL is missing. Paste/fetch the video again.");
+    }
   } else {
     body.sourceType = "upload";
-    body.inputPath = state.uploadedProject.filePath;
+    body.inputPath =
+      state.uploadedProject.filePath ||
+      state.uploadedProject.inputPath ||
+      state.uploadedProject.localPath ||
+      "";
+
+    if (!body.inputPath) {
+      throw new Error("Input video file is required.");
+    }
   }
 
   const result = await apiFetch(`${API_BASE}/clips/generate`, {
@@ -1231,36 +2363,63 @@ async function generateSingleClip(startTime, endTime, clipIndex = 0) {
     ...result,
     filePath: result.outputPath || result.filePath || "",
     outputPath: result.outputPath || result.filePath || "",
+    downloadUrl: result.downloadUrl || "",
+    previewUrl: result.previewUrl || result.downloadUrl || "",
     startTime,
     endTime,
     duration:
       result.duration != null
         ? Number(result.duration)
         : Math.max(0, timeToSeconds(endTime) - timeToSeconds(startTime)),
-    hook: autoHookForClip(clipIndex),
+    hook: result.hook || autoHookForClip(clipIndex),
   };
 }
 function buildSmartSuggestBody() {
-  if (!state.uploadedProject) throw new Error("Please fetch or upload a video first.");
+  if (!state.uploadedProject)
+    throw new Error("Please fetch or upload a video first.");
 
   const maxClips = getAutoSmartClipCount();
 
   const body = {
     maxClips,
-    minScore: 50,
+    minScore: 20,
     clipLengthSec: state.selectedDuration || 30,
-    minDurationSec: Math.max(25, Math.min(45, Number(state.selectedDuration || 30) - 8)),
-    maxDurationSec: Math.max(45, Math.min(90, Number(state.selectedDuration || 60) + 25)),
-    videoDurationSec: state.videoDurationSeconds || Number(state.uploadedProject.duration || 0),
+    minDurationSec: Math.max(
+      25,
+      Math.min(45, Number(state.selectedDuration || 30) - 8),
+    ),
+    maxDurationSec: Math.max(
+      45,
+      Math.min(90, Number(state.selectedDuration || 60) + 25),
+    ),
+    videoDurationSec:
+      state.videoDurationSeconds || Number(state.uploadedProject.duration || 0),
   };
 
-  if (state.uploadedProject?.source === "youtube") {
+  const sourceUrl =
+    state.uploadedProject.sourceUrl ||
+    state.uploadedProject.youtubeUrl ||
+    ytUrlInput?.value?.trim() ||
+    "";
+
+  const isYoutubeSource = Boolean(
+    String(state.uploadedProject.source || "").toLowerCase() === "youtube" ||
+      String(state.uploadedProject.sourceType || "").toLowerCase() === "youtube" ||
+      sourceUrl ||
+      state.uploadedProject.videoId
+  );
+
+  if (isYoutubeSource) {
     body.sourceType = "youtube";
-    body.sourceUrl = state.uploadedProject.sourceUrl;
-    body.videoId = state.uploadedProject.videoId;
+    body.sourceUrl = sourceUrl;
+    body.videoId = state.uploadedProject.videoId || getVideoIdFromUrl(sourceUrl);
   } else {
     body.sourceType = "upload";
-    body.inputPath = state.uploadedProject.filePath;
+    body.inputPath =
+      state.uploadedProject.filePath ||
+      state.uploadedProject.inputPath ||
+      state.uploadedProject.localPath ||
+      "";
   }
 
   return body;
@@ -1304,6 +2463,8 @@ async function handleUploadForSmartClips(input, suggestions) {
 
     state.generatedClips = [...clips, ...state.generatedClips];
     state.generatedClip = state.generatedClips[0] || null;
+
+    upsertCurrentProjectToAllProjects();
 
     for (let i = 0; i < clips.length; i++) {
       await loadCaptionsForClip(clips[i], i);
@@ -1410,11 +2571,11 @@ function showUploadRequiredForSmartClips(data) {
 
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
- body.maxClips = getAutoSmartClipCount();
+  body.maxClips = getAutoSmartClipCount();
   body.minScore = 60;
 
   const controller = new AbortController();
-  const timeoutMs = 3 * 60 * 1000; // 3 min, not 7
+  const timeoutMs = 6 * 60 * 1000;
 
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -1485,33 +2646,85 @@ smartClipBtn?.addEventListener("click", async () => {
     stopCrawl();
     stopCrawl = null;
 
-    if (!newClips.length) {
-      updateProgress(0, "No clips scored 50+");
-      alert("No smart clips found. Try another video.");
-      return;
-    }
+    let finalClips = newClips;
+
+    if (!finalClips.length) {
+  const fallbackCount = getAutoSmartClipCount();
+  const duration = Number(
+    state.videoDurationSeconds || state.uploadedProject?.duration || 0
+  );
+  const clipLength = Number(state.selectedDuration || 30);
+
+  updateProgress(10, "No scored clips found. Creating real fallback clips...");
+
+  finalClips = [];
+
+  for (let index = 0; index < fallbackCount; index++) {
+    const safeStart = Math.max(
+      0,
+      Math.floor((duration / (fallbackCount + 1)) * (index + 1))
+    );
+
+    const start = Math.max(0, safeStart - Math.floor(clipLength / 2));
+    const end = Math.min(duration, start + clipLength);
+
+    const startTime = secondsToTime(start);
+    const endTime = secondsToTime(end);
+
+    updateProgress(
+      10 + ((index + 1) / fallbackCount) * 75,
+      `Generating fallback clip ${index + 1} of ${fallbackCount}...`
+    );
+
+    const realClip = await generateSingleClip(startTime, endTime, index);
+
+    finalClips.push({
+      ...realClip,
+      start,
+      end,
+      startTime,
+      endTime,
+      duration: Math.max(0, end - start),
+      hook: autoHookForClip(index),
+      smartScore: 40,
+      smartReason: "Fallback real clip",
+      previewText:
+        "Real clip generated from fallback time range because no high-score moment was found.",
+    });
+  }
+}
 
     updateProgress(96, "Adding scores and captions...", 8);
-    state.generatedClips = [...newClips, ...state.generatedClips];
+    state.generatedClips = [...finalClips, ...state.generatedClips];
     state.generatedClip = state.generatedClips[0] || null;
 
-    for (let i = 0; i < newClips.length; i++) {
-      await loadCaptionsForClip(newClips[i], i);
+    upsertCurrentProjectToAllProjects();
+
+    for (let i = 0; i < finalClips.length; i++) {
+      await loadCaptionsForClip(finalClips[i], i);
     }
 
     renderGeneratedClips();
     persistStudioSession();
-    await animateProgressTo(100, `Generated ${newClips.length} smart clip${newClips.length > 1 ? "s" : ""} ✓`);
+    await animateProgressTo(
+  100,
+  `Generated ${finalClips.length} smart clip${finalClips.length > 1 ? "s" : ""} ✓`
+);
 
   } catch (error) {
-    if (stopCrawl) { stopCrawl(); stopCrawl = null; }
+    if (stopCrawl) {
+      stopCrawl();
+      stopCrawl = null;
+    }
     const cleanMessage = getCleanSmartClipError(error);
     updateProgress(0, cleanMessage || "Smart clipping failed");
     if (cleanMessage !== "NEEDS_UPLOAD") {
       alert(cleanMessage || "Smart clipping failed.");
     }
   } finally {
-    if (stopCrawl) { stopCrawl(); }
+    if (stopCrawl) {
+      stopCrawl();
+    }
     smartClipBtn.disabled = false;
     smartClipBtn.textContent = "Get clips in 1 click";
   }
@@ -1689,8 +2902,12 @@ async function downloadAllClips() {
 initTheme();
 restoreStudioSession();
 mergeCaptionEditorSession();
+setYoutubeFetchButtonHidden();
+updateProjectTabs();
 updateClipPlanner();
+renderProjectHistory([]);
 renderGeneratedClips();
+loadProjectHistory();
 
 // Restore saved caption style
 const savedStyle = localStorage.getItem("clipflow-caption-style");

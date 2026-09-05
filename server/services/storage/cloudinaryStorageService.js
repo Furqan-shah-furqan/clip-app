@@ -8,8 +8,6 @@ const {
   CLOUDINARY_API_SECRET,
 } = require("../../config/env");
 
-const LARGE_UPLOAD_THRESHOLD_BYTES = 90 * 1024 * 1024;
-
 function assertCloudinaryReady() {
   const missing = [];
 
@@ -42,6 +40,59 @@ function buildSafePublicId(filePath, publicId = "") {
     .slice(0, 90);
 }
 
+function withTimeout(promise, ms, label = "Operation") {
+  let timer;
+
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(`${label} timed out after ${Math.round(ms / 1000)} seconds`)
+      );
+    }, ms);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function uploadVideoStream(filePath, uploadOptions) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      uploadOptions,
+      (error, result) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(result);
+      }
+    );
+
+    fs.createReadStream(filePath)
+      .on("error", reject)
+      .pipe(uploadStream);
+  });
+}
+
+function getCloudinaryErrorMessage(error) {
+  return (
+    error?.error?.message ||
+    error?.message ||
+    error?.response?.data?.error?.message ||
+    error?.response?.data?.message ||
+    "Cloudinary upload failed."
+  );
+}
+
+function getCloudinaryErrorCode(error) {
+  return (
+    error?.error?.http_code ||
+    error?.http_code ||
+    error?.response?.status ||
+    null
+  );
+}
+
 async function uploadVideoToCloudinary(filePath, options = {}) {
   configureCloudinary();
 
@@ -59,26 +110,69 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
     overwrite: true,
     unique_filename: false,
     type: "upload",
+    timeout: 300000,
   };
 
-  const result =
-    stats.size >= LARGE_UPLOAD_THRESHOLD_BYTES
-      ? await cloudinary.uploader.upload_large(filePath, uploadOptions)
-      : await cloudinary.uploader.upload(filePath, uploadOptions);
+  let result;
 
-  if (!result?.secure_url) {
-    throw new Error("Cloudinary upload completed but no secure_url was returned.");
+  try {
+    console.log("CLOUDINARY UPLOAD START:", {
+      filePath,
+      sizeMB: (stats.size / 1024 / 1024).toFixed(2),
+      publicId: safePublicId,
+      cloudName: CLOUDINARY_CLOUD_NAME,
+    });
+
+    result = await withTimeout(
+      uploadVideoStream(filePath, uploadOptions),
+      300000,
+      "Cloudinary upload"
+    );
+
+    console.log("CLOUDINARY RAW RESULT:", JSON.stringify(result, null, 2));
+
+    if (!result || typeof result !== "object") {
+      throw new Error("Cloudinary returned an empty upload response.");
+    }
+
+    if (!result.secure_url) {
+      throw new Error(
+        `Cloudinary upload completed but no secure_url was returned. Raw result: ${JSON.stringify(
+          result
+        )}`
+      );
+    }
+
+    console.log("CLOUDINARY UPLOAD DONE:", {
+      publicId: result.public_id,
+      secureUrl: result.secure_url,
+      bytes: result.bytes,
+      duration: result.duration,
+      format: result.format,
+    });
+
+    return {
+      publicId: result.public_id,
+      secureUrl: result.secure_url,
+      duration: result.duration,
+      bytes: result.bytes,
+      format: result.format,
+      resourceType: result.resource_type,
+      raw: result,
+    };
+  } catch (error) {
+    const message = getCloudinaryErrorMessage(error);
+    const httpCode = getCloudinaryErrorCode(error);
+
+    console.error("CLOUDINARY UPLOAD FAILED:", {
+      message,
+      httpCode,
+      name: error?.error?.name || error?.name,
+      raw: error,
+    });
+
+    throw new Error(`Cloudinary upload failed: ${message}`);
   }
-
-  return {
-    publicId: result.public_id,
-    secureUrl: result.secure_url,
-    duration: result.duration,
-    bytes: result.bytes,
-    format: result.format,
-    resourceType: result.resource_type,
-    raw: result,
-  };
 }
 
 module.exports = {

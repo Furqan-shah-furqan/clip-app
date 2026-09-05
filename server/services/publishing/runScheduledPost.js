@@ -2,6 +2,9 @@ const prisma = require("../../lib/prisma");
 const { publishYouTubePost } = require("./youtubePublisher");
 const { publishInstagramPost } = require("./instagramPublisher");
 
+const RUNNABLE_STATUSES = ["DRAFT", "QUEUED", "FAILED", "RETRYING"];
+const PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
+
 function normalizePublishResult(result) {
   const responsePayload =
     result?.responsePayload ||
@@ -32,7 +35,38 @@ function normalizePublishResult(result) {
   };
 }
 
-const RUNNABLE_STATUSES = ["DRAFT", "QUEUED", "FAILED", "RETRYING"];
+function getErrorMessage(error) {
+  return (
+    error?.response?.data?.error?.message ||
+    error?.response?.data?.message ||
+    error?.error?.message ||
+    error?.message ||
+    "Publishing failed."
+  );
+}
+
+function getErrorResponsePayload(error) {
+  return (
+    error?.responsePayload ||
+    error?.response?.data ||
+    error?.error ||
+    {
+      message: getErrorMessage(error),
+    }
+  );
+}
+
+function isStaleProcessingSchedule(schedule) {
+  if (!schedule || schedule.status !== "PROCESSING") return false;
+
+  const updatedAtTime = new Date(
+    schedule.updatedAt || schedule.createdAt || Date.now()
+  ).getTime();
+
+  if (Number.isNaN(updatedAtTime)) return false;
+
+  return Date.now() - updatedAtTime > PROCESSING_TIMEOUT_MS;
+}
 
 class ScheduledPostExecutionError extends Error {
   constructor(code, message, extra = {}) {
@@ -54,11 +88,26 @@ async function loadScheduledPost(scheduledPostId) {
   });
 }
 
+async function resetStaleProcessingSchedule(schedule) {
+  console.log(
+    `[PublishRunner] Recovering stale PROCESSING schedule ${schedule.id}`
+  );
+
+  await prisma.scheduledPost.update({
+    where: { id: schedule.id },
+    data: {
+      status: "RETRYING",
+      errorMessage:
+        "Recovered stale PROCESSING job. Previous worker did not finish cleanly.",
+    },
+  });
+}
+
 async function claimScheduledPostForExecution(
   scheduledPostId,
   { skipIfAlreadyHandled = false } = {},
 ) {
-  const claimResult = await prisma.scheduledPost.updateMany({
+  let claimResult = await prisma.scheduledPost.updateMany({
     where: {
       id: scheduledPostId,
       status: {
@@ -101,25 +150,64 @@ async function claimScheduledPostForExecution(
   }
 
   if (current.status === "PROCESSING") {
+    const stale = isStaleProcessingSchedule(current);
+
+    if (!stale) {
+      if (skipIfAlreadyHandled) {
+        return {
+          skipped: true,
+          reason: "already_processing",
+          scheduledPost: current,
+        };
+      }
+
+      throw new ScheduledPostExecutionError(
+        "ALREADY_PROCESSING",
+        "This scheduled post is already being processed",
+        { scheduledPost: current },
+      );
+    }
+
+    await resetStaleProcessingSchedule(current);
+
+    claimResult = await prisma.scheduledPost.updateMany({
+      where: {
+        id: scheduledPostId,
+        status: "RETRYING",
+      },
+      data: {
+        status: "PROCESSING",
+        errorMessage: null,
+      },
+    });
+
+    if (claimResult.count === 1) {
+      return { claimed: true, recovered: true };
+    }
+
+    const latest = await loadScheduledPost(scheduledPostId);
+
     if (skipIfAlreadyHandled) {
       return {
         skipped: true,
-        reason: "already_processing",
-        scheduledPost: current,
+        reason: `not_claimed_after_stale_recovery_${String(
+          latest?.status || "unknown"
+        ).toLowerCase()}`,
+        scheduledPost: latest,
       };
     }
 
     throw new ScheduledPostExecutionError(
-      "ALREADY_PROCESSING",
-      "This scheduled post is already being processed",
-      { scheduledPost: current },
+      "CLAIM_FAILED_AFTER_STALE_RECOVERY",
+      "Could not claim stale processing schedule after recovery.",
+      { scheduledPost: latest },
     );
   }
 
   if (skipIfAlreadyHandled) {
     return {
       skipped: true,
-      reason: `not_runnable_${current.status.toLowerCase()}`,
+      reason: `not_runnable_${String(current.status || "unknown").toLowerCase()}`,
       scheduledPost: current,
     };
   }
@@ -146,6 +234,35 @@ async function publishScheduledPost(scheduledPost) {
     "UNSUPPORTED_PLATFORM",
     `Unsupported platform: ${scheduledPost.platform}`,
   );
+}
+
+async function markScheduledPostFailed({
+  scheduledPostId,
+  nextAttemptNumber,
+  error,
+}) {
+  const message = getErrorMessage(error);
+  const responsePayload = getErrorResponsePayload(error);
+
+  await prisma.$transaction([
+    prisma.publishAttempt.create({
+      data: {
+        scheduledPostId,
+        attemptNumber: nextAttemptNumber,
+        status: "failed",
+        requestPayloadJson: error?.requestPayload || null,
+        responsePayloadJson: responsePayload || null,
+        errorMessage: message,
+      },
+    }),
+    prisma.scheduledPost.update({
+      where: { id: scheduledPostId },
+      data: {
+        status: "FAILED",
+        errorMessage: message,
+      },
+    }),
+  ]);
 }
 
 async function runScheduledPostById(
@@ -179,6 +296,14 @@ async function runScheduledPostById(
     })) + 1;
 
   try {
+    console.log("[PublishRunner] Publishing schedule:", {
+      scheduledPostId,
+      platform: scheduledPost.platform,
+      title: scheduledPost.title,
+      clipId: scheduledPost.clipId,
+      accountId: scheduledPost.socialAccountId,
+    });
+
     const result = await publishScheduledPost(scheduledPost);
     const normalizedPublishResult = normalizePublishResult(result);
 
@@ -207,27 +332,32 @@ async function runScheduledPostById(
       }),
     ]);
 
+    console.log("[PublishRunner] Published schedule successfully:", {
+      scheduledPostId,
+      platformPostId: normalizedPublishResult.platformPostId,
+    });
+
     return normalizedPublishResult;
   } catch (error) {
-    await prisma.$transaction([
-      prisma.publishAttempt.create({
-        data: {
-          scheduledPostId,
-          attemptNumber: nextAttemptNumber,
-          status: "failed",
-          requestPayloadJson: error.requestPayload || null,
-          responsePayloadJson: error.responsePayload || null,
-          errorMessage: error.message,
-        },
-      }),
-      prisma.scheduledPost.update({
-        where: { id: scheduledPostId },
-        data: {
-          status: "FAILED",
-          errorMessage: error.message,
-        },
-      }),
-    ]);
+    console.error("[PublishRunner] Publish failed:", {
+      scheduledPostId,
+      message: getErrorMessage(error),
+      error,
+    });
+
+    try {
+      await markScheduledPostFailed({
+        scheduledPostId,
+        nextAttemptNumber,
+        error,
+      });
+    } catch (dbError) {
+      console.error("[PublishRunner] Failed to mark schedule as FAILED:", {
+        scheduledPostId,
+        originalError: getErrorMessage(error),
+        dbError,
+      });
+    }
 
     throw error;
   }
