@@ -329,12 +329,22 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const videoId = extractYouTubeId(sourceUrl);
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
+  const cookieFile = path.join(rootDir, "cookies.txt");
+  let tempCookiePath = null;
+  if (process.env.YOUTUBE_COOKIES) {
+    try {
+      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
+      fs.writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES, "utf8");
+    } catch {}
+  }
+  const activeCookies = tempCookiePath || (fs.existsSync(cookieFile) ? cookieFile : null);
+
   const args = [
     "--no-playlist", "--no-check-certificates", "--no-warnings",
-    "--extractor-args", "youtube:player_client=android,web",
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "-f", "bv*[height<=720]+ba/b[height<=720]/bv*+ba/best",
+    "--extractor-args", "youtube:player_client=android",
+    "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
     ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
+    ...(activeCookies ? ["--cookies", activeCookies] : []),
     "--download-sections", section,
     "--force-keyframes-at-cuts",
     "--merge-output-format", "mp4",
@@ -344,8 +354,14 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
     targetUrl,
   ];
 
-  console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl}`);
-  await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
+  try {
+    console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl}`);
+    await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
+  } finally {
+    if (tempCookiePath && fs.existsSync(tempCookiePath)) {
+      try { fs.unlinkSync(tempCookiePath); } catch {}
+    }
+  }
 
   const files = fs.readdirSync(uploadsDir)
     .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
