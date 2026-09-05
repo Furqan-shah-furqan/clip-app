@@ -16,10 +16,14 @@ function getFFmpegPath() {
 }
 
 function getPythonPath() {
-  if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) return process.env.PYTHON_PATH;
-  const localVenv = path.resolve(rootDir, ".venv", "Scripts", "python.exe");
-  if (fs.existsSync(localVenv)) return localVenv;
-  return "python";
+  if (process.env.PYTHON_PATH && (fs.existsSync(process.env.PYTHON_PATH) || process.env.PYTHON_PATH === "python3" || process.env.PYTHON_PATH === "python")) {
+    return process.env.PYTHON_PATH;
+  }
+  const linuxVenv = path.resolve(rootDir, ".venv", "bin", "python");
+  if (fs.existsSync(linuxVenv)) return linuxVenv;
+  const winVenv = path.resolve(rootDir, ".venv", "Scripts", "python.exe");
+  if (fs.existsSync(winVenv)) return winVenv;
+  return process.platform === "win32" ? "python" : "python3";
 }
 
 function toSeconds(t) {
@@ -44,8 +48,9 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
     const pythonBin = getPythonPath();
     const scriptPath = path.resolve(rootDir, "python", "smart_reframe.py");
 
-    if (!fs.existsSync(pythonBin) || !fs.existsSync(scriptPath)) {
-      return reject(new Error("Python or smart_reframe.py not found"));
+    const isCmd = pythonBin === "python" || pythonBin === "python3";
+    if ((!isCmd && !fs.existsSync(pythonBin)) || !fs.existsSync(scriptPath)) {
+      return reject(new Error(`Python (${pythonBin}) or smart_reframe.py not found`));
     }
 
     const safeStart = typeof startTime === "number" ? secondsToTime(startTime) : (startTime || "00:00:00");

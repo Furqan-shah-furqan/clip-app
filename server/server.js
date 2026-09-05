@@ -26,6 +26,12 @@ if (isWindows) {
   }
 } else {
   // Linux / Docker / Cloud Environment
+  if (!process.env.FFMPEG_PATH) {
+    process.env.FFMPEG_PATH = "ffmpeg";
+  }
+  if (!process.env.YTDLP_PATH) {
+    process.env.YTDLP_PATH = fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp";
+  }
   const linuxVenvPython = path.resolve(__dirname, "../.venv/bin/python");
   if (fs.existsSync(linuxVenvPython)) {
     process.env.PYTHON_PATH = linuxVenvPython;

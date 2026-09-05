@@ -321,29 +321,29 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
   const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
   const outputTemplate = `${tempBase}.%(ext)s`;
-  const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
-  const ytDlpPath = process.env.YTDLP_PATH || path.join(rootDir, "bin", "yt-dlp.exe");
+  const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
   const ffmpegDir = path.join(rootDir, "bin");
+  const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
 
   const videoId = extractYouTubeId(sourceUrl);
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const args = [
-    "--no-playlist", "--force-ipv4", "--no-check-certificates", "--no-warnings",
+    "--no-playlist", "--no-check-certificates", "--no-warnings",
     "--extractor-args", "youtube:player_client=android,web",
-    "--js-runtimes", "node",
-    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "-f", "bv*[height<=720]+ba/b[height<=720]/bv*+ba/best",
-    ...(fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe")) ? ["--ffmpeg-location", ffmpegDir] : []),
+    ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
     "--download-sections", section,
     "--force-keyframes-at-cuts",
     "--merge-output-format", "mp4",
-    "--socket-timeout", "15",
-    "--retries", "3",
+    "--socket-timeout", "30",
+    "--retries", "5",
     "-o", outputTemplate,
     targetUrl,
   ];
 
+  console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl}`);
   await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
 
   const files = fs.readdirSync(uploadsDir)
@@ -513,11 +513,12 @@ router.post("/smart-generate", async (req, res) => {
           try {
             sectionPath = await downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index: i });
           } catch (err) {
+            console.error(`[SmartClip] Section download failed for suggestion #${i + 1}:`, err.message || err);
             return res.json({
               success: false,
               needsUpload: true,
               source: "transcript",
-              message: "YouTube blocked clip download. Upload the source video to generate these smart clips.",
+              message: `YouTube clip download failed: ${err.message || "download error"}. Upload the source video to generate these smart clips.`,
               segmentCount: transcriptSegments.length,
               suggestions,
               clips: [],
