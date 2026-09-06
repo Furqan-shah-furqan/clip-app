@@ -19,4 +19,7 @@ captions/
 *.wav
 *.log
 __pycache__/
-
+cookies.txt
+cookies*.txt
+env_cookies.txt
+/etc/secrets/

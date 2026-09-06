@@ -137,7 +137,7 @@ function cleanSmartClipError(error) {
 }
 
 function runCommand(command, args = [], options = {}) {
-  const timeoutMs = Number(options.timeoutMs || 180000);
+  const timeoutMs = Number(options.timeoutMs || 360000);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "", stderr = "", settled = false;
@@ -314,6 +314,48 @@ function generateFallbackSegments() {
   return segments;
 }
 
+// ── Active YouTube cookies resolver ─────────────────────────────────────────
+function resolveActiveCookieFile() {
+  const candidates = [
+    "/etc/secrets/cookies.txt",
+    "/etc/secrets/youtube_cookies.txt",
+    process.env.YOUTUBE_COOKIES_PATH,
+    process.env.COOKIES_PATH,
+    path.join(rootDir, "cookies.txt"),
+    path.join(uploadsDir, "cookies.txt"),
+    path.join(rootDir, "cookies", "cookies.txt"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).size > 10) {
+        return candidate;
+      }
+    } catch {}
+  }
+
+  if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim().length > 10) {
+    try {
+      let content = process.env.YOUTUBE_COOKIES.trim();
+      if (content.startsWith("base64:") || (!content.includes("\n") && content.length > 50)) {
+        try {
+          const decoded = Buffer.from(content.replace(/^base64:/, ""), "base64").toString("utf8");
+          if (decoded.includes("youtube") || decoded.includes("Netscape") || decoded.includes(".google")) {
+            content = decoded;
+          }
+        } catch {}
+      }
+      const envCookiePath = path.join(uploadsDir, "env_cookies.txt");
+      fs.writeFileSync(envCookiePath, content, "utf8");
+      return envCookiePath;
+    } catch (e) {
+      console.warn("[SmartClip] Could not write env cookies:", e.message);
+    }
+  }
+
+  return null;
+}
+
 // ── YouTube section download ─────────────────────────────────────────────────
 async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
   const safeStart = Math.max(0, Number(startSec) || 0);
@@ -329,42 +371,17 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const videoId = extractYouTubeId(sourceUrl);
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
-  const cookieFile = path.join(rootDir, "cookies.txt");
-  const renderSecretCookie = "/etc/secrets/cookies.txt";
-  let tempCookiePath = null;
-
-  if (fs.existsSync(renderSecretCookie)) {
-    try {
-      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
-      fs.copyFileSync(renderSecretCookie, tempCookiePath);
-    } catch (e) {
-      console.warn("[SmartClip] Could not copy Render secret cookie:", e.message);
-    }
-  } else if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length < 50000) {
-    try {
-      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
-      fs.writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES, "utf8");
-    } catch (e) {
-      console.warn("[SmartClip] Could not write env cookies:", e.message);
-    }
-  } else if (fs.existsSync(cookieFile)) {
-    try {
-      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
-      fs.copyFileSync(cookieFile, tempCookiePath);
-    } catch {}
-  }
-
-  const activeCookies = tempCookiePath;
+  const activeCookies = resolveActiveCookieFile();
 
   const args = [
     "--no-playlist", "--no-check-certificates", "--no-warnings",
     ...(activeCookies
       ? [
           "--cookies", activeCookies,
-          "-f", "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b/best"
+          "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best"
         ]
       : [
-          "--extractor-args", "youtube:player_client=android",
+          "--extractor-args", "youtube:player_client=android,web",
           "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best"
         ]
     ),
@@ -378,14 +395,8 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
     targetUrl,
   ];
 
-  try {
-    console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl} (cookies: ${!!activeCookies})`);
-    await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
-  } finally {
-    if (tempCookiePath && fs.existsSync(tempCookiePath)) {
-      try { fs.unlinkSync(tempCookiePath); } catch {}
-    }
-  }
+  console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl} (cookies: ${activeCookies ? path.basename(activeCookies) : "none"})`);
+  await runCommand(ytDlpPath, args, { timeoutMs: 360000 });
 
   const files = fs.readdirSync(uploadsDir)
     .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
@@ -629,11 +640,22 @@ router.post("/smart-generate", async (req, res) => {
             sectionPath = await downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index: i });
           } catch (err) {
             console.error(`[SmartClip] Section download failed for suggestion #${i + 1}:`, err.message || err);
+            const errStr = String(err.message || err || "");
+            const isBotBlock = errStr.includes("not a bot") ||
+              errStr.includes("confirm you’re not a bot") ||
+              errStr.includes("confirm you're not a bot") ||
+              errStr.includes("--cookies") ||
+              errStr.includes("Sign in");
+
             return res.json({
               success: false,
               needsUpload: true,
+              needsCookies: isBotBlock,
               source: "transcript",
-              message: `YouTube clip download failed: ${err.message || "download error"}. Upload the source video to generate these smart clips.`,
+              message: isBotBlock
+                ? "YouTube blocked this download on cloud hosting. Upload cookies.txt or upload the source video directly."
+                : `YouTube clip download failed: ${err.message || "download error"}. Upload the source video to generate these smart clips.`,
+              rawError: errStr,
               segmentCount: transcriptSegments.length,
               suggestions,
               clips: [],
@@ -857,6 +879,57 @@ router.delete("/projects/:id", (req, res) => {
   const after = before.filter((item) => String(item.id) !== String(req.params.id));
   writeProjects(after);
   res.json({ success: true, deleted: before.length - after.length });
+});
+
+router.get("/cookies-status", (req, res) => {
+  const activePath = resolveActiveCookieFile();
+  const configured = Boolean(activePath);
+  return res.json({
+    configured,
+    source: activePath
+      ? activePath.startsWith("/etc/secrets")
+        ? "render-secret"
+        : activePath.includes("env_cookies")
+        ? "env"
+        : "file"
+      : "none",
+    filename: activePath ? path.basename(activePath) : null,
+  });
+});
+
+router.post("/upload-cookies", express.json({ limit: "10mb" }), (req, res) => {
+  try {
+    const { cookiesText } = req.body || {};
+    if (!cookiesText || typeof cookiesText !== "string" || cookiesText.trim().length < 20) {
+      return res.status(400).json({ error: "No valid cookies data provided." });
+    }
+
+    const content = cookiesText.trim();
+    if (
+      !content.includes("youtube.com") &&
+      !content.includes(".google.com") &&
+      !content.includes("# Netscape")
+    ) {
+      return res.status(400).json({
+        error: "File does not appear to contain Netscape YouTube/Google cookies.",
+      });
+    }
+
+    const targetPath = path.join(rootDir, "cookies.txt");
+    fs.writeFileSync(targetPath, content, "utf8");
+
+    try {
+      fs.writeFileSync(path.join(uploadsDir, "cookies.txt"), content, "utf8");
+    } catch {}
+
+    return res.json({
+      success: true,
+      message: "YouTube cookies saved and activated successfully!",
+      path: targetPath,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message || "Failed to save cookies" });
+  }
 });
 
 router.get("/suggest", (req, res) => {

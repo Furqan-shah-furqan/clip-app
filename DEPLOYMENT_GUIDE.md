@@ -160,6 +160,15 @@ If you prefer a virtual private server:
 5. Create a PostgreSQL Database on Render (free tier or starter) and copy the Internal Database URL into your Web Service environment variables as `DATABASE_URL`.
 6. Add Redis from [Upstash.com](https://upstash.com) (free serverless Redis) or Render Redis and paste `REDIS_URL`.
 7. Add your Cloudinary and OAuth variables.
+8. **Fix YouTube Bot Blocks (`cookies.txt` Secret File)**:
+   Because cloud servers (Render, AWS) share datacenter IP ranges, YouTube blocks automated downloads without cookies ("Sign in to confirm you’re not a bot").
+   To permanently enable YouTube downloads on Render:
+   - In your Render Web Service dashboard, go to the **"Environment"** tab.
+   - Scroll down to the **"Secret Files"** section and click **"Add Secret File"**.
+   - **Filename**: `cookies.txt`
+   - **Contents**: Upload your exported `cookies.txt` file (or paste its contents).
+   - Click **"Save Changes"**.
+   Render will automatically mount your cookies at `/etc/secrets/cookies.txt` and redeploy. All YouTube downloads will now succeed without bot errors!
 
 ---
 

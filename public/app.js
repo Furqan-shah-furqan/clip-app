@@ -2491,9 +2491,17 @@ function formatSmartReason(suggestion = {}) {
 }
 
 function showUploadRequiredForSmartClips(data) {
-  const message =
-    data?.message ||
-    "YouTube transcript analyzed! Upload the source video to generate these smart clips.";
+  state.uploadRequiredActive = true;
+  const isBotBlock =
+    Boolean(data?.needsCookies) ||
+    String(data?.message || "").includes("bot") ||
+    String(data?.rawError || "").includes("bot") ||
+    String(data?.message || "").includes("cookies") ||
+    String(data?.rawError || "").includes("Sign in");
+
+  const message = isBotBlock
+    ? "YouTube requires authentication on cloud hosting (Render). Upload cookies.txt or upload your source video."
+    : (data?.message || "YouTube transcript analyzed! Upload the source video to generate these smart clips.");
 
   updateProgress(0, message);
 
@@ -2505,7 +2513,71 @@ function showUploadRequiredForSmartClips(data) {
   const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
   if (suggestions.length && generatedClipsGrid) {
-    generatedClipsGrid.innerHTML = `
+    const bannerHtml = isBotBlock
+      ? `
+      <div style="
+        padding: 22px;
+        background: linear-gradient(135deg, #1f1807 0%, #151005 100%);
+        border-radius: 14px;
+        margin-bottom: 20px;
+        border: 1px solid #d97706;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      ">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom: 8px;">
+          <span style="font-size:22px;">🍪</span>
+          <p style="color:#fbbf24;font-weight:700;margin:0;font-size:16px;">
+            Found ${suggestions.length} Viral Moments! (YouTube Bot Protection on Render)
+          </p>
+        </div>
+        <p style="color:#d1d5db;margin:0 0 16px;font-size:14px;line-height:1.5;">
+          YouTube blocks video downloads from cloud hosting servers like Render unless cookies are provided.
+          You can fix this in 1 click by uploading your <strong>cookies.txt</strong>, or upload your source video file directly:
+        </p>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+          <label style="
+            display:inline-flex; align-items:center; gap:8px;
+            padding:10px 20px;
+            background:#fbbf24;
+            color:#000;
+            border-radius:8px;
+            cursor:pointer;
+            font-weight:700;
+            font-size:14px;
+            box-shadow: 0 2px 8px rgba(251,191,36,0.3);
+          ">
+            🍪 Upload cookies.txt
+            <input type="file" accept=".txt" style="display:none"
+              onchange="handleCookieUpload(this)">
+          </label>
+          <label style="
+            display:inline-flex; align-items:center; gap:8px;
+            padding:10px 20px;
+            background:#ffffff;
+            color:#000;
+            border-radius:8px;
+            cursor:pointer;
+            font-weight:700;
+            font-size:14px;
+          ">
+            📹 Upload Source Video
+            <input type="file" accept=".mp4,.mov,.mkv,.webm" style="display:none"
+              onchange="handleUploadForSmartClips(this, ${JSON.stringify(suggestions).replace(/"/g, "&quot;")})">
+          </label>
+          <button type="button" onclick="showRenderCookieGuide()" style="
+            background:transparent;
+            color:#9ca3af;
+            border:1px solid #4b5563;
+            border-radius:8px;
+            padding:10px 16px;
+            cursor:pointer;
+            font-size:13px;
+          ">
+            📖 How to add to Render (Permanent)
+          </button>
+        </div>
+      </div>
+      `
+      : `
       <div style="
         padding: 20px;
         background: #111;
@@ -2533,6 +2605,10 @@ function showUploadRequiredForSmartClips(data) {
             onchange="handleUploadForSmartClips(this, ${JSON.stringify(suggestions).replace(/"/g, "&quot;")})">
         </label>
       </div>
+      `;
+
+    generatedClipsGrid.innerHTML = `
+      ${bannerHtml}
       ${suggestions
         .slice(0, 5)
         .map((item, index) => {
@@ -2563,9 +2639,66 @@ function showUploadRequiredForSmartClips(data) {
         .join("")}
     `;
   }
-
-  throw new Error("NEEDS_UPLOAD");
 }
+
+async function handleCookieUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    updateProgress(10, "Uploading YouTube cookies...");
+    const text = await file.text();
+
+    if (
+      !text.includes("youtube.com") &&
+      !text.includes(".google.com") &&
+      !text.includes("# Netscape")
+    ) {
+      alert(
+        "The selected file does not appear to be a Netscape YouTube cookies file. Please make sure it was exported from YouTube.",
+      );
+      updateProgress(0, "Invalid cookies file");
+      return;
+    }
+
+    const res = await apiFetch(`${API_BASE}/clips/upload-cookies`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cookiesText: text }),
+    });
+
+    if (res?.success) {
+      alert("✅ YouTube cookies saved successfully! Re-generating clips now...");
+      updateProgress(20, "Cookies active! Re-generating clips...");
+      state.uploadRequiredActive = false;
+      if (smartClipBtn) {
+        smartClipBtn.click();
+      }
+    } else {
+      throw new Error(res?.error || "Failed to save cookies");
+    }
+  } catch (err) {
+    alert("Cookie upload failed: " + err.message);
+    updateProgress(0, "Cookie upload failed");
+  }
+}
+
+function showRenderCookieGuide() {
+  alert(
+    "How to permanently enable YouTube downloads on Render in 30 seconds:\n\n" +
+      "1. Open your Render Dashboard in your browser\n" +
+      "2. Click your web service: clip-clipflow-studio\n" +
+      "3. Go to the 'Environment' tab on the left\n" +
+      "4. Scroll down to 'Secret Files' and click 'Add Secret File'\n" +
+      "5. Set Filename: cookies.txt\n" +
+      "6. Upload the cookies.txt file from your Downloads folder\n" +
+      "7. Click 'Save Changes'\n\n" +
+      "Render will automatically redeploy and YouTube will work permanently!",
+  );
+}
+
+window.handleCookieUpload = handleCookieUpload;
+window.showRenderCookieGuide = showRenderCookieGuide;
 
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
@@ -2634,6 +2767,7 @@ smartClipBtn?.addEventListener("click", async () => {
     smartClipBtn.disabled = true;
     smartClipBtn.textContent = "Generating clips...";
     state.smartSuggestions = [];
+    state.uploadRequiredActive = false;
     _currentProgress = 0;
 
     updateProgress(0, "Finding viral moments...", 300);
@@ -2647,7 +2781,10 @@ smartClipBtn?.addEventListener("click", async () => {
     let finalClips = newClips;
 
     if (!finalClips.length) {
-  const fallbackCount = getAutoSmartClipCount();
+      if (state.uploadRequiredActive) {
+        return;
+      }
+      const fallbackCount = getAutoSmartClipCount();
   // Use video duration, or a safe default of 300s if unknown
   const duration = Math.max(
     Number(state.selectedDuration || 30) * 2,
