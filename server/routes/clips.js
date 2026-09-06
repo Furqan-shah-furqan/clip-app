@@ -332,22 +332,44 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const cookieFile = path.join(rootDir, "cookies.txt");
   const renderSecretCookie = "/etc/secrets/cookies.txt";
   let tempCookiePath = null;
-  if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length < 5000) {
+
+  if (fs.existsSync(renderSecretCookie)) {
+    try {
+      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
+      fs.copyFileSync(renderSecretCookie, tempCookiePath);
+    } catch (e) {
+      console.warn("[SmartClip] Could not copy Render secret cookie:", e.message);
+    }
+  } else if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.length < 50000) {
     try {
       tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
       fs.writeFileSync(tempCookiePath, process.env.YOUTUBE_COOKIES, "utf8");
+    } catch (e) {
+      console.warn("[SmartClip] Could not write env cookies:", e.message);
+    }
+  } else if (fs.existsSync(cookieFile)) {
+    try {
+      tempCookiePath = path.join(uploadsDir, `cookies_${clipStamp}.txt`);
+      fs.copyFileSync(cookieFile, tempCookiePath);
     } catch {}
   }
-  const activeCookies = fs.existsSync(renderSecretCookie)
-    ? renderSecretCookie
-    : (tempCookiePath || (fs.existsSync(cookieFile) ? cookieFile : null));
+
+  const activeCookies = tempCookiePath;
 
   const args = [
     "--no-playlist", "--no-check-certificates", "--no-warnings",
-    "--extractor-args", "youtube:player_client=android",
-    "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+    ...(activeCookies
+      ? [
+          "--cookies", activeCookies,
+          "--no-cookies-write",
+          "-f", "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b/best"
+        ]
+      : [
+          "--extractor-args", "youtube:player_client=android",
+          "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best"
+        ]
+    ),
     ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
-    ...(activeCookies ? ["--cookies", activeCookies] : []),
     "--download-sections", section,
     "--force-keyframes-at-cuts",
     "--merge-output-format", "mp4",
@@ -358,7 +380,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   ];
 
   try {
-    console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl}`);
+    console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl} (cookies: ${!!activeCookies})`);
     await runCommand(ytDlpPath, args, { timeoutMs: 180000 });
   } finally {
     if (tempCookiePath && fs.existsSync(tempCookiePath)) {
