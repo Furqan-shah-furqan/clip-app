@@ -361,7 +361,6 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
     ...(activeCookies
       ? [
           "--cookies", activeCookies,
-          "--no-cookies-write",
           "-f", "bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b/best"
         ]
       : [
