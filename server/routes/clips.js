@@ -520,9 +520,83 @@ router.post("/smart-generate", async (req, res) => {
       videoDurationSec: Number(videoDurationSec) || 0,
     });
 
-    const suggestions = allSuggestions
+    let suggestions = allSuggestions
       .filter((item) => Number(item.score || 0) >= safeMinScore)
       .slice(0, safeMaxClips);
+
+    // ── Fallback 1: if no clips pass minScore, take the best available ones ──
+    if (!suggestions.length && allSuggestions.length > 0) {
+      console.log(`[SmartClip] No clips scored ${safeMinScore}+. Falling back to top ${safeMaxClips} best clips.`);
+      suggestions = allSuggestions.slice(0, safeMaxClips);
+    }
+
+    // ── Fallback 2: if findSmartClipMoments found nothing, use transcript segments or time windows ──
+    if (!suggestions.length) {
+      const clipDuration = Math.max(15, Number(clipLengthSec) || 30);
+      const videoDur = Number(videoDurationSec) || 0;
+
+      if (transcriptSegments.length > 0) {
+        // Use transcript time ranges directly — group consecutive segments
+        const used = new Set();
+        let groupStart = null, groupEnd = null, groupText = [];
+
+        const pushGroup = () => {
+          if (groupStart !== null && groupEnd > groupStart) {
+            suggestions.push({
+              startSec: groupStart,
+              endSec: Math.min(groupEnd, groupStart + clipDuration),
+              start: secondsToTime(groupStart),
+              end: secondsToTime(Math.min(groupEnd, groupStart + clipDuration)),
+              durationSec: Math.min(groupEnd, groupStart + clipDuration) - groupStart,
+              score: 35,
+              title: groupText.join(" ").slice(0, 78) || "Video moment",
+              reason: "transcript segment",
+              signals: ["transcript segment"],
+              previewText: groupText.join(" ").slice(0, 260),
+              text: groupText.join(" "),
+            });
+          }
+        };
+
+        for (const seg of transcriptSegments) {
+          if (suggestions.length >= safeMaxClips) break;
+          if (used.has(seg)) continue;
+          if (groupStart === null || seg.start - groupEnd > 5) {
+            pushGroup();
+            groupStart = seg.start;
+            groupEnd = seg.end;
+            groupText = [seg.text || ""];
+          } else {
+            groupEnd = Math.max(groupEnd, seg.end);
+            groupText.push(seg.text || "");
+          }
+          used.add(seg);
+        }
+        pushGroup();
+      }
+
+      // If still no suggestions, create time-window placeholders
+      if (!suggestions.length && videoDur > 0) {
+        for (let i = 0; i < safeMaxClips; i++) {
+          const startSec = Math.max(0, Math.floor((videoDur / (safeMaxClips + 1)) * (i + 1)) - Math.floor(clipDuration / 2));
+          const endSec = Math.min(videoDur, startSec + clipDuration);
+          if (endSec <= startSec) continue;
+          suggestions.push({
+            startSec,
+            endSec,
+            start: secondsToTime(startSec),
+            end: secondsToTime(endSec),
+            durationSec: endSec - startSec,
+            score: 30,
+            title: `Video Clip ${i + 1}`,
+            reason: "time-based fallback",
+            signals: ["time-based"],
+            previewText: "",
+            text: "",
+          });
+        }
+      }
+    }
 
     if (!suggestions.length) {
       return res.json({
@@ -531,7 +605,7 @@ router.post("/smart-generate", async (req, res) => {
         segmentCount: transcriptSegments.length,
         suggestions: [],
         clips: [],
-        message: `No smart clips scored ${safeMinScore}+.`,
+        message: `No suitable clip moments found in this video.`,
       });
     }
 

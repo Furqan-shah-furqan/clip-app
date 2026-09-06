@@ -2322,7 +2322,6 @@ async function generateSingleClip(startTime, endTime, clipIndex = 0) {
   const isYoutubeSource = Boolean(
     String(state.uploadedProject.source || "").toLowerCase() === "youtube" ||
       String(state.uploadedProject.sourceType || "").toLowerCase() === "youtube" ||
-      sourceUrl ||
       state.uploadedProject.videoId
   );
 
@@ -2405,7 +2404,6 @@ function buildSmartSuggestBody() {
   const isYoutubeSource = Boolean(
     String(state.uploadedProject.source || "").toLowerCase() === "youtube" ||
       String(state.uploadedProject.sourceType || "").toLowerCase() === "youtube" ||
-      sourceUrl ||
       state.uploadedProject.videoId
   );
 
@@ -2572,7 +2570,7 @@ function showUploadRequiredForSmartClips(data) {
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
   body.maxClips = getAutoSmartClipCount();
-  body.minScore = 60;
+  body.minScore = 30;
 
   const controller = new AbortController();
   const timeoutMs = 6 * 60 * 1000;
@@ -2593,7 +2591,7 @@ async function generateSmartClipsFromSource() {
     }
 
     const clips = (Array.isArray(data.clips) ? data.clips : []).filter(
-      (clip) => Number(clip.smartScore || clip.score || 0) >= 60,
+      (clip) => Number(clip.smartScore || clip.score || 0) >= 1,
     );
 
     return clips.map((clip, index) => ({
@@ -2650,8 +2648,10 @@ smartClipBtn?.addEventListener("click", async () => {
 
     if (!finalClips.length) {
   const fallbackCount = getAutoSmartClipCount();
-  const duration = Number(
-    state.videoDurationSeconds || state.uploadedProject?.duration || 0
+  // Use video duration, or a safe default of 300s if unknown
+  const duration = Math.max(
+    Number(state.selectedDuration || 30) * 2,
+    Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0)
   );
   const clipLength = Number(state.selectedDuration || 30);
 
@@ -2668,6 +2668,9 @@ smartClipBtn?.addEventListener("click", async () => {
     const start = Math.max(0, safeStart - Math.floor(clipLength / 2));
     const end = Math.min(duration, start + clipLength);
 
+    // Skip invalid windows
+    if (end <= start) continue;
+
     const startTime = secondsToTime(start);
     const endTime = secondsToTime(end);
 
@@ -2676,21 +2679,24 @@ smartClipBtn?.addEventListener("click", async () => {
       `Generating fallback clip ${index + 1} of ${fallbackCount}...`
     );
 
-    const realClip = await generateSingleClip(startTime, endTime, index);
-
-    finalClips.push({
-      ...realClip,
-      start,
-      end,
-      startTime,
-      endTime,
-      duration: Math.max(0, end - start),
-      hook: autoHookForClip(index),
-      smartScore: 40,
-      smartReason: "Fallback real clip",
-      previewText:
-        "Real clip generated from fallback time range because no high-score moment was found.",
-    });
+    try {
+      const realClip = await generateSingleClip(startTime, endTime, index);
+      finalClips.push({
+        ...realClip,
+        start,
+        end,
+        startTime,
+        endTime,
+        duration: Math.max(0, end - start),
+        hook: autoHookForClip(index),
+        smartScore: 40,
+        smartReason: "Fallback real clip",
+        previewText:
+          "Real clip generated from fallback time range because no high-score moment was found.",
+      });
+    } catch (clipErr) {
+      console.error(`Fallback clip ${index + 1} failed:`, clipErr.message);
+    }
   }
 }
 
