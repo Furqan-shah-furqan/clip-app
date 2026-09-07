@@ -367,6 +367,45 @@ function resolveActiveCookieFile() {
   return null;
 }
 
+function prepareWritableCookies(activeCookies, clipStamp) {
+  if (!activeCookies) return null;
+  try {
+    const tempCookiePath = path.join(uploadsDir, `yt_cookies_${clipStamp}.txt`);
+    let cookieContent = fs.readFileSync(activeCookies, "utf8");
+
+    // Auto-normalize: If cookies contain .google.com auth tokens but lack .youtube.com lines,
+    // duplicate them for .youtube.com so yt-dlp sends full auth to YouTube
+    const lines = cookieContent.split(/\r?\n/);
+    const googleAuthNames = new Set(["SID", "HSID", "SSID", "APISID", "SAPISID", "__Secure-1PSID", "__Secure-1PAPISID", "__Secure-3PSID", "__Secure-1PSIDCC", "__Secure-3PSIDCC"]);
+    const ytLinesToAdd = [];
+    const hasYtSid = lines.some((l) => l.includes(".youtube.com") && l.includes("\tSID\t"));
+
+    if (!hasYtSid) {
+      for (const line of lines) {
+        const parts = line.split("\t");
+        if (parts.length >= 7 && (parts[0] === ".google.com" || parts[0] === "google.com")) {
+          const name = parts[5];
+          if (googleAuthNames.has(name)) {
+            const ytParts = [...parts];
+            ytParts[0] = ".youtube.com";
+            ytLinesToAdd.push(ytParts.join("\t"));
+          }
+        }
+      }
+      if (ytLinesToAdd.length) {
+        cookieContent = cookieContent + "\n" + ytLinesToAdd.join("\n");
+      }
+    }
+
+    fs.writeFileSync(tempCookiePath, cookieContent, "utf8");
+    try { fs.chmodSync(tempCookiePath, 0o666); } catch {}
+    return tempCookiePath;
+  } catch (err) {
+    console.warn("[SmartClip] Failed to prepare writable cookies:", err.message);
+    return null;
+  }
+}
+
 // ── YouTube source video download ────────────────────────────────────────────
 async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
   const clipStamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -379,36 +418,28 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const activeCookies = resolveActiveCookieFile();
-  let tempCookiePath = null;
-  if (activeCookies) {
-    try {
-      tempCookiePath = path.join(uploadsDir, `yt_cookies_${clipStamp}.txt`);
-      fs.copyFileSync(activeCookies, tempCookiePath);
-      try { fs.chmodSync(tempCookiePath, 0o666); } catch {}
-    } catch (err) {
-      console.warn("[SmartClip] Failed to copy cookies to writable location:", err.message);
-      tempCookiePath = null;
-    }
-  }
-
+  const tempCookiePath = prepareWritableCookies(activeCookies, clipStamp);
   const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
 
   const clientStrategies = [
-    "youtube:player_client=android,web,ios",
-    "youtube:player_client=ios,android,web",
-    "youtube:player_client=android",
+    { client: "youtube:player_client=android,web,ios", withCookies: true },
+    { client: "youtube:player_client=ios,android,web", withCookies: true },
+    { client: "youtube:player_client=android", withCookies: true },
+    { client: "youtube:player_client=android", withCookies: false },
+    { client: "youtube:player_client=ios", withCookies: false },
   ];
 
   let lastError = null;
 
-  for (const clientStrategy of clientStrategies) {
+  for (const strategy of clientStrategies) {
+    const useCookies = strategy.withCookies && Boolean(effectiveCookies);
     const args = [
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
       "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-      "--extractor-args", clientStrategy,
-      ...(effectiveCookies ? ["--cookies", effectiveCookies] : []),
+      "--extractor-args", strategy.client,
+      ...(useCookies ? ["--cookies", effectiveCookies] : []),
       "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--merge-output-format", "mp4",
@@ -418,7 +449,7 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
       targetUrl,
     ];
 
-    console.log(`[SmartClip] Downloading YouTube source video with ${clientStrategy} from ${targetUrl} (cookies: ${effectiveCookies ? path.basename(activeCookies || "temp") : "none"})`);
+    console.log(`[SmartClip] Downloading YouTube source with ${strategy.client} (cookies: ${useCookies ? "yes" : "no"}) from ${targetUrl}`);
     try {
       await runCommand(ytDlpPath, args, { timeoutMs: 300000 });
 
@@ -437,7 +468,7 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
       }
     } catch (err) {
       lastError = err;
-      console.warn(`[SmartClip] Client strategy ${clientStrategy} failed:`, err.message);
+      console.warn(`[SmartClip] Strategy ${strategy.client} (cookies: ${useCookies}) failed:`, err.message);
     }
   }
 
@@ -464,36 +495,28 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const activeCookies = resolveActiveCookieFile();
-  let tempCookiePath = null;
-  if (activeCookies) {
-    try {
-      tempCookiePath = path.join(uploadsDir, `yt_cookies_${clipStamp}.txt`);
-      fs.copyFileSync(activeCookies, tempCookiePath);
-      try { fs.chmodSync(tempCookiePath, 0o666); } catch {}
-    } catch (err) {
-      console.warn("[SmartClip] Failed to copy cookies to writable location:", err.message);
-      tempCookiePath = null;
-    }
-  }
-
+  const tempCookiePath = prepareWritableCookies(activeCookies, clipStamp);
   const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
 
   const clientStrategies = [
-    "youtube:player_client=android,web,ios",
-    "youtube:player_client=ios,android,web",
-    "youtube:player_client=android",
+    { client: "youtube:player_client=android,web,ios", withCookies: true },
+    { client: "youtube:player_client=ios,android,web", withCookies: true },
+    { client: "youtube:player_client=android", withCookies: true },
+    { client: "youtube:player_client=android", withCookies: false },
+    { client: "youtube:player_client=ios", withCookies: false },
   ];
 
   let lastError = null;
 
-  for (const clientStrategy of clientStrategies) {
+  for (const strategy of clientStrategies) {
+    const useCookies = strategy.withCookies && Boolean(effectiveCookies);
     const args = [
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
       "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-      "--extractor-args", clientStrategy,
-      ...(effectiveCookies ? ["--cookies", effectiveCookies] : []),
+      "--extractor-args", strategy.client,
+      ...(useCookies ? ["--cookies", effectiveCookies] : []),
       "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--download-sections", section,
@@ -505,7 +528,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
       targetUrl,
     ];
 
-    console.log(`[SmartClip] Invoking yt-dlp section ${section} with ${clientStrategy} from ${targetUrl} (cookies: ${effectiveCookies ? path.basename(activeCookies || "temp") : "none"})`);
+    console.log(`[SmartClip] Invoking yt-dlp section ${section} with ${strategy.client} (cookies: ${useCookies ? "yes" : "no"}) from ${targetUrl}`);
     try {
       await runCommand(ytDlpPath, args, { timeoutMs: 360000 });
 
@@ -524,7 +547,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
       }
     } catch (err) {
       lastError = err;
-      console.warn(`[SmartClip] Section download strategy ${clientStrategy} failed:`, err.message);
+      console.warn(`[SmartClip] Section download strategy ${strategy.client} failed:`, err.message);
     }
   }
 
