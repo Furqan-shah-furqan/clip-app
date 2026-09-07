@@ -12,6 +12,16 @@ const {
 } = require("../utils/paths");
 const { smartGenerateClip } = require("../services/smartClipService");
 const { findSmartClipMoments } = require("../services/smartClipRanker");
+const {
+  isValidYouTubeUrl,
+  extractYouTubeId,
+  downloadYouTubeSourceVideo,
+  downloadYouTubeSection,
+  cleanupFile,
+  cleanupStaleSourceVideos,
+  getDownloaderDiagnostics,
+  resolveActiveCookieFile,
+} = require("../services/youtubeDownloader");
 
 const router = express.Router();
 
@@ -33,24 +43,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
-function isValidYouTubeUrl(url) {
-  return /^https?:\/\/(www\.)?(youtube\.com\/(watch\?|shorts\/|live\/)|youtu\.be\/)/.test(url);
-}
-
-function extractYouTubeId(url) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes("youtu.be")) return parsed.pathname.replace("/", "").trim();
-    if (parsed.searchParams.get("v")) return parsed.searchParams.get("v");
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    const shortsIndex = parts.indexOf("shorts");
-    const liveIndex = parts.indexOf("live");
-    if (shortsIndex !== -1 && parts[shortsIndex + 1]) return parts[shortsIndex + 1];
-    if (liveIndex !== -1 && parts[liveIndex + 1]) return parts[liveIndex + 1];
-  } catch { return ""; }
-  return "";
-}
 
 function timeToSeconds(timeStr) {
   if (!timeStr) return 0;
@@ -314,271 +306,13 @@ function generateFallbackSegments() {
   return segments;
 }
 
-// ── Active YouTube cookies resolver ─────────────────────────────────────────
-function resolveActiveCookieFile() {
-  const candidates = [
-    path.join(uploadsDir, "cookies.txt"),
-    path.join(rootDir, "cookies.txt"),
-    "/etc/secrets/cookies.txt",
-    "/etc/secrets/youtube_cookies.txt",
-    process.env.YOUTUBE_COOKIES_PATH,
-    process.env.COOKIES_PATH,
-    path.join(rootDir, "cookies", "cookies.txt"),
-  ].filter(Boolean);
-
-  let bestCandidate = null;
-  let newestMtime = -1;
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) {
-        const stat = fs.statSync(candidate);
-        if (stat.isFile() && stat.size > 10) {
-          if (stat.mtimeMs > newestMtime) {
-            newestMtime = stat.mtimeMs;
-            bestCandidate = candidate;
-          }
-        }
-      }
-    } catch {}
-  }
-
-  if (bestCandidate) return bestCandidate;
-
-  if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim().length > 10) {
-    try {
-      let content = process.env.YOUTUBE_COOKIES.trim();
-      if (content.startsWith("base64:") || (!content.includes("\n") && content.length > 50)) {
-        try {
-          const decoded = Buffer.from(content.replace(/^base64:/, ""), "base64").toString("utf8");
-          if (decoded.includes("youtube") || decoded.includes("Netscape") || decoded.includes(".google")) {
-            content = decoded;
-          }
-        } catch {}
-      }
-      const envCookiePath = path.join(uploadsDir, "env_cookies.txt");
-      fs.writeFileSync(envCookiePath, content, "utf8");
-      return envCookiePath;
-    } catch (e) {
-      console.warn("[SmartClip] Could not write env cookies:", e.message);
-    }
-  }
-
-  return null;
-}
-
-function prepareWritableCookies(activeCookies, clipStamp) {
-  if (!activeCookies) return null;
-  try {
-    const tempCookiePath = path.join(uploadsDir, `yt_cookies_${clipStamp}.txt`);
-    let cookieContent = fs.readFileSync(activeCookies, "utf8");
-
-    // Auto-normalize: If cookies contain .google.com auth tokens but lack .youtube.com lines,
-    // duplicate them for .youtube.com so yt-dlp sends full auth to YouTube
-    const lines = cookieContent.split(/\r?\n/);
-    const googleAuthNames = new Set(["SID", "HSID", "SSID", "APISID", "SAPISID", "__Secure-1PSID", "__Secure-1PAPISID", "__Secure-3PSID", "__Secure-1PSIDCC", "__Secure-3PSIDCC"]);
-    const ytLinesToAdd = [];
-    const hasYtSid = lines.some((l) => l.includes(".youtube.com") && l.includes("\tSID\t"));
-
-    if (!hasYtSid) {
-      for (const line of lines) {
-        const parts = line.split("\t");
-        if (parts.length >= 7 && (parts[0] === ".google.com" || parts[0] === "google.com")) {
-          const name = parts[5];
-          if (googleAuthNames.has(name)) {
-            const ytParts = [...parts];
-            ytParts[0] = ".youtube.com";
-            ytLinesToAdd.push(ytParts.join("\t"));
-          }
-        }
-      }
-      if (ytLinesToAdd.length) {
-        cookieContent = cookieContent + "\n" + ytLinesToAdd.join("\n");
-      }
-    }
-
-    fs.writeFileSync(tempCookiePath, cookieContent, "utf8");
-    try { fs.chmodSync(tempCookiePath, 0o666); } catch {}
-    return tempCookiePath;
-  } catch (err) {
-    console.warn("[SmartClip] Failed to prepare writable cookies:", err.message);
-    return null;
-  }
-}
-
-// ── YouTube source video download ────────────────────────────────────────────
+// ── YouTube Downloader Bridges ───────────────────────────────────────────────
 async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
-  const clipStamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const outputTemplate = path.join(uploadsDir, `yt_source_${clipStamp}.%(ext)s`);
-  const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
-  const ffmpegDir = path.join(rootDir, "bin");
-  const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
-
-  const videoId = extractYouTubeId(sourceUrl);
-  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
-
-  const activeCookies = resolveActiveCookieFile();
-  const tempCookiePath = prepareWritableCookies(activeCookies, clipStamp);
-  const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
-
-  const clientStrategies = [
-    { client: "youtube:player_client=android", withCookies: false },
-    { client: "youtube:player_client=android", withCookies: true },
-    { client: "youtube:player_client=android,web", withCookies: true },
-    { client: "youtube:player_client=ios", withCookies: false },
-    { client: "youtube:player_client=ios,android", withCookies: true },
-  ];
-
-  const strategyErrors = [];
-  let lastError = null;
-
-  for (const strategy of clientStrategies) {
-    const useCookies = strategy.withCookies && Boolean(effectiveCookies);
-    const args = [
-      "--no-playlist",
-      "--no-check-certificates",
-      "--no-warnings",
-      "--extractor-args", strategy.client,
-      ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
-      ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
-      "--merge-output-format", "mp4",
-      "--socket-timeout", "30",
-      "--retries", "3",
-      "-o", outputTemplate,
-      targetUrl,
-    ];
-
-    console.log(`[SmartClip] Downloading YouTube source with ${strategy.client} (cookies: ${useCookies ? "yes" : "no"}) from ${targetUrl}`);
-    try {
-      await runCommand(ytDlpPath, args, { timeoutMs: 300000 });
-
-      const files = fs.readdirSync(uploadsDir)
-        .filter((f) => f.startsWith(`yt_source_${clipStamp}`))
-        .map((f) => path.join(uploadsDir, f))
-        .filter((f) => fs.existsSync(f));
-
-      const mp4 = files.find((f) => f.endsWith(".mp4")) || files[0];
-      if (mp4 && fs.existsSync(mp4) && fs.statSync(mp4).size > 1000) {
-        if (tempCookiePath && fs.existsSync(tempCookiePath)) {
-          try { fs.copyFileSync(tempCookiePath, path.join(uploadsDir, "cookies.txt")); } catch {}
-          try { fs.unlinkSync(tempCookiePath); } catch {}
-        }
-        return mp4;
-      }
-    } catch (err) {
-      lastError = err;
-      strategyErrors.push(`[${strategy.client}, cookies=${useCookies}]: ${err.message}`);
-      console.warn(`[SmartClip] Strategy ${strategy.client} (cookies: ${useCookies}) failed:`, err.message);
-    }
-  }
-
-  if (tempCookiePath && fs.existsSync(tempCookiePath)) {
-    try { fs.unlinkSync(tempCookiePath); } catch {}
-  }
-
-  throw new Error(strategyErrors.join(" \n ") || lastError?.message || "Failed to download YouTube video after trying all strategies");
+  return await downloadYouTubeSourceVideo({ sourceUrl });
 }
 
-// ── YouTube section download ─────────────────────────────────────────────────
 async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
-  const safeStart = Math.max(0, Number(startSec) || 0);
-  const safeEnd = Math.max(safeStart + 8, Number(endSec) || safeStart + 30);
-  const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-  const tempBase = path.join(uploadsDir, `yt_smart_section_${clipStamp}`);
-  const outputTemplate = `${tempBase}.%(ext)s`;
-  const section = `*${safeStart.toFixed(3)}-${safeEnd.toFixed(3)}`;
-  const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
-  const ffmpegDir = path.join(rootDir, "bin");
-  const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
-
-  const videoId = extractYouTubeId(sourceUrl);
-  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
-
-  const activeCookies = resolveActiveCookieFile();
-  const tempCookiePath = prepareWritableCookies(activeCookies, clipStamp);
-  const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
-
-  const clientStrategies = [
-    { client: "youtube:player_client=android", withCookies: false },
-    { client: "youtube:player_client=android", withCookies: true },
-    { client: "youtube:player_client=android,web", withCookies: true },
-    { client: "youtube:player_client=ios", withCookies: false },
-    { client: "youtube:player_client=ios,android", withCookies: true },
-  ];
-
-  const strategyErrors = [];
-  let lastError = null;
-
-  for (const strategy of clientStrategies) {
-    const useCookies = strategy.withCookies && Boolean(effectiveCookies);
-    const args = [
-      "--no-playlist",
-      "--no-check-certificates",
-      "--no-warnings",
-      "--extractor-args", strategy.client,
-      ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
-      ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
-      "--download-sections", section,
-      "--force-keyframes-at-cuts",
-      "--merge-output-format", "mp4",
-      "--socket-timeout", "30",
-      "--retries", "3",
-      "-o", outputTemplate,
-      targetUrl,
-    ];
-
-    console.log(`[SmartClip] Invoking yt-dlp section ${section} with ${strategy.client} (cookies: ${useCookies ? "yes" : "no"}) from ${targetUrl}`);
-    try {
-      await runCommand(ytDlpPath, args, { timeoutMs: 360000 });
-
-      const files = fs.readdirSync(uploadsDir)
-        .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
-        .map((f) => path.join(uploadsDir, f))
-        .filter((f) => fs.existsSync(f));
-
-      const mp4 = files.find((f) => f.endsWith(".mp4")) || files[0];
-      if (mp4 && fs.existsSync(mp4) && fs.statSync(mp4).size > 1000) {
-        if (tempCookiePath && fs.existsSync(tempCookiePath)) {
-          try { fs.copyFileSync(tempCookiePath, path.join(uploadsDir, "cookies.txt")); } catch {}
-          try { fs.unlinkSync(tempCookiePath); } catch {}
-        }
-        return mp4;
-      }
-    } catch (err) {
-      lastError = err;
-      strategyErrors.push(`[${strategy.client}, cookies=${useCookies}]: ${err.message}`);
-      console.warn(`[SmartClip] Section download strategy ${strategy.client} failed:`, err.message);
-    }
-  }
-
-  if (tempCookiePath && fs.existsSync(tempCookiePath)) {
-    try { fs.unlinkSync(tempCookiePath); } catch {}
-  }
-
-  // Fallback: download whole source video once and extract section with FFmpeg locally
-  console.log("[SmartClip] Section download strategies failed, falling back to full source video download + FFmpeg cut...");
-  const sourceMp4 = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
-  const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
-  const ffmpegPath = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"))
-    ? path.join(ffmpegDir, "ffmpeg.exe")
-    : "ffmpeg";
-
-  const cutDuration = safeEnd - safeStart;
-  await runCommand(ffmpegPath, [
-    "-y",
-    "-ss", String(safeStart),
-    "-i", sourceMp4,
-    "-t", String(cutDuration),
-    "-c", "copy",
-    cutMp4,
-  ], { timeoutMs: 60000 });
-
-  try { if (fs.existsSync(sourceMp4)) fs.unlinkSync(sourceMp4); } catch {}
-
-  if (fs.existsSync(cutMp4)) return cutMp4;
-  throw lastError || new Error("Failed to download YouTube section");
+  return await downloadYouTubeSection({ sourceUrl, startSec, endSec, index });
 }
 
 function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
@@ -666,76 +400,29 @@ router.post("/smart-suggest", async (req, res) => {
 
 router.get("/diag", async (req, res) => {
   const url = req.query.url || "https://www.youtube.com/watch?v=AxRd9vXZ1kc";
-  const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
-  const activeCookies = resolveActiveCookieFile();
-
-  let cookiesSnippet = null;
-  let ytStats = { totalLines: 0, ytLines: 0, hasLoginInfo: false, hasSid: false };
-  if (activeCookies && fs.existsSync(activeCookies)) {
-    try {
-      const content = fs.readFileSync(activeCookies, "utf8");
-      const lines = content.split(/\r?\n/);
-      ytStats.totalLines = lines.length;
-      ytStats.ytLines = lines.filter((l) => l.includes("youtube.com")).length;
-      ytStats.hasLoginInfo = lines.some((l) => l.includes("LOGIN_INFO"));
-      ytStats.hasSid = lines.some((l) => l.includes("\tSID\t"));
-      cookiesSnippet = {
-        path: activeCookies,
-        size: fs.statSync(activeCookies).size,
-        lines: lines.slice(0, 10),
-      };
-    } catch (e) {
-      cookiesSnippet = { error: e.message };
-    }
-  }
-
-  const tests = {};
-
-  // Test 1: version
   try {
-    const v = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 10000 });
-    tests.version = v.stdout.trim();
-  } catch (e) {
-    tests.version = `error: ${e.message}`;
-  }
+    const diag = await getDownloaderDiagnostics(url);
+    const activeCookies = resolveActiveCookieFile();
 
-  // Test 2: android without cookies format 18 test
-  try {
-    const t2 = await runCommand(ytDlpPath, [
-      "--no-warnings",
-      "--extractor-args", "youtube:player_client=android",
-      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
-      "-g", url
-    ], { timeoutMs: 25000 });
-    tests.android_no_cookies = { success: true, url: t2.stdout.trim().slice(0, 120) + "..." };
-  } catch (e) {
-    tests.android_no_cookies = { success: false, error: e.message };
-  }
-
-  // Test 3: android with cookies if present
-  if (activeCookies) {
-    try {
-      const t3 = await runCommand(ytDlpPath, [
-        "--no-warnings",
-        "--extractor-args", "youtube:player_client=android",
-        "--cookies", activeCookies,
-        "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
-        "-g", url
-      ], { timeoutMs: 25000 });
-      tests.android_with_cookies = { success: true, url: t3.stdout.trim().slice(0, 120) + "..." };
-    } catch (e) {
-      tests.android_with_cookies = { success: false, error: e.message };
+    let ytStats = { totalLines: 0, ytLines: 0, hasLoginInfo: false, hasSid: false };
+    if (activeCookies && fs.existsSync(activeCookies)) {
+      try {
+        const content = fs.readFileSync(activeCookies, "utf8");
+        const lines = content.split(/\r?\n/);
+        ytStats.totalLines = lines.length;
+        ytStats.ytLines = lines.filter((l) => l.includes("youtube.com")).length;
+        ytStats.hasLoginInfo = lines.some((l) => l.includes("LOGIN_INFO"));
+        ytStats.hasSid = lines.some((l) => l.includes("\tSID\t"));
+      } catch {}
     }
-  }
 
-  return res.json({
-    platform: process.platform,
-    ytDlpPath,
-    activeCookies,
-    cookiesSnippet,
-    ytStats,
-    tests,
-  });
+    return res.json({
+      ...diag,
+      ytStats,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Diagnostics failed", details: err.message });
+  }
 });
 
 router.post("/smart-generate", async (req, res) => {
@@ -918,9 +605,7 @@ router.post("/smart-generate", async (req, res) => {
           clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
         }
       } finally {
-        if (sourceVideoPath && fs.existsSync(sourceVideoPath)) {
-          try { fs.unlinkSync(sourceVideoPath); } catch {}
-        }
+        cleanupFile(sourceVideoPath);
       }
     } else {
       // ── Local upload → FFmpeg ──
@@ -1016,11 +701,7 @@ router.post("/generate", async (req, res) => {
         });
       }
     } finally {
-      if (tempSectionPath) {
-        try {
-          if (fs.existsSync(tempSectionPath)) fs.unlinkSync(tempSectionPath);
-        } catch {}
-      }
+      cleanupFile(tempSectionPath);
     }
 
     const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;

@@ -160,15 +160,34 @@ If you prefer a virtual private server:
 5. Create a PostgreSQL Database on Render (free tier or starter) and copy the Internal Database URL into your Web Service environment variables as `DATABASE_URL`.
 6. Add Redis from [Upstash.com](https://upstash.com) (free serverless Redis) or Render Redis and paste `REDIS_URL`.
 7. Add your Cloudinary and OAuth variables.
-8. **Fix YouTube Bot Blocks (`cookies.txt` Secret File)**:
-   Because cloud servers (Render, AWS) share datacenter IP ranges, YouTube blocks automated downloads without cookies ("Sign in to confirm you’re not a bot").
-   To permanently enable YouTube downloads on Render:
-   - In your Render Web Service dashboard, go to the **"Environment"** tab.
-   - Scroll down to the **"Secret Files"** section and click **"Add Secret File"**.
-   - **Filename**: `cookies.txt`
-   - **Contents**: Upload your exported `cookies.txt` file (or paste its contents).
-   - Click **"Save Changes"**.
-   Render will automatically mount your cookies at `/etc/secrets/cookies.txt` and redeploy. All YouTube downloads will now succeed without bot errors!
+8. **Bypassing YouTube Cloud Bot Detection (Render / Datacenter IPs)**:
+   Because cloud datacenter IPs (Render, AWS, GCP) are aggressively flagged by YouTube's Botguard, automated server downloads fail unless routed or extracted cleanly. ClipFlow features a resilient **Hybrid Architecture**:
+
+   - **Strategy 1 (Primary — Residential Proxy Routing)**:
+     In your Render Web Service dashboard, go to the **"Environment"** tab and add:
+     ```env
+     YTDLP_PROXY=http://username:password@proxy-host:port
+     ```
+     *Supported providers*: Webshare, BrightData, Smartproxy, IPRoyal.
+     Combined with ClipFlow's built-in Android player client spoofing (`youtube:player_client=android`), residential proxies bypass datacenter IP blocks completely.
+
+   - **Strategy 2 (Secondary — Serverless Extraction API Fallback)**:
+     If `yt-dlp` is blocked or server memory limits are reached, ClipFlow automatically falls back to an external extraction service to retrieve the direct unblocked MP4 stream link and stream it directly to local disk:
+     - **Option A (RapidAPI)**: Add `RAPIDAPI_KEY=your_key_here` (from rapidapi.com YouTube Download endpoints).
+     - **Option B (Cobalt API)**: Add `COBALT_API_URL=https://api.cobalt.tools/` (or your private Cobalt instance).
+
+   - **Strategy 3 (Cookies Secret File — Optional Fallback)**:
+     You can also mount a `cookies.txt` secret file:
+     - In Render dashboard ➔ **"Environment"** ➔ **"Secret Files"** ➔ Click **"Add Secret File"**.
+     - **Filename**: `cookies.txt`
+     - **Contents**: Paste your exported Netscape cookies.
+
+   - **Diagnostic Verification in 1 Click**:
+     Once deployed, check your setup anytime by opening:
+     ```
+     https://your-render-service.onrender.com/api/clips/diag
+     ```
+     This returns live diagnostic status on proxy connectivity, cookies, yt-dlp version, and external API fallback readiness.
 
 ---
 
