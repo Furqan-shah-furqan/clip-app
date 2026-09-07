@@ -670,13 +670,19 @@ router.get("/diag", async (req, res) => {
   const activeCookies = resolveActiveCookieFile();
 
   let cookiesSnippet = null;
+  let ytStats = { totalLines: 0, ytLines: 0, hasLoginInfo: false, hasSid: false };
   if (activeCookies && fs.existsSync(activeCookies)) {
     try {
       const content = fs.readFileSync(activeCookies, "utf8");
+      const lines = content.split(/\r?\n/);
+      ytStats.totalLines = lines.length;
+      ytStats.ytLines = lines.filter((l) => l.includes("youtube.com")).length;
+      ytStats.hasLoginInfo = lines.some((l) => l.includes("LOGIN_INFO"));
+      ytStats.hasSid = lines.some((l) => l.includes("\tSID\t"));
       cookiesSnippet = {
         path: activeCookies,
         size: fs.statSync(activeCookies).size,
-        lines: content.split(/\r?\n/).slice(0, 10),
+        lines: lines.slice(0, 10),
       };
     } catch (e) {
       cookiesSnippet = { error: e.message };
@@ -727,6 +733,7 @@ router.get("/diag", async (req, res) => {
     ytDlpPath,
     activeCookies,
     cookiesSnippet,
+    ytStats,
     tests,
   });
 });
