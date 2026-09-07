@@ -1174,6 +1174,16 @@ app.get("/api/health", (req, res) => {
   res.json({ ok: true });
 });
 
+app.get("/api/version", (req, res) => {
+  res.json({
+    ok: true,
+    version: "1.0.5-android-direct",
+    timestamp: 1788760330,
+    platform: process.platform,
+    uptime: Math.round(process.uptime()),
+  });
+});
+
 // Catch-all route for frontend app
 app.get("*", (req, res) => {
   res.sendFile(path.join(rootDir, "public", "index.html"));

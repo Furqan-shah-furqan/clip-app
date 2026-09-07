@@ -422,11 +422,11 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
   const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
 
   const clientStrategies = [
-    { client: "youtube:player_client=android,web,ios", withCookies: true },
-    { client: "youtube:player_client=ios,android,web", withCookies: true },
-    { client: "youtube:player_client=android", withCookies: true },
     { client: "youtube:player_client=android", withCookies: false },
+    { client: "youtube:player_client=android", withCookies: true },
+    { client: "youtube:player_client=android,web", withCookies: true },
     { client: "youtube:player_client=ios", withCookies: false },
+    { client: "youtube:player_client=ios,android", withCookies: true },
   ];
 
   let lastError = null;
@@ -437,7 +437,6 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
-      "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
       "--extractor-args", strategy.client,
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
       "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
@@ -499,11 +498,11 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
 
   const clientStrategies = [
-    { client: "youtube:player_client=android,web,ios", withCookies: true },
-    { client: "youtube:player_client=ios,android,web", withCookies: true },
-    { client: "youtube:player_client=android", withCookies: true },
     { client: "youtube:player_client=android", withCookies: false },
+    { client: "youtube:player_client=android", withCookies: true },
+    { client: "youtube:player_client=android,web", withCookies: true },
     { client: "youtube:player_client=ios", withCookies: false },
+    { client: "youtube:player_client=ios,android", withCookies: true },
   ];
 
   let lastError = null;
@@ -514,7 +513,6 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
-      "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
       "--extractor-args", strategy.client,
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
       "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
