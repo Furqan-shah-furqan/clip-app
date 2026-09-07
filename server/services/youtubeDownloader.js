@@ -44,13 +44,36 @@ function extractYouTubeId(url) {
 // ── Utility: Proxy & Config Resolution ───────────────────────────────────────
 
 /**
+ * Normalizes proxy URL.
+ * Special handling: Webshare backbone proxies (p.webshare.io) require the username
+ * to end in -rotate, otherwise they return HTTP 407 (Proxy Authentication Required).
+ * Also trims trailing slashes that copy-pasting may introduce.
+ */
+function normalizeProxyUrl(rawProxy) {
+  if (!rawProxy) return null;
+  let clean = String(rawProxy).trim().replace(/\/+$/, "");
+
+  try {
+    const parsed = new URL(clean);
+    if (parsed.hostname.includes("webshare.io") && parsed.username && !parsed.username.includes("-rotate")) {
+      const auth = parsed.password ? `${parsed.username}-rotate:${parsed.password}` : `${parsed.username}-rotate`;
+      const port = parsed.port ? `:${parsed.port}` : ":80";
+      return `${parsed.protocol}//${auth}@${parsed.hostname}${port}`;
+    }
+    return clean;
+  } catch {
+    return clean;
+  }
+}
+
+/**
  * Returns residential proxy URL if configured in environment variables.
  * Supported variables: YTDLP_PROXY, PROXY_URL, HTTPS_PROXY, HTTP_PROXY
  * Format: http://username:password@proxy-ip:port or socks5://...
  */
 function getProxyUrl() {
   const proxy = process.env.YTDLP_PROXY || process.env.PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "";
-  return proxy.trim() || null;
+  return normalizeProxyUrl(proxy);
 }
 
 /**
