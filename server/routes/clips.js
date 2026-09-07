@@ -429,6 +429,7 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
     { client: "youtube:player_client=ios,android", withCookies: true },
   ];
 
+  const strategyErrors = [];
   let lastError = null;
 
   for (const strategy of clientStrategies) {
@@ -467,6 +468,7 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
       }
     } catch (err) {
       lastError = err;
+      strategyErrors.push(`[${strategy.client}, cookies=${useCookies}]: ${err.message}`);
       console.warn(`[SmartClip] Strategy ${strategy.client} (cookies: ${useCookies}) failed:`, err.message);
     }
   }
@@ -475,7 +477,7 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
     try { fs.unlinkSync(tempCookiePath); } catch {}
   }
 
-  throw lastError || new Error("Failed to download YouTube video after trying all strategies");
+  throw new Error(strategyErrors.join(" \n ") || lastError?.message || "Failed to download YouTube video after trying all strategies");
 }
 
 // ── YouTube section download ─────────────────────────────────────────────────
@@ -505,6 +507,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
     { client: "youtube:player_client=ios,android", withCookies: true },
   ];
 
+  const strategyErrors = [];
   let lastError = null;
 
   for (const strategy of clientStrategies) {
@@ -545,6 +548,7 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
       }
     } catch (err) {
       lastError = err;
+      strategyErrors.push(`[${strategy.client}, cookies=${useCookies}]: ${err.message}`);
       console.warn(`[SmartClip] Section download strategy ${strategy.client} failed:`, err.message);
     }
   }
@@ -658,6 +662,73 @@ router.post("/smart-suggest", async (req, res) => {
     console.error("SMART SUGGEST ERROR:", error);
     return res.status(500).json({ error: "Smart clip suggestion failed", details: error.message, suggestions: [] });
   }
+});
+
+router.get("/diag", async (req, res) => {
+  const url = req.query.url || "https://www.youtube.com/watch?v=AxRd9vXZ1kc";
+  const ytDlpPath = process.env.YTDLP_PATH || (process.platform === "win32" ? path.join(rootDir, "bin", "yt-dlp.exe") : (fs.existsSync("/usr/local/bin/yt-dlp") ? "/usr/local/bin/yt-dlp" : "yt-dlp"));
+  const activeCookies = resolveActiveCookieFile();
+
+  let cookiesSnippet = null;
+  if (activeCookies && fs.existsSync(activeCookies)) {
+    try {
+      const content = fs.readFileSync(activeCookies, "utf8");
+      cookiesSnippet = {
+        path: activeCookies,
+        size: fs.statSync(activeCookies).size,
+        lines: content.split(/\r?\n/).slice(0, 10),
+      };
+    } catch (e) {
+      cookiesSnippet = { error: e.message };
+    }
+  }
+
+  const tests = {};
+
+  // Test 1: version
+  try {
+    const v = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 10000 });
+    tests.version = v.stdout.trim();
+  } catch (e) {
+    tests.version = `error: ${e.message}`;
+  }
+
+  // Test 2: android without cookies format 18 test
+  try {
+    const t2 = await runCommand(ytDlpPath, [
+      "--no-warnings",
+      "--extractor-args", "youtube:player_client=android",
+      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+      "-g", url
+    ], { timeoutMs: 25000 });
+    tests.android_no_cookies = { success: true, url: t2.stdout.trim().slice(0, 120) + "..." };
+  } catch (e) {
+    tests.android_no_cookies = { success: false, error: e.message };
+  }
+
+  // Test 3: android with cookies if present
+  if (activeCookies) {
+    try {
+      const t3 = await runCommand(ytDlpPath, [
+        "--no-warnings",
+        "--extractor-args", "youtube:player_client=android",
+        "--cookies", activeCookies,
+        "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+        "-g", url
+      ], { timeoutMs: 25000 });
+      tests.android_with_cookies = { success: true, url: t3.stdout.trim().slice(0, 120) + "..." };
+    } catch (e) {
+      tests.android_with_cookies = { success: false, error: e.message };
+    }
+  }
+
+  return res.json({
+    platform: process.platform,
+    ytDlpPath,
+    activeCookies,
+    cookiesSnippet,
+    tests,
+  });
 });
 
 router.post("/smart-generate", async (req, res) => {
