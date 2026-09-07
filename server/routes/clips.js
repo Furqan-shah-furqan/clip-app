@@ -317,22 +317,33 @@ function generateFallbackSegments() {
 // ── Active YouTube cookies resolver ─────────────────────────────────────────
 function resolveActiveCookieFile() {
   const candidates = [
+    path.join(uploadsDir, "cookies.txt"),
+    path.join(rootDir, "cookies.txt"),
     "/etc/secrets/cookies.txt",
     "/etc/secrets/youtube_cookies.txt",
     process.env.YOUTUBE_COOKIES_PATH,
     process.env.COOKIES_PATH,
-    path.join(rootDir, "cookies.txt"),
-    path.join(uploadsDir, "cookies.txt"),
     path.join(rootDir, "cookies", "cookies.txt"),
   ].filter(Boolean);
 
+  let bestCandidate = null;
+  let newestMtime = -1;
+
   for (const candidate of candidates) {
     try {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).size > 10) {
-        return candidate;
+      if (fs.existsSync(candidate)) {
+        const stat = fs.statSync(candidate);
+        if (stat.isFile() && stat.size > 10) {
+          if (stat.mtimeMs > newestMtime) {
+            newestMtime = stat.mtimeMs;
+            bestCandidate = candidate;
+          }
+        }
       }
     } catch {}
   }
+
+  if (bestCandidate) return bestCandidate;
 
   if (process.env.YOUTUBE_COOKIES && process.env.YOUTUBE_COOKIES.trim().length > 10) {
     try {
@@ -372,19 +383,29 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
   const activeCookies = resolveActiveCookieFile();
+  let tempCookiePath = null;
+  if (activeCookies) {
+    try {
+      // ALWAYS copy to a writable location in uploads/ to prevent yt-dlp OSError on read-only secret filesystems (e.g. Render /etc/secrets/)
+      tempCookiePath = path.join(uploadsDir, `yt_cookies_${clipStamp}.txt`);
+      fs.copyFileSync(activeCookies, tempCookiePath);
+      try { fs.chmodSync(tempCookiePath, 0o666); } catch {}
+    } catch (err) {
+      console.warn("[SmartClip] Failed to copy cookies to writable location:", err.message);
+      tempCookiePath = null;
+    }
+  }
+
+  const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
 
   const args = [
-    "--no-playlist", "--no-check-certificates", "--no-warnings",
-    ...(activeCookies
-      ? [
-          "--cookies", activeCookies,
-          "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best"
-        ]
-      : [
-          "--extractor-args", "youtube:player_client=android,web",
-          "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best"
-        ]
-    ),
+    "--no-playlist",
+    "--no-check-certificates",
+    "--no-warnings",
+    "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "--extractor-args", "youtube:player_client=android,web,ios",
+    ...(effectiveCookies ? ["--cookies", effectiveCookies] : []),
+    "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
     ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
     "--download-sections", section,
     "--force-keyframes-at-cuts",
@@ -395,8 +416,20 @@ async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, end
     targetUrl,
   ];
 
-  console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl} (cookies: ${activeCookies ? path.basename(activeCookies) : "none"})`);
-  await runCommand(ytDlpPath, args, { timeoutMs: 360000 });
+  console.log(`[SmartClip] Invoking yt-dlp (${ytDlpPath}) for section ${section} from ${targetUrl} (cookies: ${effectiveCookies ? path.basename(activeCookies || "temp") : "none"})`);
+  try {
+    await runCommand(ytDlpPath, args, { timeoutMs: 360000 });
+  } finally {
+    if (tempCookiePath && fs.existsSync(tempCookiePath)) {
+      try {
+        // If yt-dlp refreshed session cookies, keep them updated in uploads/cookies.txt
+        fs.copyFileSync(tempCookiePath, path.join(uploadsDir, "cookies.txt"));
+      } catch {}
+      try {
+        fs.unlinkSync(tempCookiePath);
+      } catch {}
+    }
+  }
 
   const files = fs.readdirSync(uploadsDir)
     .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
