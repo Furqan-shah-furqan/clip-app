@@ -479,7 +479,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 // ── RapidAPI YouTube Downloader ───────────────────────────────────────────────
 
 /**
- * Polls a delayed file URL every 5s until HTTP 200 (max 5 min).
+ * Polls a delayed file URL every 5s until HTTP 200 or 206 (max 5 min).
  * Required for the FAST Downloader 24/7 provider whose files are processed async.
  */
 async function pollForReadyFileUrl(fileUrl, { intervalMs = 5000, maxWaitMs = 300000 } = {}) {
@@ -494,15 +494,18 @@ async function pollForReadyFileUrl(fileUrl, { intervalMs = 5000, maxWaitMs = 300
     console.log(`[RapidAPI-Poll] Attempt #${attempt} (${elapsed}s elapsed)...`);
 
     try {
-      const probe = await axios.head(fileUrl, {
+      const probe = await axios.get(fileUrl, {
         timeout: 15000,
         validateStatus: (s) => s < 500,
         maxRedirects: 5,
-        headers: { "User-Agent": "Mozilla/5.0" },
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          Range: "bytes=0-10",
+        },
       });
 
-      if (probe.status === 200) {
-        console.log(`[RapidAPI-Poll] ✅ File READY after ${elapsed}s`);
+      if (probe.status === 200 || probe.status === 206) {
+        console.log(`[RapidAPI-Poll] ✅ File READY after ${elapsed}s (HTTP ${probe.status})`);
         return fileUrl;
       }
 
@@ -574,7 +577,7 @@ function parseStreamUrlFromResponse(data) {
 }
 
 /**
- * Primary provider: ytstream-download-youtube-videos.p.rapidapi.com
+ * Provider: ytstream-download-youtube-videos.p.rapidapi.com
  * Returns direct progressive MP4 URLs instantly (no polling needed).
  */
 async function fetchFromYtStream(id, rapidApiKey) {
@@ -587,6 +590,7 @@ async function fetchFromYtStream(id, rapidApiKey) {
     headers: {
       "x-rapidapi-host": host,
       "x-rapidapi-key": rapidApiKey,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     },
     timeout: 30000,
   });
@@ -598,18 +602,56 @@ async function fetchFromYtStream(id, rapidApiKey) {
     throw new Error("ytstream: no streamable MP4 URL found in response.");
   }
 
-  // ytstream returns immediate googlevideo.com URLs — no polling needed
   console.log(`[RapidAPI][ytstream] ✅ Direct MP4 URL resolved: ${url.slice(0, 80)}...`);
   return url;
 }
 
 /**
- * Fallback provider: YouTube Video FAST Downloader 24/7
- * Returns an async `file` URL that requires polling until HTTP 200.
+ * Provider: YouTube Video FAST Downloader 24/7
+ * Uses /get_available_quality to pick best MP4, then /download_video to generate async file URL.
  */
 async function fetchFromFastDownloader(id, rapidApiKey) {
   const host = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
-  const endpoint = `https://${host}/dl/video/${id}`;
+
+  // Step 1: Discover available quality IDs
+  let selectedQualityId = null;
+  try {
+    const qualityUrl = `https://${host}/get_available_quality/${id}`;
+    console.log(`[RapidAPI][FAST] Discovering qualities at: ${qualityUrl}`);
+    const qRes = await axios.get(qualityUrl, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 15000,
+    });
+    const qualities = Array.isArray(qRes.data) ? qRes.data : [];
+    if (qualities.length > 0) {
+      console.log(`[RapidAPI][FAST] Discovered ${qualities.length} quality options`);
+      const videoQualities = qualities.filter((q) => q.type === "video" || String(q.mime || "").includes("video"));
+      const best =
+        videoQualities.find((q) => q.quality === "720p" && String(q.mime || "").includes("mp4")) ||
+        videoQualities.find((q) => q.quality === "720p") ||
+        videoQualities.find((q) => q.quality === "1080p" && String(q.mime || "").includes("mp4")) ||
+        videoQualities.find((q) => q.quality === "1080p") ||
+        videoQualities.find((q) => q.quality === "480p" || q.quality === "360p") ||
+        videoQualities[0] ||
+        qualities[0];
+
+      if (best?.id) {
+        selectedQualityId = best.id;
+        console.log(`[RapidAPI][FAST] Selected quality ID: ${selectedQualityId} (${best.quality || "auto"})`);
+      }
+    }
+  } catch (qErr) {
+    console.warn(`[RapidAPI][FAST] Quality discovery skipped: ${qErr.message}`);
+  }
+
+  // Step 2: Request video download URL from /download_video/{id}
+  const endpoint = selectedQualityId
+    ? `https://${host}/download_video/${id}?quality=${selectedQualityId}`
+    : `https://${host}/download_video/${id}`;
 
   console.log(`[RapidAPI][FAST] GET ${endpoint}`);
 
@@ -617,6 +659,7 @@ async function fetchFromFastDownloader(id, rapidApiKey) {
     headers: {
       "x-rapidapi-host": host,
       "x-rapidapi-key": rapidApiKey,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
     },
     timeout: 30000,
   });
@@ -625,17 +668,17 @@ async function fetchFromFastDownloader(id, rapidApiKey) {
 
   const rawUrl = parseStreamUrlFromResponse(response.data);
   if (!rawUrl) {
-    throw new Error("FAST Downloader: no file URL found in response.");
+    throw new Error(`FAST Downloader returned no streamable file URL: ${JSON.stringify(response.data)}`);
   }
 
   console.log(`[RapidAPI][FAST] Parsed async file URL: ${rawUrl.slice(0, 80)}...`);
 
-  // FAST Downloader processes files asynchronously — poll until ready
+  // Step 3: FAST Downloader processes files asynchronously — poll until ready
   return await pollForReadyFileUrl(rawUrl, { intervalMs: 5000, maxWaitMs: 300000 });
 }
 
 /**
- * Master fetch function: tries ytstream first (proven, instant), falls back to FAST Downloader.
+ * Master fetch function: automatically prioritizes provider matching RAPIDAPI_HOST, with fallback.
  */
 async function fetchRapidApiStreamUrl(videoId, targetUrl) {
   const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
@@ -648,21 +691,33 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
     throw new Error(`Could not extract video ID from URL: ${targetUrl}`);
   }
 
-  console.log(`[RapidAPI] Fetching MP4 for Video ID: ${id}`);
+  const hostConfig = (process.env.RAPIDAPI_HOST || "").trim().toLowerCase();
+  console.log(`[RapidAPI] Fetching MP4 for Video ID: ${id} (Host: ${hostConfig || "auto"})`);
 
-  // ── Provider 1: ytstream (instant direct URLs) ────────────────────────────
-  try {
-    return await fetchFromYtStream(id, rapidApiKey);
-  } catch (err) {
-    console.warn(`[RapidAPI][ytstream] Failed: ${err.message}. Trying FAST Downloader fallback...`);
+  // If host is configured for ytstream, prioritize it
+  if (hostConfig.includes("ytstream")) {
+    try {
+      return await fetchFromYtStream(id, rapidApiKey);
+    } catch (ytErr) {
+      const ytDetail = ytErr.response?.data?.message || ytErr.message;
+      console.warn(`[RapidAPI][ytstream] Failed: ${ytDetail}. Trying FAST Downloader...`);
+      return await fetchFromFastDownloader(id, rapidApiKey);
+    }
   }
 
-  // ── Provider 2: FAST Downloader 24/7 (async with polling) ────────────────
+  // Default: FAST Downloader 24/7 (matches user's active subscription)
   try {
     return await fetchFromFastDownloader(id, rapidApiKey);
-  } catch (err) {
-    console.error(`[RapidAPI][FAST] Failed: ${err.response?.status || "NO_STATUS"} — ${JSON.stringify(err.response?.data || err.message)}`);
-    throw new Error(`All RapidAPI providers failed for video ID: ${id}. Last error: ${err.message}`);
+  } catch (fastErr) {
+    const fastDetail = fastErr.response?.data?.message || fastErr.response?.data || fastErr.message;
+    console.warn(`[RapidAPI][FAST] Failed: ${fastDetail}. Trying ytstream fallback...`);
+
+    try {
+      return await fetchFromYtStream(id, rapidApiKey);
+    } catch (ytErr) {
+      const ytDetail = ytErr.response?.data?.message || ytErr.response?.data || ytErr.message;
+      throw new Error(`All RapidAPI providers failed for video ${id}. FAST Downloader: ${fastDetail} | ytstream: ${ytDetail}`);
+    }
   }
 }
 
@@ -721,8 +776,9 @@ async function downloadYouTubeSourceVideo(input) {
       return downloadedPath;
     }
   } catch (apiErr) {
-    console.error(`[YouTube-Downloader] RapidAPI extraction failed: ${apiErr.message}`);
-    throw new Error(`YouTube RapidAPI extraction failed: ${apiErr.message}`);
+    const detail = apiErr.response?.data?.message || apiErr.response?.data?.error || apiErr.message;
+    console.error(`[YouTube-Downloader] RapidAPI extraction failed: ${detail}`);
+    throw new Error(`YouTube RapidAPI extraction failed: ${detail}`);
   }
 
   throw new Error("Failed to download YouTube video: no file was created on disk.");
