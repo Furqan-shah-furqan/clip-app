@@ -574,85 +574,54 @@ router.post("/smart-generate", async (req, res) => {
     const clips = [];
     fs.mkdirSync(exportsDir, { recursive: true });
 
-    // ── YouTube → download source video once, or fall back to direct section download ──
+    // ── YouTube → download source video once, then cut clips locally with FFmpeg ──
     if (normalizedSourceType === "youtube") {
       let sourceVideoPath = null;
-      let usedSectionFallback = false;
-
       try {
         sourceVideoPath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
       } catch (err) {
-        console.warn("[SmartClip] Full source video download failed, trying resilient section-by-section download:", err.message);
-        usedSectionFallback = true;
-      }
+        console.error("[SmartClip] Source video download failed:", err.message || err);
+        const errStr = String(err.message || err || "");
+        const isBotBlock = errStr.includes("not a bot") ||
+          errStr.includes("confirm you’re not a bot") ||
+          errStr.includes("confirm you're not a bot") ||
+          errStr.includes("--cookies") ||
+          errStr.includes("Sign in");
 
-      if (!usedSectionFallback && sourceVideoPath) {
-        try {
-          for (let i = 0; i < suggestions.length; i++) {
-            if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
-
-            const suggestion = suggestions[i];
-            const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-            const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-            const result = await smartGenerateClip({
-              inputPath: sourceVideoPath,
-              startTime: secondsToTime(startSec),
-              endTime: secondsToTime(endSec),
-              aspectRatio: aspectRatio || "9:16",
-            });
-
-            clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-          }
-        } finally {
-          cleanupFile(sourceVideoPath);
-        }
-      } else {
-        // Fallback: download each clip section directly
-        for (let i = 0; i < suggestions.length; i++) {
-          if (Date.now() - startedAt > maxSmartGenerateMs) break;
-
-          const suggestion = suggestions[i];
-          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-          const durationSec = Math.max(1, endSec - startSec);
-
-          let sectionPath = null;
-          try {
-            sectionPath = await downloadYouTubeSectionForSmartClipping({
-              sourceUrl,
-              startSec,
-              endSec,
-              index: i,
-            });
-
-            const result = await smartGenerateClip({
-              inputPath: sectionPath,
-              startTime: "00:00:00",
-              endTime: secondsToTime(durationSec),
-              aspectRatio: aspectRatio || "9:16",
-            });
-
-            clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-          } catch (clipErr) {
-            console.error(`[SmartClip] Failed to generate section ${i}:`, clipErr.message);
-          } finally {
-            cleanupFile(sectionPath);
-          }
-        }
-      }
-
-      if (!clips.length) {
         return res.json({
           success: false,
           needsUpload: true,
-          needsCookies: true,
+          needsCookies: isBotBlock,
           source: "transcript",
-          message: "YouTube clip download failed. Try uploading your source video file directly.",
+          message: isBotBlock
+            ? "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links."
+            : `YouTube clip download failed: ${err.message || "download error"}.`,
+          rawError: errStr,
           segmentCount: transcriptSegments.length,
           suggestions,
           clips: [],
         });
+      }
+
+      try {
+        for (let i = 0; i < suggestions.length; i++) {
+          if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
+
+          const suggestion = suggestions[i];
+          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+
+          const result = await smartGenerateClip({
+            inputPath: sourceVideoPath,
+            startTime: secondsToTime(startSec),
+            endTime: secondsToTime(endSec),
+            aspectRatio: aspectRatio || "9:16",
+          });
+
+          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+        }
+      } finally {
+        cleanupFile(sourceVideoPath);
       }
     } else {
       // ── Local upload → FFmpeg ──
