@@ -488,28 +488,30 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
     throw new Error("RAPIDAPI_KEY is not configured in environment variables.");
   }
 
+  // Step 1: Extract Video ID
   const id = videoId || extractYouTubeId(targetUrl);
   if (!id) {
     throw new Error(`Could not extract video ID from URL: ${targetUrl}`);
   }
 
+  // Step 2: Fetch the Raw MP4 Data
   const rapidApiHost = "ytstream-download-youtube-videos.p.rapidapi.com";
   const endpoint = `https://${rapidApiHost}/dl?id=${id}`;
 
-  console.log("Starting API fetch for:", targetUrl);
-  console.log("[RapidAPI] Target Endpoint:", endpoint);
-  console.log("[RapidAPI] Host Header:", rapidApiHost);
+  console.log(`[RapidAPI] Fetching stream URL for Video ID: ${id}`);
+  console.log(`[RapidAPI] Target Endpoint: ${endpoint}`);
 
   try {
     const response = await axios.get(endpoint, {
       headers: {
-        "x-rapidapi-key": rapidApiKey,
         "x-rapidapi-host": rapidApiHost,
+        "x-rapidapi-key": rapidApiKey,
       },
       timeout: 30000,
     });
 
-    console.log("API Response Data:", response.data);
+    // Step 3: Advanced Logging & Parsing
+    console.log("RapidAPI Response:", response.data);
 
     const data = response.data;
     if (!data) {
@@ -521,19 +523,27 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
     if (typeof data.url === "string" && data.url.startsWith("http")) return data.url;
     if (typeof data.downloadUrl === "string" && data.downloadUrl.startsWith("http")) return data.downloadUrl;
 
-    // Formats array format from ytstream-download-youtube-videos
+    // Formats array format from ytstream-download-youtube-videos (formats 18, 22, etc.)
     if (Array.isArray(data.formats) && data.formats.length > 0) {
       // Find progressive MP4 formats that contain both video and audio
       const progressive = data.formats.filter(
-        (f) => f.url && f.hasAudio !== false && f.hasVideo !== false && (String(f.mimeType || "").includes("mp4") || f.ext === "mp4")
+        (f) =>
+          f.url &&
+          f.hasAudio !== false &&
+          f.hasVideo !== false &&
+          (String(f.mimeType || "").includes("mp4") || f.ext === "mp4" || f.itag === 22 || f.itag === 18)
       );
 
       if (progressive.length > 0) {
         // Sort highest resolution first (1080p -> 720p -> 480p -> 360p)
         progressive.sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
-        console.log(`[RapidAPI] Selected progressive MP4 format: ${progressive[0].qualityLabel || progressive[0].height || "best"}`);
+        console.log(`[RapidAPI] Selected progressive MP4 format: ${progressive[0].qualityLabel || progressive[0].height || "best"} (itag: ${progressive[0].itag})`);
         return progressive[0].url;
       }
+
+      // Fallback: any format with an MP4 URL
+      const anyMp4 = data.formats.find((f) => f.url && (String(f.mimeType || "").includes("mp4") || f.ext === "mp4"));
+      if (anyMp4?.url) return anyMp4.url;
 
       // Fallback: any format with a valid URL
       const anyWithUrl = data.formats.find((f) => f.url);
@@ -551,7 +561,9 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
 
     throw new Error("RapidAPI responded successfully, but no streamable MP4 URL was found in the formats payload.");
   } catch (error) {
-    console.error("API Fetch Failed:", error.response?.data || error.message);
+    console.error("RapidAPI Fetch Failed!");
+    console.error("RapidAPI Error Status:", error.response?.status || "NO_STATUS");
+    console.error("RapidAPI Full Error Response:", JSON.stringify(error.response?.data || error.message, null, 2));
     throw error;
   }
 }
@@ -575,8 +587,10 @@ async function downloadViaRapidApi({ targetUrl, videoId, targetPath }) {
 const downloadViaExternalApiFallback = downloadViaRapidApi;
 
 /**
+ * Step 4: Stream and Handoff
  * High-level YouTube source downloader controller:
- * Exclusively uses RapidAPI extraction to download raw MP4 directly to Render's ephemeral storage.
+ * Exclusively uses RapidAPI extraction to download raw MP4 directly to Render's ephemeral storage (/tmp or uploads).
+ * Returns the absolute path of the downloaded source MP4 for local FFmpeg clipping.
  */
 async function downloadYouTubeSourceVideo({ sourceUrl }) {
   if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) {
@@ -585,12 +599,19 @@ async function downloadYouTubeSourceVideo({ sourceUrl }) {
 
   cleanupStaleSourceVideos();
 
+  // Step 1: Extract 11-character Video ID
   const videoId = extractYouTubeId(sourceUrl);
-  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
+  if (!videoId) {
+    throw new Error(`Could not extract valid Video ID from URL: ${sourceUrl}`);
+  }
+
+  const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const tempDir = fs.existsSync("/tmp") ? "/tmp" : uploadsDir;
   const clipStamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const finalMp4Target = path.join(uploadsDir, `yt_source_${clipStamp}.mp4`);
+  const finalMp4Target = path.join(tempDir, `${videoId}_${clipStamp}.mp4`);
 
   console.log(`[YouTube-Downloader] Initiating RapidAPI video extraction: ${targetUrl}`);
+  console.log(`[YouTube-Downloader] Target ephemeral file path: ${finalMp4Target}`);
 
   try {
     const downloadedPath = await downloadViaRapidApi({
