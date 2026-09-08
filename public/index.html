@@ -7,176 +7,224 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="style.css" />
   </head>
-  <body>
+  <body class="home-page theme-dark">
+    <!-- Ambient glowing lights matching captions page -->
     <div class="scene scene-a"></div>
     <div class="scene scene-b"></div>
     <div class="scene scene-c"></div>
     <div class="scene-grid"></div>
 
-    <main class="app-shell">
-      
+    <!-- ─── 7PX MARGIN WRAPPER & 45PX BORDER RADIUS MAIN CONTAINER ─── -->
+    <div class="home-main-container">
+      <!-- ─── TOPBAR: Brand, 2 Navigation Tabs, and Theme Toggle ───── -->
+      <header class="home-topbar">
+        <div class="home-topbar-left">
+          <div class="home-brand">
+            <span class="home-brand-mark">CF</span>
+            <div class="home-brand-meta">
+              <span class="home-brand-title">ClipFlow</span>
+              <span class="home-brand-tag">Studio</span>
+            </div>
+          </div>
+        </div>
 
-      <!-- ───── STUDIO TAB ───── -->
-      <section class="tab-content active" id="clips">
-        <section class="workspace-shell">
-          <section class="workspace-main">
-            <!-- Opus-style import panel -->
-            <article class="opus-import-panel">
-              <div class="opus-import-brand">ClipFlow</div>
+        <div class="home-topbar-center">
+          <nav class="home-nav-tabs" role="tablist" aria-label="Main Navigation">
+            <button class="home-nav-tab is-active" id="topTabGenerate" type="button" role="tab" aria-selected="true" data-tab-view="generate">
+              <span class="nav-tab-icon">⚡</span>
+              <span class="nav-tab-label">Generate Clips</span>
+            </button>
+            <button class="home-nav-tab" id="topTabProjects" type="button" role="tab" aria-selected="false" data-tab-view="projects">
+              <span class="nav-tab-icon">📁</span>
+              <span class="nav-tab-label">All Projects & Saved</span>
+              <span class="nav-tab-badge" id="topProjectsCountBadge">(0)</span>
+            </button>
+          </nav>
+        </div>
 
-              <div class="opus-import-card">
-                <div class="opus-link-field">
-                  <span class="opus-link-icon">⛓</span>
-                  <input
-                    type="url"
-                    id="ytUrlInput"
-                    class="yt-url-input opus-url-input"
-                    placeholder="Drop a YouTube link"
-                    autocomplete="off"
-                    spellcheck="false"
-                  />
-                  <button
-                    class="yt-fetch-btn opus-fetch-mini-btn"
-                    id="ytFetchBtn"
-                    type="button"
-                  >
-                    Fetch
-                  </button>
-                </div>
+        <div class="home-topbar-right">
+          <label class="ce-theme-toggle" aria-label="Toggle theme">
+            <input type="checkbox" id="themeToggle" checked />
+            <span class="ce-toggle-track">
+              <span class="ce-toggle-thumb"></span>
+            </span>
+            <span class="ce-toggle-label" id="modePill">Dark</span>
+          </label>
+        </div>
+      </header>
 
-                <input type="file" id="videoInput" accept="video/*" hidden />
+      <!-- ─── INNER SCROLLABLE WORKSPACE ──────────────────────────── -->
+      <div class="home-content-scroll">
+        <!-- ───── TAB 1: CLIP GENERATION VIEW ───── -->
+        <section class="home-view-pane is-active" id="viewGenerate">
+          <!-- Opus-style import panel -->
+          <article class="opus-import-panel">
+            <div class="opus-import-brand">ClipFlow</div>
 
-                <div class="opus-import-actions">
-                  <label class="opus-import-action" for="videoInput">
-                    <span>⇪</span>
-                    Upload
-                  </label>
-
-                  <button
-                    class="opus-import-action is-disabled"
-                    type="button"
-                    disabled
-                  >
-                    <span>◌</span>
-                    Google Drive
-                  </button>
-                </div>
-
+            <div class="opus-import-card">
+              <div class="opus-link-field">
+                <span class="opus-link-icon">⛓</span>
+                <input
+                  type="url"
+                  id="ytUrlInput"
+                  class="yt-url-input opus-url-input"
+                  placeholder="Drop a YouTube link"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
                 <button
-                  class="opus-main-generate-btn"
-                  id="smartClipBtn"
+                  class="yt-fetch-btn opus-fetch-mini-btn"
+                  id="ytFetchBtn"
                   type="button"
                 >
-                  Get clips in 1 click
+                  Fetch
                 </button>
+              </div>
 
+              <input type="file" id="videoInput" accept="video/*" hidden />
 
-                <div
-                  class="yt-info-preview opus-info-preview"
-                  id="ytInfoPreview"
-                  style="display: none"
+              <div class="opus-import-actions">
+                <label class="opus-import-action" for="videoInput">
+                  <span>⇪</span>
+                  Upload
+                </label>
+
+                <button
+                  class="opus-import-action is-disabled"
+                  type="button"
+                  disabled
                 >
-                  <img class="yt-thumb" id="ytThumb" src="" alt="thumbnail" />
-                  <div class="yt-info-text">
-                    <strong id="ytTitle"></strong>
-                    <small id="ytDuration"></small>
-                  </div>
-                </div>
+                  <span>◌</span>
+                  Google Drive
+                </button>
+              </div>
 
-                <div
-                  class="yt-fetch-progress opus-progress-box"
-                  id="ytFetchProgress"
-                  style="display: none"
-                >
-                  <div class="yt-progress-bar">
-                    <div
-                      class="yt-progress-fill"
-                      id="ytProgressFill"
-                      style="width: 0%"
-                    ></div>
-                  </div>
-                  <span class="yt-progress-label" id="ytProgressLabel"
-                    >Fetching source…</span
-                  >
-                </div>
+              <button
+                class="opus-main-generate-btn"
+                id="smartClipBtn"
+                type="button"
+              >
+                Get clips in 1 click
+              </button>
 
-                <div class="opus-live-progress" id="opusLiveProgress">
-                  <div class="opus-live-top">
-                    <span id="progressLabel">Ready</span>
-                    <strong id="progressPercent">0%</strong>
+              <div
+                class="yt-info-preview opus-info-preview"
+                id="ytInfoPreview"
+                style="display: none"
+              >
+                <img class="yt-thumb" id="ytThumb" src="" alt="thumbnail" />
+                <div class="yt-info-text">
+                  <strong id="ytTitle"></strong>
+                  <small id="ytDuration"></small>
+                </div>
+              </div>
+
+              <!-- ─── IMAGE 4 REPLICA: MODERN PROGRESS CARD (Hidden until link pasted/processing) ─── -->
+              <div class="modern-progress-card" id="modernProgressCard" style="display: none;">
+                <div class="mp-header">
+                  <div class="mp-header-left">
+                    <span class="mp-sparkle">✦</span>
+                    <span class="mp-title" id="mpTitle">Project Progress</span>
                   </div>
-                  <div
-                    class="opus-live-eta"
-                    id="progressEta"
-                    style="display: none"
-                  >
-                    ETA 0m
+                  <span class="mp-badge" id="mpBadge">AI Video Engine</span>
+                </div>
+                <div class="mp-percent-row">
+                  <span class="mp-percent" id="progressPercent">0%</span>
+                </div>
+                <div class="mp-track">
+                  <div class="mp-fill" id="progressFill" style="width: 0%;"></div>
+                  <div class="mp-status-pill" id="progressLabel">Analyzing Video...</div>
+                </div>
+                <div class="mp-footer">
+                  <div class="mp-collaborators">
+                    <div class="mp-avatars">
+                      <span class="mp-avatar mp-avatar-1" title="Whisper AI">🧠</span>
+                      <span class="mp-avatar mp-avatar-2" title="Vision AI">⚡</span>
+                      <span class="mp-avatar mp-avatar-3" title="4K Pipeline">🎬</span>
+                    </div>
+                    <span class="mp-collab-text">Collaborators 3</span>
                   </div>
-                  <div class="opus-live-bar">
-                    <div class="video-progress-fill" id="progressFill"></div>
+                  <div class="mp-footer-actions">
+                    <span class="mp-eta" id="progressEta" style="display: none;">ETA 0m</span>
+                    <button class="mp-details-btn" type="button" id="mpDetailsBtn">More details →</button>
                   </div>
                 </div>
               </div>
-              <section class="created-clips-strip">
-  <div class="created-clips-strip-head">
-    <div>
-      <h3>Smart clip results</h3>
-    </div>
+            </div>
 
-    <div class="created-clips-actions">
-      <button class="action-btn ghost icon-action-btn" id="downloadAllBtn" title="Download All" type="button">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      </button>
+            <!-- Smart clip results section -->
+            <section class="created-clips-strip">
+              <div class="created-clips-strip-head">
+                <div>
+                  <h3>Smart clip results</h3>
+                </div>
 
-      <button class="action-btn danger icon-action-btn" id="deleteAllBtn" title="Delete All" type="button">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-          <path d="M10 11v6"/>
-          <path d="M14 11v6"/>
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-        </svg>
-      </button>
-    </div>
-  </div>
+                <div class="created-clips-actions">
+                  <button class="action-btn ghost icon-action-btn" id="downloadAllBtn" title="Download All" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                  </button>
 
-  <div class="clips-view clips-story-row" id="generatedClipsGrid">
-    <div class="empty-state">No smart clips generated yet.</div>
-  </div>
-</section>
+                  <button class="action-btn danger icon-action-btn" id="deleteAllBtn" title="Delete All" type="button">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      <path d="M10 11v6"/>
+                      <path d="M14 11v6"/>
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
 
-<section class="opus-projects-panel">
-  <div class="opus-projects-topbar">
-    <div class="opus-project-tabs" role="tablist" aria-label="Project views">
-      <button class="opus-project-tab active" type="button" data-project-view="all">
-        All projects <span id="allProjectsCount">(0)</span>
-      </button>
-      <button class="opus-project-tab" type="button" data-project-view="saved">
-        Saved projects <span id="savedProjectsCount">(0)</span>
-      </button>
-    </div>
+              <div class="clips-view clips-story-row" id="generatedClipsGrid">
+                <div class="empty-state">No smart clips generated yet.</div>
+              </div>
+            </section>
+          </article>
+        </section>
 
-    <div class="opus-project-tools">
-      <span class="opus-storage-meter">0 GB / 0 GB</span>
-      <button class="opus-project-pill" type="button" id="saveProjectBtn">
-        <span></span> Auto-save
-      </button>
-      <button class="opus-project-pill" type="button" id="refreshProjectsBtn">
-        <span></span> Refresh
-      </button>
-    </div>
-  </div>
+        <!-- ───── TAB 2: ALL PROJECTS & SAVED VIEW ───── -->
+        <section class="home-view-pane" id="viewProjects" style="display: none;">
+          <section class="opus-projects-panel">
+            <div class="opus-projects-topbar">
+              <div class="opus-project-tabs" role="tablist" aria-label="Project views">
+                <button class="opus-project-tab active" type="button" data-project-view="all">
+                  All projects <span id="allProjectsCount">(0)</span>
+                </button>
+                <button class="opus-project-tab" type="button" data-project-view="saved">
+                  Saved projects <span id="savedProjectsCount">(0)</span>
+                </button>
+              </div>
 
-  <div class="opus-project-grid" id="projectHistoryList">
-    <div class="empty-state">No projects yet.</div>
-  </div>
-</section>
-            </article>
+              <div class="opus-project-tools">
+                <span class="opus-storage-meter">0 GB / 0 GB</span>
+                <button class="opus-project-pill" type="button" id="saveProjectBtn">
+                  <span></span> Auto-save
+                </button>
+                <button class="opus-project-pill" type="button" id="refreshProjectsBtn">
+                  <span></span> Refresh
+                </button>
+              </div>
+            </div>
+
+            <div class="opus-project-grid" id="projectHistoryList">
+              <div class="empty-state">No projects yet.</div>
+            </div>
           </section>
+        </section>
+      </div>
+    </div>
+
+    <!-- Hidden compatibility wrapper for legacy script refs -->
+    <div style="display: none;">
+      <main class="app-shell">
+        <section class="tab-content active" id="clips">
+          <section class="workspace-shell">
+            <section class="workspace-main">
 
           
         </section>
@@ -382,8 +430,8 @@
             </div>
           </article>
         </section>
-      </section>
     </main>
+    </div>
 
     <!-- Clip preview modal (with caption overlay) -->
     <div class="clip-modal" id="clipModal" aria-hidden="true">

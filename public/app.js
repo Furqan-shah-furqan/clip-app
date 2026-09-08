@@ -147,6 +147,39 @@ tabButtons.forEach((btn) => {
   });
 });
 
+// ─── Top navigation tabs (Generate Clips vs All Projects & Saved) ─────────────
+const topTabGenerate = document.getElementById("topTabGenerate");
+const topTabProjects = document.getElementById("topTabProjects");
+const viewGenerate = document.getElementById("viewGenerate");
+const viewProjects = document.getElementById("viewProjects");
+const topProjectsCountBadge = document.getElementById("topProjectsCountBadge");
+
+function switchHomeView(viewName) {
+  const isGen = viewName === "generate";
+  if (topTabGenerate) {
+    topTabGenerate.classList.toggle("is-active", isGen);
+    topTabGenerate.setAttribute("aria-selected", isGen ? "true" : "false");
+  }
+  if (topTabProjects) {
+    topTabProjects.classList.toggle("is-active", !isGen);
+    topTabProjects.setAttribute("aria-selected", !isGen ? "true" : "false");
+  }
+  if (viewGenerate) {
+    viewGenerate.style.display = isGen ? "flex" : "none";
+    viewGenerate.classList.toggle("is-active", isGen);
+  }
+  if (viewProjects) {
+    viewProjects.style.display = !isGen ? "flex" : "none";
+    viewProjects.classList.toggle("is-active", !isGen);
+    if (!isGen) {
+      loadProjectHistory();
+    }
+  }
+}
+
+topTabGenerate?.addEventListener("click", () => switchHomeView("generate"));
+topTabProjects?.addEventListener("click", () => switchHomeView("projects"));
+
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const videoInput = document.getElementById("videoInput");
 const videoPreview = document.getElementById("videoPreview");
@@ -267,15 +300,23 @@ function liveUpdateCaptionPreview() {
 }
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
+function updateThemeState() {
+  const saved = localStorage.getItem("clipflow-theme");
+  const isDark = themeToggle ? themeToggle.checked : (saved !== "light");
+  document.body.classList.toggle("theme-dark", isDark);
+  document.body.classList.toggle("theme-light", !isDark);
+  if (modePill) modePill.textContent = isDark ? "Dark" : "Light";
+}
+
 function initTheme() {
-  const isDark = localStorage.getItem("clipflow-theme") === "dark";
+  const saved = localStorage.getItem("clipflow-theme");
+  const isDark = saved === null ? true : saved === "dark";
   if (themeToggle) themeToggle.checked = isDark;
-  updateModePill();
+  updateThemeState();
 }
 
 function updateModePill() {
-  if (!modePill) return;
-  modePill.textContent = themeToggle?.checked ? "Dark" : "Light";
+  updateThemeState();
 }
 
 themeToggle?.addEventListener("change", () => {
@@ -283,7 +324,7 @@ themeToggle?.addEventListener("change", () => {
     "clipflow-theme",
     themeToggle.checked ? "dark" : "light",
   );
-  updateModePill();
+  updateThemeState();
 });
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
@@ -364,55 +405,39 @@ let _currentProgress = 0;
 
 function formatProgressText(value) {
   const safe = Math.max(0, Math.min(100, Number(value) || 0));
-  if (safe >= 100) return "100%";
-  if (safe < 1) return `${safe.toFixed(1)}%`;
-  // Show one decimal place between 1–99.9
-  const rounded = Math.round(safe * 10) / 10;
-  return Number.isInteger(rounded) ? `${rounded}.0%` : `${rounded.toFixed(1)}%`;
+  return `${Math.round(safe)}%`;
 }
 
 function formatEtaText(seconds) {
   const safe = Math.max(0, Math.round(Number(seconds) || 0));
-
-  if (safe <= 0) {
-    return "ETA 0s";
-  }
-
-  const mins = Math.floor(safe / 60);
-  const secs = safe % 60;
-
-  if (mins >= 10) {
-    return `ETA ${mins}m`;
-  }
-
-  if (mins >= 1 && secs) {
-    return `ETA ${mins}m ${secs}s`;
-  }
-
-  if (mins >= 1) {
-    return `ETA ${mins}m`;
-  }
-
-  return `ETA ${secs}s`;
-}
-
-function formatEtaText(seconds) {
-  const safe = Math.max(0, Math.round(Number(seconds) || 0));
-
   if (safe <= 0) return "ETA 0s";
-
   const mins = Math.floor(safe / 60);
   const secs = safe % 60;
-
   if (mins >= 1 && secs > 0) return `ETA ${mins}m ${secs}s`;
   if (mins >= 1) return `ETA ${mins}m`;
-
   return `ETA ${secs}s`;
 }
 
 function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   _currentProgress = p;
+
+  const modernProgressCard = document.getElementById("modernProgressCard");
+  if (modernProgressCard) {
+    const isWorking = (p > 0 && p < 100) || (label && !["Ready", "Ready ✓"].includes(label));
+    if (isWorking) {
+      modernProgressCard.style.display = "flex";
+    } else if (p >= 100) {
+      modernProgressCard.style.display = "flex";
+      setTimeout(() => {
+        if (_currentProgress >= 100 && modernProgressCard) {
+          modernProgressCard.style.display = "none";
+        }
+      }, 2500);
+    } else {
+      modernProgressCard.style.display = "none";
+    }
+  }
 
   if (progressFill) {
     progressFill.style.width = `${p}%`;
@@ -608,8 +633,14 @@ function setFetchedSourceCard({ title, thumb, meta }) {
 function resetYoutubeFetchUi() {
   if (ytFetchBtn) ytFetchBtn.disabled = false;
   if (ytFetchProgress) ytFetchProgress.style.display = "none";
-  if (ytProgressFill) ytProgressFill.style.width = "0%";
-  if (ytProgressLabel) ytProgressLabel.textContent = "Fetching preview…";
+  const modernProgressCard = document.getElementById("modernProgressCard");
+  if (modernProgressCard && _currentProgress >= 100) {
+    setTimeout(() => {
+      if (_currentProgress >= 100) {
+        modernProgressCard.style.display = "none";
+      }
+    }, 1500);
+  }
 }
 
 function showClipControls() {
@@ -1189,12 +1220,10 @@ async function fetchYoutubeSource(url, options = {}) {
   _lastAutoFetchedUrl = cleanUrl;
 
   if (ytFetchBtn) ytFetchBtn.disabled = true;
-  if (ytFetchProgress) ytFetchProgress.style.display = "flex";
-  if (ytProgressFill) ytProgressFill.style.width = "10%";
-  if (ytProgressLabel) ytProgressLabel.textContent = "Fetching source info…";
+  if (ytFetchProgress) ytFetchProgress.style.display = "none";
 
   try {
-    updateProgress(10, "Fetching YouTube source…");
+    updateProgress(15, "Fetching YouTube source…");
 
     const result = await apiFetch(`${API_BASE}/youtube/fetch`, {
       method: "POST",
@@ -1979,6 +2008,10 @@ function renderProjectHistory(projects = lastProjectsCache) {
     allProjectsCount.textContent = `(${allProjects.length})`;
   if (savedProjectsCount)
     savedProjectsCount.textContent = `(${savedProjects.length})`;
+  const topProjectsCountBadgeEl = document.getElementById("topProjectsCountBadge");
+  if (topProjectsCountBadgeEl) {
+    topProjectsCountBadgeEl.textContent = `(${allProjects.length})`;
+  }
 
   const projectsToRender =
     currentProjectView === "saved" ? savedProjects : allProjects;
