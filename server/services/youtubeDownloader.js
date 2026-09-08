@@ -771,6 +771,8 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
     ...(proxyUrl && effectiveCookies ? [{ client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Section Web via proxy" }] : []),
   ];
 
+  const stratErrors = [];
+
   for (const strat of strategies) {
     const useCookies = strat.withCookies && Boolean(effectiveCookies);
     const useProxy = strat.useProxy && Boolean(proxyUrl);
@@ -809,12 +811,14 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
         return mp4;
       }
     } catch (err) {
-      console.warn(`[YouTube-Downloader] ${strat.label} failed: ${err.message?.slice(0, 120)}`);
+      const msg = err.message?.slice(0, 160) || String(err);
+      stratErrors.push(`[${strat.label}]: ${msg}`);
+      console.warn(`[YouTube-Downloader] ${strat.label} failed: ${msg}`);
     }
   }
 
   if (tempCookiePath) cleanupFile(tempCookiePath);
-  throw new Error("Direct section download strategies exhausted.");
+  throw new Error(`Direct section download strategies exhausted:\n${stratErrors.join("\n")}`);
 }
 
 /**
