@@ -283,28 +283,62 @@ function runCommand(command, args = [], options = {}) {
 
 /**
  * Downloads a direct MP4 stream URL directly to disk via Axios stream.
- * Displays progress in Render dashboard and validates minimum file size.
+ * Automatically and explicitly follows HTTP 301/302/303/307 redirects from Googlevideo / Cobalt.
+ * Logs status codes and validates minimum file size.
  */
 async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) {
   const timeoutMs = options.timeoutMs || 300000;
-  console.log(`[YouTube-Downloader] Starting direct stream download to ${path.basename(targetFilePath)}...`);
+  console.log(`[YouTube-Downloader] [Stream] Starting direct stream to ${path.basename(targetFilePath)}...`);
 
-  const response = await axios({
-    method: "GET",
-    url: streamUrl,
-    responseType: "stream",
-    timeout: timeoutMs,
-    maxRedirects: 5,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-      ...(options.headers || {}),
-    },
-  });
+  let currentUrl = streamUrl;
+  let response = null;
+  let redirectsFollowed = 0;
+  const maxRedirects = 10;
+
+  while (redirectsFollowed < maxRedirects) {
+    console.log(`[YouTube-Downloader] [Stream] Requesting: ${currentUrl.slice(0, 110)}... (Hop #${redirectsFollowed + 1})`);
+
+    response = await axios({
+      method: "GET",
+      url: currentUrl,
+      responseType: "stream",
+      timeout: timeoutMs,
+      maxRedirects: 0, // Handled manually to log redirects and preserve headers
+      validateStatus: (status) => status >= 200 && status < 400,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        ...(options.headers || {}),
+      },
+    });
+
+    console.log(`[YouTube-Downloader] [Stream] Response Status: ${response.status} ${response.statusText || ""}`);
+
+    // If redirect (301, 302, 303, 307, 308), follow the Location header
+    if (response.status >= 300 && response.status < 400 && response.headers.location) {
+      redirectsFollowed++;
+      const redirectLocation = response.headers.location;
+      currentUrl = new URL(redirectLocation, currentUrl).toString();
+      console.log(`[YouTube-Downloader] [Stream] Following HTTP ${response.status} redirect to: ${currentUrl.slice(0, 110)}...`);
+      // Drain previous stream to release socket
+      try { response.data.destroy(); } catch {}
+      continue;
+    }
+
+    // 200 OK — Ready to write stream
+    break;
+  }
+
+  if (!response || response.status < 200 || response.status >= 300) {
+    throw new Error(`Failed to stream MP4: Server returned HTTP ${response?.status || "UNKNOWN"}`);
+  }
 
   const totalBytes = Number(response.headers["content-length"]) || 0;
+  console.log(`[YouTube-Downloader] [Stream] Streaming raw MP4 data (Total Size: ${totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(2) + " MB" : "chunked/unknown"})...`);
+
   let downloadedBytes = 0;
   let lastLoggedMb = 0;
-
   const writer = fs.createWriteStream(targetFilePath);
 
   response.data.on("data", (chunk) => {
@@ -315,7 +349,7 @@ async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) 
       const progressStr = totalBytes > 0
         ? ` (${Math.round((downloadedBytes / totalBytes) * 100)}%)`
         : "";
-      console.log(`[YouTube-Downloader] Streaming progress: ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB${progressStr}`);
+      console.log(`[YouTube-Downloader] [Stream] Received: ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB${progressStr}`);
     }
   });
 
@@ -335,7 +369,7 @@ async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) 
     throw new Error(`Downloaded video file is corrupt or too small (${stat.size} bytes).`);
   }
 
-  console.log(`[YouTube-Downloader] Successfully streamed video: ${(stat.size / (1024 * 1024)).toFixed(2)} MB to ${path.basename(targetFilePath)}`);
+  console.log(`[YouTube-Downloader] [Stream] Download complete: ${(stat.size / (1024 * 1024)).toFixed(2)} MB written to ${path.basename(targetFilePath)}`);
   return targetFilePath;
 }
 
@@ -454,41 +488,65 @@ async function fetchCobaltStreamUrl(targetUrl) {
     process.env.COBALT_API_URL,
     "https://api.cobalt.tools/api/json",
     "https://api.cobalt.tools/",
+    "https://cobalt-api.kwiatekm.tokyo/api/json",
     "https://cobalt-api.kwiatekm.tokyo/",
   ].filter(Boolean);
 
   for (const rawUrl of instances) {
-    try {
-      const isJsonEndpoint = rawUrl.endsWith("/api/json");
-      const targetEndpoint = isJsonEndpoint ? rawUrl : rawUrl.replace(/\/+$/, "") + "/";
-      console.log(`[YouTube-Downloader] [API-Extraction] Querying Cobalt API at ${targetEndpoint}...`);
+    const isJsonEndpoint = rawUrl.endsWith("/api/json");
+    const targetEndpoint = isJsonEndpoint ? rawUrl : rawUrl.replace(/\/+$/, "") + "/";
+    const payload = {
+      url: targetUrl,
+      videoQuality: "1080",
+    };
 
+    console.log(`[YouTube-Downloader] [Cobalt-API] === SENDING REQUEST ===`);
+    console.log(`[YouTube-Downloader] [Cobalt-API] Target Endpoint: ${targetEndpoint}`);
+    console.log(`[YouTube-Downloader] [Cobalt-API] Request Payload:`, JSON.stringify(payload, null, 2));
+
+    try {
       const res = await axios.post(
         targetEndpoint,
-        {
-          url: targetUrl,
-          videoQuality: "720",
-          youtubeVideoCodec: "h264",
-        },
+        payload,
         {
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
             ...(process.env.COBALT_API_KEY ? { Authorization: `Bearer ${process.env.COBALT_API_KEY}` } : {}),
           },
-          timeout: 20000,
+          timeout: 25000,
         }
       );
 
+      console.log(`[YouTube-Downloader] [Cobalt-API] === RESPONSE RECEIVED ===`);
+      console.log(`[YouTube-Downloader] [Cobalt-API] HTTP Status Code: ${res.status}`);
+      console.log(`[YouTube-Downloader] [Cobalt-API] Response Body:`, JSON.stringify(res.data, null, 2));
+
       const data = res.data;
       if (data) {
-        if (data.status === "tunnel" || data.status === "redirect" || data.status === "stream") {
-          if (data.url) return data.url;
+        // Standard Cobalt URL responses
+        if (typeof data.url === "string" && data.url) {
+          console.log(`[YouTube-Downloader] [Cobalt-API] Extracted direct stream URL: ${data.url.slice(0, 100)}...`);
+          return data.url;
         }
-        if (data.url) return data.url;
+        // Cobalt Picker format
+        if (Array.isArray(data.picker) && data.picker.length > 0) {
+          const picked = data.picker.find((p) => p.type === "video" && p.url) || data.picker[0];
+          if (picked?.url) {
+            console.log(`[YouTube-Downloader] [Cobalt-API] Extracted stream from picker: ${picked.url.slice(0, 100)}...`);
+            return picked.url;
+          }
+        }
+        // Direct stream / tunnel / link fields
+        if (typeof data.stream === "string" && data.stream) return data.stream;
+        if (typeof data.tunnel === "string" && data.tunnel) return data.tunnel;
+        if (typeof data.link === "string" && data.link) return data.link;
       }
     } catch (err) {
-      console.warn(`[YouTube-Downloader] Cobalt API (${rawUrl}) failed:`, err.response?.data || err.message);
+      console.error(`[YouTube-Downloader] [Cobalt-API] === REQUEST FAILED ===`);
+      console.error(`[YouTube-Downloader] [Cobalt-API] Target: ${targetEndpoint}`);
+      console.error(`[YouTube-Downloader] [Cobalt-API] HTTP Status: ${err.response?.status || "NO_RESPONSE"}`);
+      console.error(`[YouTube-Downloader] [Cobalt-API] Error Details:`, err.response?.data ? JSON.stringify(err.response.data, null, 2) : err.message);
     }
   }
   return null;
@@ -504,11 +562,12 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
 
   const rapidApiHost = process.env.RAPIDAPI_HOST || "ytstream-download-youtube-videos.p.rapidapi.com";
   const customUrl = process.env.RAPIDAPI_URL;
+  const endpoint = customUrl || `https://${rapidApiHost}/dl?id=${videoId}`;
 
-  console.log(`[YouTube-Downloader] [Fallback] Querying RapidAPI (${rapidApiHost})...`);
+  console.log(`[YouTube-Downloader] [RapidAPI] === SENDING REQUEST ===`);
+  console.log(`[YouTube-Downloader] [RapidAPI] Target Endpoint: ${endpoint}`);
 
   try {
-    let endpoint = customUrl || `https://${rapidApiHost}/dl?id=${videoId}`;
     const res = await axios.get(endpoint, {
       headers: {
         "x-rapidapi-key": rapidApiKey,
@@ -516,6 +575,10 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
       },
       timeout: 25000,
     });
+
+    console.log(`[YouTube-Downloader] [RapidAPI] === RESPONSE RECEIVED ===`);
+    console.log(`[YouTube-Downloader] [RapidAPI] HTTP Status Code: ${res.status}`);
+    console.log(`[YouTube-Downloader] [RapidAPI] Response Keys:`, Object.keys(res.data || {}));
 
     const data = res.data;
     if (!data) return null;
@@ -527,23 +590,23 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
 
     // Formats array format
     if (Array.isArray(data.formats)) {
-      // Find 720p or 360p progressive MP4
+      // Find 1080p, 720p or 360p progressive MP4
       const progressive = data.formats.filter((f) => f.url && (f.hasAudio !== false) && (f.mimeType?.includes("mp4") || f.ext === "mp4"));
       if (progressive.length) {
-        // Sort highest quality first
         progressive.sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
+        console.log(`[YouTube-Downloader] [RapidAPI] Selected progressive MP4 format: ${progressive[0].height || "best"}p`);
         return progressive[0].url;
       }
       if (data.formats[0]?.url) return data.formats[0].url;
     }
 
-    // Adaptive or other formats format
+    // Adaptive formats
     if (Array.isArray(data.adaptiveFormats)) {
       const mp4s = data.adaptiveFormats.filter((f) => f.url && f.mimeType?.includes("mp4"));
       if (mp4s.length) return mp4s[0].url;
     }
   } catch (err) {
-    console.warn("[YouTube-Downloader] RapidAPI download failed:", err.response?.data || err.message);
+    console.error(`[YouTube-Downloader] [RapidAPI] Request Failed:`, err.response?.data || err.message);
   }
 
   return null;
