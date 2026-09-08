@@ -553,7 +553,7 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
   }
 
   // Step 2: Fetch the Raw MP4 Data — VIDEO endpoint (not audio)
-  const rapidApiHost = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-247.p.rapidapi.com").trim();
+  const rapidApiHost = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
   const endpoint = `https://${rapidApiHost}/dl/video/${id}`;
 
   console.log(`[RapidAPI] Fetching VIDEO download URL for Video ID: ${id}`);
