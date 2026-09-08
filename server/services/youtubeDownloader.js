@@ -454,9 +454,10 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       await runCommand(ytDlpPath, args, { timeoutMs: 300000 });
 
       // Locate downloaded file
-      const files = fs.readdirSync(uploadsDir)
+      const searchDir = path.dirname(outputTemplate);
+      const files = fs.readdirSync(searchDir)
         .filter((f) => f.startsWith(`yt_source_${clipStamp}`))
-        .map((f) => path.join(uploadsDir, f))
+        .map((f) => path.join(searchDir, f))
         .filter((f) => fs.existsSync(f));
 
       const mp4 = files.find((f) => f.endsWith(".mp4")) || files[0];
@@ -764,21 +765,51 @@ async function downloadYouTubeSourceVideo(input) {
   console.log(`[YouTube-Downloader] Source URL: ${targetUrl}`);
   console.log(`[YouTube-Downloader] Target path: ${finalMp4Target}`);
 
+  let rapidApiError = null;
+
+  // ── Strategy 1: RapidAPI ──
+  if (process.env.RAPIDAPI_KEY) {
+    try {
+      console.log(`[YouTube-Downloader] Attempting RapidAPI download...`);
+      const downloadedPath = await downloadViaRapidApi({
+        targetUrl,
+        videoId,
+        targetPath: finalMp4Target,
+      });
+
+      if (downloadedPath && fs.existsSync(downloadedPath) && fs.statSync(downloadedPath).size > 10000) {
+        console.log(`[YouTube-Downloader] ✅ Source MP4 downloaded via RapidAPI: ${downloadedPath}`);
+        return downloadedPath;
+      }
+    } catch (apiErr) {
+      rapidApiError = apiErr;
+      const detail = apiErr.response?.data?.message || apiErr.response?.data?.error || apiErr.message;
+      console.warn(`[YouTube-Downloader] RapidAPI download failed: ${detail}. Falling back to yt-dlp...`);
+    }
+  }
+
+  // ── Strategy 2: yt-dlp with Residential Proxy & Session Cookies ──
   try {
-    const downloadedPath = await downloadViaRapidApi({
+    console.log(`[YouTube-Downloader] Attempting yt-dlp download (with proxy & cookies)...`);
+    const outputTemplate = path.join(tempDir, `yt_source_${clipStamp}.%(ext)s`);
+    const ytdlpPath = await downloadViaYtDlp({
       targetUrl,
-      videoId,
-      targetPath: finalMp4Target,
+      clipStamp,
+      outputTemplate,
     });
 
-    if (downloadedPath && fs.existsSync(downloadedPath)) {
-      console.log(`[YouTube-Downloader] ✅ MP4 downloaded to disk: ${downloadedPath}`);
-      return downloadedPath;
+    if (ytdlpPath && fs.existsSync(ytdlpPath) && fs.statSync(ytdlpPath).size > 10000) {
+      console.log(`[YouTube-Downloader] ✅ Source MP4 downloaded via yt-dlp: ${ytdlpPath}`);
+      return ytdlpPath;
     }
-  } catch (apiErr) {
-    const detail = apiErr.response?.data?.message || apiErr.response?.data?.error || apiErr.message;
-    console.error(`[YouTube-Downloader] RapidAPI extraction failed: ${detail}`);
-    throw new Error(`YouTube RapidAPI extraction failed: ${detail}`);
+  } catch (ytdlpErr) {
+    console.error(`[YouTube-Downloader] yt-dlp fallback also failed: ${ytdlpErr.message}`);
+    const apiDetail = rapidApiError?.response?.data?.message || rapidApiError?.message || "RapidAPI not configured or failed";
+    throw new Error(
+      `YouTube download failed across all pipelines.\n` +
+      `RapidAPI Error: ${apiDetail}\n` +
+      `yt-dlp Error: ${ytdlpErr.message.slice(0, 180)}`
+    );
   }
 
   throw new Error("Failed to download YouTube video: no file was created on disk.");
@@ -960,6 +991,26 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     ? `Key configured (length: ${process.env.RAPIDAPI_KEY.trim().length})`
     : "RAPIDAPI_KEY missing";
 
+  // Test 4: Live RapidAPI extraction test
+  if (process.env.RAPIDAPI_KEY) {
+    try {
+      const testId = extractYouTubeId(testUrl) || "AxRd9vXZ1kc";
+      const rapidUrl = await fetchRapidApiStreamUrl(testId, testUrl);
+      results.tests.rapidApiLive = {
+        success: true,
+        streamUrl: rapidUrl ? rapidUrl.slice(0, 80) + "..." : null,
+      };
+    } catch (e) {
+      results.tests.rapidApiLive = {
+        success: false,
+        error: e.message,
+        status: e.response?.status,
+        data: e.response?.data,
+      };
+    }
+  }
+
+  results.buildVersion = "hybrid-v2";
   return results;
 }
 
