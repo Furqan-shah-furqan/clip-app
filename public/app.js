@@ -2848,7 +2848,8 @@ async function generateSmartClipsFromSource() {
   body.minScore = 30;
 
   const controller = new AbortController();
-  const timeoutMs = 6 * 60 * 1000;
+  // 10-minute client timeout so cloud video clipping & AI reframing is not cut off prematurely
+  const timeoutMs = 10 * 60 * 1000;
 
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -2888,7 +2889,7 @@ async function generateSmartClipsFromSource() {
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(
-        "Smart clipping timed out after 3 minutes. Try uploading the source video directly.",
+        "Smart clipping took longer than 10 minutes on cloud hosting. Try uploading the source video directly.",
       );
     }
     throw error;
