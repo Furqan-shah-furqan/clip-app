@@ -580,6 +580,11 @@ router.post("/smart-generate", async (req, res) => {
       let fullSourcePath = null;
 
       try {
+        // Step 1 & 2: Download raw MP4 stream directly to disk once via 3rd-party extraction API
+        console.log(`[SmartClip] Downloading source video once via API stream for ${suggestions.length} clips...`);
+        fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
+
+        // Step 3: Local FFmpeg pipeline generates each clip from the downloaded local file
         for (let i = 0; i < suggestions.length; i++) {
           if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
@@ -587,35 +592,10 @@ router.post("/smart-generate", async (req, res) => {
           const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
           const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
 
-          let clipVideoPath = null;
-          let clipStartTime = "00:00:00";
-          let clipEndTime = secondsToTime(Math.max(8, endSec - startSec));
-
-          // Try fast direct section download first (bypasses huge downloads & cloud RAM limits)
-          try {
-            clipVideoPath = await downloadYouTubeSectionForSmartClipping({
-              sourceUrl,
-              startSec,
-              endSec,
-              index: i,
-            });
-            tempSectionFiles.push(clipVideoPath);
-          } catch (secErr) {
-            console.warn(`[SmartClip] Direct section download failed for clip #${i + 1}, trying full source video...`, secErr.message);
-
-            // Fallback: download whole source video once
-            if (!fullSourcePath) {
-              fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
-            }
-            clipVideoPath = fullSourcePath;
-            clipStartTime = secondsToTime(startSec);
-            clipEndTime = secondsToTime(endSec);
-          }
-
           const result = await smartGenerateClip({
-            inputPath: clipVideoPath,
-            startTime: clipStartTime,
-            endTime: clipEndTime,
+            inputPath: fullSourcePath,
+            startTime: secondsToTime(startSec),
+            endTime: secondsToTime(endSec),
             aspectRatio: aspectRatio || "9:16",
           });
 

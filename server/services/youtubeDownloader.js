@@ -452,17 +452,19 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 async function fetchCobaltStreamUrl(targetUrl) {
   const instances = [
     process.env.COBALT_API_URL,
+    "https://api.cobalt.tools/api/json",
     "https://api.cobalt.tools/",
-    "https://co.wuk.sh/",
+    "https://cobalt-api.kwiatekm.tokyo/",
   ].filter(Boolean);
 
-  for (const baseUrl of instances) {
+  for (const rawUrl of instances) {
     try {
-      const cleanBase = baseUrl.replace(/\/+$/, "");
-      console.log(`[YouTube-Downloader] [Fallback] Querying Cobalt API at ${cleanBase}...`);
+      const isJsonEndpoint = rawUrl.endsWith("/api/json");
+      const targetEndpoint = isJsonEndpoint ? rawUrl : rawUrl.replace(/\/+$/, "") + "/";
+      console.log(`[YouTube-Downloader] [API-Extraction] Querying Cobalt API at ${targetEndpoint}...`);
 
       const res = await axios.post(
-        `${cleanBase}/`,
+        targetEndpoint,
         {
           url: targetUrl,
           videoQuality: "720",
@@ -486,7 +488,7 @@ async function fetchCobaltStreamUrl(targetUrl) {
         if (data.url) return data.url;
       }
     } catch (err) {
-      console.warn(`[YouTube-Downloader] Cobalt API (${baseUrl}) failed:`, err.response?.data || err.message);
+      console.warn(`[YouTube-Downloader] Cobalt API (${rawUrl}) failed:`, err.response?.data || err.message);
     }
   }
   return null;
@@ -679,50 +681,34 @@ async function downloadYouTubeSourceVideo({ sourceUrl }) {
     throw new Error("A valid YouTube source URL is required.");
   }
 
-  // Run routine cleanup of any stale source files older than 15 minutes
+  // Routine cleanup of temporary video files older than 15 minutes
   cleanupStaleSourceVideos();
 
   const videoId = extractYouTubeId(sourceUrl);
   const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
   const clipStamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const outputTemplate = path.join(uploadsDir, `yt_source_${clipStamp}.%(ext)s`);
   const finalMp4Target = path.join(uploadsDir, `yt_source_${clipStamp}.mp4`);
 
-  console.log(`[YouTube-Downloader] Initiating download for YouTube video: ${targetUrl}`);
+  console.log(`[YouTube-Downloader] [Step 1: API Fetch & Step 2: Stream] Initiating API extraction for: ${targetUrl}`);
 
-  // Tier 1: yt-dlp with Residential Proxy
-  let ytDlpError = null;
+  // Pure 3rd-Party Extraction API: gets direct raw MP4 URL (googlevideo.com / tunnel) & streams directly to local disk
   try {
-    const downloadedPath = await downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate });
-    if (downloadedPath && fs.existsSync(downloadedPath)) {
-      console.log(`[YouTube-Downloader] Source MP4 ready via yt-dlp: ${downloadedPath}`);
-      return downloadedPath;
-    }
-  } catch (err) {
-    ytDlpError = err;
-    console.warn(`[YouTube-Downloader] Primary yt-dlp strategy failed. Switching to Tier 2 Serverless API Fallback. Error: ${err.message}`);
-  }
-
-  // Tier 2: Serverless Extraction API Fallback
-  try {
-    const fallbackPath = await downloadViaExternalApiFallback({
+    const downloadedPath = await downloadViaExternalApiFallback({
       targetUrl,
       videoId,
       targetPath: finalMp4Target,
     });
 
-    if (fallbackPath && fs.existsSync(fallbackPath)) {
-      console.log(`[YouTube-Downloader] Source MP4 ready via Serverless API Fallback: ${fallbackPath}`);
-      return fallbackPath;
+    if (downloadedPath && fs.existsSync(downloadedPath)) {
+      console.log(`[YouTube-Downloader] Source MP4 successfully downloaded via API stream to disk: ${downloadedPath}`);
+      return downloadedPath;
     }
   } catch (apiErr) {
-    console.error(`[YouTube-Downloader] Serverless API Fallback also failed: ${apiErr.message}`);
-    const compositeError = new Error(
-      `YouTube download failed across all strategies.\n` +
-      `Primary Strategy (yt-dlp): ${ytDlpError?.message || "Unknown error"}\n` +
-      `Secondary Strategy (API Fallback): ${apiErr.message}`
+    console.error(`[YouTube-Downloader] 3rd-party extraction API failed: ${apiErr.message}`);
+    throw new Error(
+      `YouTube extraction API failed: ${apiErr.message}. ` +
+      `Ensure COBALT_API_URL or RAPIDAPI_KEY is configured in Render environment variables.`
     );
-    throw compositeError;
   }
 
   throw new Error("Failed to download YouTube video: no file was created on disk.");
@@ -820,33 +806,14 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
   const safeStart = Math.max(0, Number(startSec) || 0);
   const safeEnd = Math.max(safeStart + 8, Number(endSec) || safeStart + 30);
   const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-  const outputTemplate = path.join(uploadsDir, `yt_smart_section_${clipStamp}.%(ext)s`);
 
-  const videoId = extractYouTubeId(sourceUrl);
-  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
+  console.log(`[YouTube-Downloader] [Step 3: FFmpeg Handoff] Extracting section ${safeStart}s - ${safeEnd}s`);
 
-  console.log(`[YouTube-Downloader] Downloading section ${safeStart}s - ${safeEnd}s from ${targetUrl}`);
-
-  // Tier 1: Try fast direct section download (bypasses huge video downloads on Render)
-  try {
-    const directMp4 = await downloadDirectSectionViaYtDlp({
-      targetUrl,
-      startSec: safeStart,
-      endSec: safeEnd,
-      clipStamp,
-      outputTemplate,
-    });
-    if (directMp4 && fs.existsSync(directMp4) && fs.statSync(directMp4).size > 1000) {
-      return directMp4;
-    }
-  } catch (secErr) {
-    console.warn(`[YouTube-Downloader] Direct section download failed: ${secErr.message}. Falling back to full source video + FFmpeg...`);
-  }
-
-  // Tier 2: Download whole source video once using the resilient hybrid downloader and cut locally
+  // Step 1 & 2: Download raw MP4 stream via 3rd-party extraction API
   const sourceMp4 = await downloadYouTubeSourceVideo({ sourceUrl });
   const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
 
+  // Step 3: Local FFmpeg slice & immediate ephemeral cleanup
   try {
     const ffmpegPath = getFfmpegPath();
     const cutDuration = safeEnd - safeStart;
@@ -861,7 +828,7 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
     ], { timeoutMs: 60000 });
 
     if (fs.existsSync(cutMp4) && fs.statSync(cutMp4).size > 1000) {
-      console.log(`[YouTube-Downloader] Section cut successful: ${cutMp4}`);
+      console.log(`[YouTube-Downloader] Section cut successful via FFmpeg: ${cutMp4}`);
       return cutMp4;
     }
     throw new Error("FFmpeg cut produced invalid or empty file.");
