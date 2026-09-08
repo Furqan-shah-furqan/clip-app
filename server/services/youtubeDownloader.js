@@ -2,13 +2,10 @@
  * YouTube Downloader Service — ClipFlow Studio
  * 
  * Architecture:
- * 1. Primary Strategy: yt-dlp CLI with Residential Proxy routing (--proxy) and Android player
- *    client spoofing (--extractor-args "youtube:player_client=android"). Bypasses datacenter
- *    IP blocks and Botguard challenges. Supports modern PO-Tokens and OAuth2.
- * 2. Secondary Strategy: Serverless / 3rd-Party Extraction API Fallback. If yt-dlp fails due to
- *    bot challenge or memory limits, requests unblocked direct progressive MP4 stream links via
- *    Cobalt API, RapidAPI, or Invidious, streaming directly to disk via Axios.
- * 3. Single-Pass Local Processing: Downloads the source MP4 exactly once to Render's ephemeral
+ * 1. Primary Strategy: RapidAPI YouTube Video Downloader (ytstream-download-youtube-videos).
+ *    Requests unblocked direct progressive MP4 stream links using process.env.RAPIDAPI_KEY,
+ *    and streams directly to local disk via Axios with recursive 302 redirect handling.
+ * 2. Single-Pass Local Processing: Downloads the source MP4 exactly once to Render's ephemeral
  *    storage (uploads/), passes path to local FFmpeg for clipping/captioning, and aggressively
  *    cleans up large video files immediately after processing.
  */
@@ -283,7 +280,7 @@ function runCommand(command, args = [], options = {}) {
 
 /**
  * Downloads a direct MP4 stream URL directly to disk via Axios stream.
- * Automatically and explicitly follows HTTP 301/302/303/307 redirects from Googlevideo / Cobalt.
+ * Automatically and explicitly follows HTTP 301/302/303/307 redirects from Googlevideo / RapidAPI tunnels.
  * Logs status codes and validates minimum file size.
  */
 async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) {
@@ -352,6 +349,8 @@ async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) 
       console.log(`[YouTube-Downloader] [Stream] Received: ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB${progressStr}`);
     }
   });
+
+  response.data.pipe(writer);
 
   await new Promise((resolve, reject) => {
     writer.on("finish", resolve);
@@ -477,82 +476,25 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
   throw new Error(`yt-dlp strategies exhausted:\n${strategyErrors.join("\n")}`);
 }
 
-// ── Strategy 2: Serverless / 3rd-Party Extraction API Fallback ────────────────
+// ── RapidAPI YouTube Downloader (Exclusive Cloud Extractor) ──────────────────
 
 /**
- * Provider A: Cobalt API
- * Open-source, high-performance extraction API (self-hosted or public instances).
- */
-async function fetchCobaltStreamUrl(targetUrl) {
-  const instances = [
-    process.env.COBALT_API_URL,
-    "https://api.cobalt.tools/api/json",
-    "https://api.cobalt.tools/",
-    "https://cobalt-api.kwiatekm.tokyo/api/json",
-    "https://cobalt-api.kwiatekm.tokyo/",
-  ].filter(Boolean);
-
-  for (const rawUrl of instances) {
-    const isJsonEndpoint = rawUrl.endsWith("/api/json");
-    const targetEndpoint = isJsonEndpoint ? rawUrl : rawUrl.replace(/\/+$/, "") + "/";
-    // Strictly formatted body as mandated by Cobalt specification
-    const body = { url: targetUrl };
-
-    console.log("Starting API fetch for:", targetUrl);
-    console.log("[Cobalt-API] Target Endpoint:", targetEndpoint);
-
-    try {
-      const response = await axios.post(targetEndpoint, body, {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          ...(process.env.COBALT_API_KEY ? { Authorization: `Bearer ${process.env.COBALT_API_KEY}` } : {}),
-        },
-        timeout: 25000,
-      });
-
-      console.log("API Response Data:", response.data);
-
-      const data = response.data;
-      if (data) {
-        // Direct url in response (Cobalt v7 / v10 standard)
-        if (typeof data.url === "string" && data.url) {
-          console.log("[Cobalt-API] Successfully extracted stream URL:", data.url.slice(0, 100));
-          return data.url;
-        }
-        // Picker structure (v10 format for multi-streams)
-        if (Array.isArray(data.picker) && data.picker.length > 0) {
-          const picked = data.picker.find((p) => p.type === "video" && p.url) || data.picker[0];
-          if (picked?.url) {
-            console.log("[Cobalt-API] Successfully extracted stream URL from picker:", picked.url.slice(0, 100));
-            return picked.url;
-          }
-        }
-        // Direct stream / tunnel fallback fields
-        if (typeof data.stream === "string" && data.stream) return data.stream;
-        if (typeof data.tunnel === "string" && data.tunnel) return data.tunnel;
-        if (typeof data.link === "string" && data.link) return data.link;
-      }
-    } catch (error) {
-      console.error("API Fetch Failed:", error.response?.data || error.message);
-    }
-  }
-  return null;
-}
-
-/**
- * Provider B: RapidAPI YouTube Downloader
- * Enterprise-grade cloud scraper that returns unblocked googlevideo.com MP4 links.
+ * Provider: RapidAPI YouTube Video Downloader (ytstream-download-youtube-videos)
+ * Connects directly to RapidAPI to retrieve direct progressive googlevideo.com MP4 stream URLs.
  */
 async function fetchRapidApiStreamUrl(videoId, targetUrl) {
-  const rapidApiKey = process.env.RAPIDAPI_KEY;
-  if (!rapidApiKey) return null;
-
-  const rapidApiHost = process.env.RAPIDAPI_HOST || "ytstream-download-youtube-videos.p.rapidapi.com";
-  let endpoint = process.env.RAPIDAPI_URL;
-  if (!endpoint) {
-    endpoint = `https://${rapidApiHost}/dl?id=${videoId}`;
+  const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
+  if (!rapidApiKey) {
+    throw new Error("RAPIDAPI_KEY is not configured in environment variables.");
   }
+
+  const id = videoId || extractYouTubeId(targetUrl);
+  if (!id) {
+    throw new Error(`Could not extract video ID from URL: ${targetUrl}`);
+  }
+
+  const rapidApiHost = "ytstream-download-youtube-videos.p.rapidapi.com";
+  const endpoint = `https://${rapidApiHost}/dl?id=${id}`;
 
   console.log("Starting API fetch for:", targetUrl);
   console.log("[RapidAPI] Target Endpoint:", endpoint);
@@ -564,177 +506,83 @@ async function fetchRapidApiStreamUrl(videoId, targetUrl) {
         "x-rapidapi-key": rapidApiKey,
         "x-rapidapi-host": rapidApiHost,
       },
-      timeout: 25000,
+      timeout: 30000,
     });
 
     console.log("API Response Data:", response.data);
 
     const data = response.data;
-    if (!data) return null;
+    if (!data) {
+      throw new Error("RapidAPI returned empty response body.");
+    }
 
-    // Direct link formats
-    if (typeof data.link === "string" && data.link) return data.link;
-    if (typeof data.downloadUrl === "string" && data.downloadUrl) return data.downloadUrl;
-    if (typeof data.url === "string" && data.url) return data.url;
+    // Direct link formats (link, url, downloadUrl)
+    if (typeof data.link === "string" && data.link.startsWith("http")) return data.link;
+    if (typeof data.url === "string" && data.url.startsWith("http")) return data.url;
+    if (typeof data.downloadUrl === "string" && data.downloadUrl.startsWith("http")) return data.downloadUrl;
 
-    // Formats array format
-    if (Array.isArray(data.formats)) {
+    // Formats array format from ytstream-download-youtube-videos
+    if (Array.isArray(data.formats) && data.formats.length > 0) {
+      // Find progressive MP4 formats that contain both video and audio
       const progressive = data.formats.filter(
-        (f) => f.url && f.hasAudio !== false && (f.mimeType?.includes("mp4") || f.ext === "mp4")
+        (f) => f.url && f.hasAudio !== false && f.hasVideo !== false && (String(f.mimeType || "").includes("mp4") || f.ext === "mp4")
       );
-      if (progressive.length) {
+
+      if (progressive.length > 0) {
+        // Sort highest resolution first (1080p -> 720p -> 480p -> 360p)
         progressive.sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
-        console.log(`[RapidAPI] Selected progressive MP4 format: ${progressive[0].height || "best"}p`);
+        console.log(`[RapidAPI] Selected progressive MP4 format: ${progressive[0].qualityLabel || progressive[0].height || "best"}`);
         return progressive[0].url;
       }
-      if (data.formats[0]?.url) return data.formats[0].url;
+
+      // Fallback: any format with a valid URL
+      const anyWithUrl = data.formats.find((f) => f.url);
+      if (anyWithUrl?.url) return anyWithUrl.url;
     }
 
-    // Adaptive formats
-    if (Array.isArray(data.adaptiveFormats)) {
-      const mp4s = data.adaptiveFormats.filter((f) => f.url && f.mimeType?.includes("mp4"));
-      if (mp4s.length) return mp4s[0].url;
+    // Adaptive formats fallback
+    if (Array.isArray(data.adaptiveFormats) && data.adaptiveFormats.length > 0) {
+      const mp4s = data.adaptiveFormats.filter((f) => f.url && String(f.mimeType || "").includes("mp4"));
+      if (mp4s.length > 0) {
+        mp4s.sort((a, b) => (Number(b.height) || 0) - (Number(a.height) || 0));
+        return mp4s[0].url;
+      }
     }
+
+    throw new Error("RapidAPI responded successfully, but no streamable MP4 URL was found in the formats payload.");
   } catch (error) {
     console.error("API Fetch Failed:", error.response?.data || error.message);
+    throw error;
   }
-
-  return null;
 }
 
 /**
- * Provider C: Invidious Public Video Stream Extractor
- * Queries public Invidious instances for progressive format streams.
+ * Downloads the source YouTube video via RapidAPI stream directly to local disk.
  */
-async function fetchInvidiousStreamUrl(videoId) {
-  const instances = [
-    process.env.INVIDIOUS_API_URL,
-    "https://invidious.privacydev.net",
-    "https://vid.puffyan.us",
-    "https://inv.nadeko.net",
-  ].filter(Boolean);
+async function downloadViaRapidApi({ targetUrl, videoId, targetPath }) {
+  console.log(`[YouTube-Downloader] Initiating RapidAPI download for video: ${videoId || targetUrl}`);
 
-  for (const base of instances) {
-    try {
-      const cleanBase = base.replace(/\/+$/, "");
-      console.log(`[YouTube-Downloader] [Fallback] Querying Invidious instance ${cleanBase}...`);
-
-      const res = await axios.get(`${cleanBase}/api/v1/videos/${videoId}`, {
-        timeout: 15000,
-      });
-
-      const streams = res.data?.formatStreams;
-      if (Array.isArray(streams) && streams.length > 0) {
-        // Find 720p or 360p mp4
-        const mp4Stream = streams.find((s) => s.container === "mp4" && s.resolution === "720p") ||
-          streams.find((s) => s.container === "mp4") ||
-          streams[0];
-        if (mp4Stream?.url) return mp4Stream.url;
-      }
-    } catch (err) {
-      console.warn(`[YouTube-Downloader] Invidious (${base}) failed:`, err.message);
-    }
+  const mp4StreamUrl = await fetchRapidApiStreamUrl(videoId, targetUrl);
+  if (!mp4StreamUrl) {
+    throw new Error("RapidAPI extraction returned null or empty MP4 URL.");
   }
-  return null;
+
+  console.log(`[YouTube-Downloader] RapidAPI direct MP4 link acquired. Starting stream to disk: ${targetPath}`);
+  return await streamRemoteVideoToFile(mp4StreamUrl, targetPath);
 }
 
-/**
- * Provider D: Custom Webhook / Serverless API Fallback
- * User-configurable microservice / Cloudflare worker.
- */
-async function fetchCustomWebhookStreamUrl(targetUrl, videoId) {
-  const customEndpoint = process.env.CUSTOM_YOUTUBE_API_URL;
-  if (!customEndpoint) return null;
-
-  try {
-    console.log(`[YouTube-Downloader] [Fallback] Querying Custom Extractor Webhook...`);
-    const res = await axios.get(customEndpoint, {
-      params: { url: targetUrl, id: videoId },
-      timeout: 25000,
-    });
-    return res.data?.downloadUrl || res.data?.streamUrl || res.data?.url || null;
-  } catch (err) {
-    console.warn("[YouTube-Downloader] Custom Webhook failed:", err.message);
-    return null;
-  }
-}
+// Alias for backwards compatibility
+const downloadViaExternalApiFallback = downloadViaRapidApi;
 
 /**
- * Executes the Secondary Strategy: queries external extraction providers and
- * directly streams the unblocked MP4 to the local target path.
- */
-async function downloadViaExternalApiFallback({ targetUrl, videoId, targetPath }) {
-  console.log(`[YouTube-Downloader] [Tier 2: Serverless API Fallback] Triggered for video ${videoId || targetUrl}`);
-
-  // Provider 1: Cobalt API
-  try {
-    const cobaltUrl = await fetchCobaltStreamUrl(targetUrl);
-    if (cobaltUrl) {
-      console.log("[YouTube-Downloader] Resolved direct stream URL from Cobalt API!");
-      return await streamRemoteVideoToFile(cobaltUrl, targetPath);
-    }
-  } catch (e) {
-    console.warn("[YouTube-Downloader] Cobalt fallback error:", e.message);
-  }
-
-  // Provider 2: RapidAPI (if key provided)
-  if (process.env.RAPIDAPI_KEY) {
-    try {
-      const rapidApiUrl = await fetchRapidApiStreamUrl(videoId, targetUrl);
-      if (rapidApiUrl) {
-        console.log("[YouTube-Downloader] Resolved direct stream URL from RapidAPI!");
-        return await streamRemoteVideoToFile(rapidApiUrl, targetPath);
-      }
-    } catch (e) {
-      console.warn("[YouTube-Downloader] RapidAPI fallback error:", e.message);
-    }
-  }
-
-  // Provider 3: Custom Webhook (if provided)
-  if (process.env.CUSTOM_YOUTUBE_API_URL) {
-    try {
-      const customUrl = await fetchCustomWebhookStreamUrl(targetUrl, videoId);
-      if (customUrl) {
-        console.log("[YouTube-Downloader] Resolved direct stream URL from Custom Webhook!");
-        return await streamRemoteVideoToFile(customUrl, targetPath);
-      }
-    } catch (e) {
-      console.warn("[YouTube-Downloader] Custom Webhook fallback error:", e.message);
-    }
-  }
-
-  // Provider 4: Invidious Instances
-  if (videoId) {
-    try {
-      const invidiousUrl = await fetchInvidiousStreamUrl(videoId);
-      if (invidiousUrl) {
-        console.log("[YouTube-Downloader] Resolved direct stream URL from Invidious instance!");
-        return await streamRemoteVideoToFile(invidiousUrl, targetPath);
-      }
-    } catch (e) {
-      console.warn("[YouTube-Downloader] Invidious fallback error:", e.message);
-    }
-  }
-
-  throw new Error("All external API fallback extraction providers failed or returned no streamable MP4 URL.");
-}
-
-// ── Master High-Level Downloader ─────────────────────────────────────────────
-
-/**
- * Downloads the YouTube source video to local ephemeral storage exactly once.
- * Cascades:
- *   1. yt-dlp with Residential Proxy + Android Client Spoofing + PO-Token
- *   2. Serverless API Fallback (Cobalt / RapidAPI / Invidious) -> Direct Axios Stream to Disk
- * 
- * Returns the absolute path of the downloaded source MP4 file.
+ * High-level YouTube source downloader controller:
+ * Exclusively uses RapidAPI extraction to download raw MP4 directly to Render's ephemeral storage.
  */
 async function downloadYouTubeSourceVideo({ sourceUrl }) {
   if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) {
     throw new Error("A valid YouTube source URL is required.");
   }
 
-  // Routine cleanup of temporary video files older than 15 minutes
   cleanupStaleSourceVideos();
 
   const videoId = extractYouTubeId(sourceUrl);
@@ -742,26 +590,22 @@ async function downloadYouTubeSourceVideo({ sourceUrl }) {
   const clipStamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const finalMp4Target = path.join(uploadsDir, `yt_source_${clipStamp}.mp4`);
 
-  console.log(`[YouTube-Downloader] [Step 1: API Fetch & Step 2: Stream] Initiating API extraction for: ${targetUrl}`);
+  console.log(`[YouTube-Downloader] Initiating RapidAPI video extraction: ${targetUrl}`);
 
-  // Pure 3rd-Party Extraction API: gets direct raw MP4 URL (googlevideo.com / tunnel) & streams directly to local disk
   try {
-    const downloadedPath = await downloadViaExternalApiFallback({
+    const downloadedPath = await downloadViaRapidApi({
       targetUrl,
       videoId,
       targetPath: finalMp4Target,
     });
 
     if (downloadedPath && fs.existsSync(downloadedPath)) {
-      console.log(`[YouTube-Downloader] Source MP4 successfully downloaded via API stream to disk: ${downloadedPath}`);
+      console.log(`[YouTube-Downloader] Source MP4 successfully downloaded to disk: ${downloadedPath}`);
       return downloadedPath;
     }
   } catch (apiErr) {
-    console.error(`[YouTube-Downloader] 3rd-party extraction API failed: ${apiErr.message}`);
-    throw new Error(
-      `YouTube extraction API failed: ${apiErr.message}. ` +
-      `Ensure COBALT_API_URL or RAPIDAPI_KEY is configured in Render environment variables.`
-    );
+    console.error(`[YouTube-Downloader] RapidAPI extraction failed: ${apiErr.message}`);
+    throw new Error(`YouTube RapidAPI extraction failed: ${apiErr.message}`);
   }
 
   throw new Error("Failed to download YouTube video: no file was created on disk.");
@@ -911,8 +755,6 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     activeCookiesPath: activeCookies,
     poTokenConfigured: Boolean(process.env.YTDLP_PO_TOKEN),
     rapidApiConfigured: Boolean(process.env.RAPIDAPI_KEY),
-    cobaltConfigured: Boolean(process.env.COBALT_API_URL),
-    customApiConfigured: Boolean(process.env.CUSTOM_YOUTUBE_API_URL),
     tests: {},
   };
 
@@ -940,14 +782,10 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     }
   }
 
-  // Test 3: Cobalt availability
-  try {
-    const cobaltBase = (process.env.COBALT_API_URL || "https://api.cobalt.tools/").replace(/\/+$/, "");
-    const cobaltCheck = await axios.get(cobaltBase, { timeout: 6000 });
-    results.tests.cobaltStatus = `HTTP ${cobaltCheck.status}`;
-  } catch (e) {
-    results.tests.cobaltStatus = e.response ? `HTTP ${e.response.status}` : e.message;
-  }
+  // Test 3: RapidAPI configuration status
+  results.tests.rapidApiStatus = process.env.RAPIDAPI_KEY
+    ? `Key configured (length: ${process.env.RAPIDAPI_KEY.trim().length})`
+    : "RAPIDAPI_KEY missing";
 
   return results;
 }
