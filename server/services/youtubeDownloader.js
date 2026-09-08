@@ -592,7 +592,8 @@ const downloadViaExternalApiFallback = downloadViaRapidApi;
  * Exclusively uses RapidAPI extraction to download raw MP4 directly to Render's ephemeral storage (/tmp or uploads).
  * Returns the absolute path of the downloaded source MP4 for local FFmpeg clipping.
  */
-async function downloadYouTubeSourceVideo({ sourceUrl }) {
+async function downloadYouTubeSourceVideo(input) {
+  const sourceUrl = typeof input === "string" ? input : input?.sourceUrl;
   if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) {
     throw new Error("A valid YouTube source URL is required.");
   }
