@@ -934,6 +934,26 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     results.tests.cobaltStatus = e.response ? `HTTP ${e.response.status}` : e.message;
   }
 
+  // Test 4: Live section download test
+  try {
+    const testStamp = `diag_${Date.now()}`;
+    const resMp4 = await downloadDirectSectionViaYtDlp({
+      targetUrl: testUrl,
+      startSec: 5,
+      endSec: 10,
+      clipStamp: testStamp,
+      outputTemplate: path.join(uploadsDir, `yt_diag_${testStamp}.%(ext)s`),
+    });
+    if (resMp4 && fs.existsSync(resMp4)) {
+      results.tests.sectionDownload = { success: true, size: fs.statSync(resMp4).size };
+      cleanupFile(resMp4);
+    } else {
+      results.tests.sectionDownload = { success: false, error: "File not created" };
+    }
+  } catch (e) {
+    results.tests.sectionDownload = { success: false, error: e.message };
+  }
+
   return results;
 }
 
