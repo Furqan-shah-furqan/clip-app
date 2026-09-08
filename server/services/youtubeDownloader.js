@@ -354,19 +354,40 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
   console.log(`[YouTube-Downloader] [Tier 1: yt-dlp] Initializing. Proxy: ${maskProxyUrl(proxyUrl)}, Cookies: ${effectiveCookies ? "available" : "none"}`);
 
-  // Multi-tier client configurations
+  // Multi-tier client configurations: tries direct unproxied first (fastest and clean),
+  // then proxied (if configured), then authenticated cookies, then alternative clients.
   const clientStrategies = [
-    { client: "youtube:player_client=android", withCookies: false, label: "Android client (no cookies)" },
-    { client: "youtube:player_client=android", withCookies: true, label: "Android client + cookies" },
-    { client: "youtube:player_client=android,web", withCookies: true, label: "Android+Web client + cookies" },
-    { client: "youtube:player_client=ios", withCookies: false, label: "iOS client (no cookies)" },
-    { client: "youtube:player_client=ios,android", withCookies: true, label: "iOS+Android client + cookies" },
+    // Tier 1: Direct Android & Android VR clients (unproxied — bypasses datacenter blocks cleanly)
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
+    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Android VR direct (no cookies)" },
+
+    // Tier 2: Proxied Android clients (if proxy configured)
+    ...(proxyUrl ? [
+      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Android client via proxy" },
+      { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Android VR via proxy" },
+    ] : []),
+
+    // Tier 3: Cookies strategies (Web/MWeb clients)
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Web client + cookies direct" },
+      ...(proxyUrl ? [
+        { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Web client + cookies via proxy" },
+      ] : []),
+    ] : []),
+
+    // Tier 4: iOS and TV Embedded clients
+    { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "iOS client direct" },
+    { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "TV Embedded direct" },
+    ...(proxyUrl ? [
+      { client: "youtube:player_client=ios", withCookies: false, useProxy: true, label: "iOS client via proxy" },
+    ] : []),
   ];
 
   const strategyErrors = [];
 
   for (const strategy of clientStrategies) {
     const useCookies = strategy.withCookies && Boolean(effectiveCookies);
+    const useProxy = strategy.useProxy && Boolean(proxyUrl);
 
     // Build arguments
     const args = [
@@ -375,7 +396,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       "--no-warnings",
       "--extractor-args", strategy.client,
       ...poTokenArgs,
-      ...(proxyUrl ? ["--proxy", proxyUrl] : []),
+      ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
       "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
@@ -394,7 +415,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
     args.push("-o", outputTemplate, targetUrl);
 
-    console.log(`[YouTube-Downloader] Trying ${strategy.label} [Proxy: ${maskProxyUrl(proxyUrl)}]`);
+    console.log(`[YouTube-Downloader] Trying ${strategy.label} [Proxy: ${useProxy ? maskProxyUrl(proxyUrl) : "none"}]`);
 
     try {
       await runCommand(ytDlpPath, args, { timeoutMs: 300000 });
@@ -708,20 +729,123 @@ async function downloadYouTubeSourceVideo({ sourceUrl }) {
 }
 
 /**
- * Downloads a specific section of a YouTube video by downloading the full source
- * once and cutting with local FFmpeg, immediately deleting the full source video
- * to prevent disk exhaustion.
+ * Direct Section Downloader via yt-dlp.
+ * Uses --download-sections to download ONLY the needed 15-45s slice directly.
+ * Extremely fast (1-3s, ~2-3MB) and bypasses full-video cloud timeouts and memory issues.
+ */
+async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clipStamp, outputTemplate }) {
+  const ytDlpPath = getYtDlpPath();
+  const ffmpegDir = path.join(rootDir, "bin");
+  const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
+
+  const proxyUrl = getProxyUrl();
+  const poTokenArgs = getPoTokenArgs();
+  const activeCookies = resolveActiveCookieFile();
+  const tempCookiePath = prepareWritableCookies(activeCookies, clipStamp);
+  const effectiveCookies = tempCookiePath || (activeCookies && !activeCookies.startsWith("/etc/secrets") ? activeCookies : null);
+  const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
+
+  const strategies = [
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Section Android direct (no cookies)" },
+    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Section Android VR direct (no cookies)" },
+    ...(proxyUrl ? [
+      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Section Android via proxy" },
+      { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Section Android VR via proxy" },
+    ] : []),
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Section Web + cookies direct" },
+      ...(proxyUrl ? [
+        { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Section Web + cookies via proxy" },
+      ] : []),
+    ] : []),
+    { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "Section iOS direct" },
+    { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "Section TV Embedded direct" },
+  ];
+
+  const stratErrors = [];
+
+  for (const strat of strategies) {
+    const useCookies = strat.withCookies && Boolean(effectiveCookies);
+    const useProxy = strat.useProxy && Boolean(proxyUrl);
+    const args = [
+      "--no-playlist",
+      "--no-check-certificates",
+      "--no-warnings",
+      "--extractor-args", strat.client,
+      ...poTokenArgs,
+      ...(useProxy ? ["--proxy", proxyUrl] : []),
+      ...(useCookies ? ["--cookies", effectiveCookies] : []),
+      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+      ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
+      "--download-sections", section,
+      "--force-keyframes-at-cuts",
+      "--merge-output-format", "mp4",
+      "--socket-timeout", "20",
+      "--retries", "2",
+      "-o", outputTemplate,
+      targetUrl,
+    ];
+
+    try {
+      console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label}...`);
+      await runCommand(ytDlpPath, args, { timeoutMs: 45000 });
+
+      const files = fs.readdirSync(uploadsDir)
+        .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
+        .map((f) => path.join(uploadsDir, f))
+        .filter((f) => fs.existsSync(f));
+
+      const mp4 = files.find((f) => f.endsWith(".mp4")) || files[0];
+      if (mp4 && fs.existsSync(mp4) && fs.statSync(mp4).size > 1000) {
+        console.log(`[YouTube-Downloader] Direct section download succeeded with ${strat.label}!`);
+        if (tempCookiePath) cleanupFile(tempCookiePath);
+        return mp4;
+      }
+    } catch (err) {
+      const msg = err.message || String(err);
+      stratErrors.push(`[${strat.label}]: ${msg}`);
+      console.warn(`[YouTube-Downloader] ${strat.label} failed: ${msg.slice(0, 120)}`);
+    }
+  }
+
+  if (tempCookiePath) cleanupFile(tempCookiePath);
+  throw new Error(`Direct section download strategies exhausted:\n${stratErrors.join("\n")}`);
+}
+
+/**
+ * Downloads a specific section of a YouTube video by attempting direct section download
+ * first (1-3 seconds), and falling back to full source download + FFmpeg cut if needed.
  */
 async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }) {
   const safeStart = Math.max(0, Number(startSec) || 0);
   const safeEnd = Math.max(safeStart + 8, Number(endSec) || safeStart + 30);
   const clipStamp = `${Date.now()}_${index}_${Math.random().toString(36).slice(2, 8)}`;
-  const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
+  const outputTemplate = path.join(uploadsDir, `yt_smart_section_${clipStamp}.%(ext)s`);
 
-  console.log(`[YouTube-Downloader] Downloading section ${safeStart}s - ${safeEnd}s from ${sourceUrl}`);
+  const videoId = extractYouTubeId(sourceUrl);
+  const targetUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : sourceUrl;
 
-  // Download whole source video once using the resilient hybrid downloader
+  console.log(`[YouTube-Downloader] Downloading section ${safeStart}s - ${safeEnd}s from ${targetUrl}`);
+
+  // Tier 1: Try fast direct section download (bypasses huge video downloads on Render)
+  try {
+    const directMp4 = await downloadDirectSectionViaYtDlp({
+      targetUrl,
+      startSec: safeStart,
+      endSec: safeEnd,
+      clipStamp,
+      outputTemplate,
+    });
+    if (directMp4 && fs.existsSync(directMp4) && fs.statSync(directMp4).size > 1000) {
+      return directMp4;
+    }
+  } catch (secErr) {
+    console.warn(`[YouTube-Downloader] Direct section download failed: ${secErr.message}. Falling back to full source video + FFmpeg...`);
+  }
+
+  // Tier 2: Download whole source video once using the resilient hybrid downloader and cut locally
   const sourceMp4 = await downloadYouTubeSourceVideo({ sourceUrl });
+  const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
 
   try {
     const ffmpegPath = getFfmpegPath();
@@ -821,6 +945,7 @@ module.exports = {
   cleanupStaleSourceVideos,
   streamRemoteVideoToFile,
   downloadViaYtDlp,
+  downloadDirectSectionViaYtDlp,
   downloadViaExternalApiFallback,
   downloadYouTubeSourceVideo,
   downloadYouTubeSection,
