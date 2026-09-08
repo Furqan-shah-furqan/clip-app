@@ -70,12 +70,28 @@ function ensureValidClipWindow(startTime, endTime) {
 }
 
 
+const THIRTY_ONE_DAYS_MS = 31 * 24 * 60 * 60 * 1000;
+
 function readProjects() {
   try {
     if (!fs.existsSync(projectsFile)) return [];
     const raw = fs.readFileSync(projectsFile, "utf8");
     const data = raw ? JSON.parse(raw) : [];
-    return Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) return [];
+
+    const now = Date.now();
+    const fresh = data.filter((project) => {
+      const dateVal = project.updatedAt || project.createdAt;
+      if (!dateVal) return true;
+      const ts = new Date(dateVal).getTime();
+      if (!ts || isNaN(ts)) return true;
+      return (now - ts) <= THIRTY_ONE_DAYS_MS;
+    });
+
+    if (fresh.length !== data.length) {
+      writeProjects(fresh);
+    }
+    return fresh;
   } catch {
     return [];
   }
