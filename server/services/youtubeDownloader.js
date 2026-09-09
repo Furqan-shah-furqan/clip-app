@@ -280,96 +280,125 @@ function runCommand(command, args = [], options = {}) {
 
 /**
  * Downloads a direct MP4 stream URL directly to disk via Axios stream.
- * Automatically and explicitly follows HTTP 301/302/303/307 redirects from Googlevideo / RapidAPI tunnels.
- * Logs status codes and validates minimum file size.
+ * Automatically and explicitly follows HTTP 301/302/303/307 redirects.
+ * If direct stream fails (e.g. 403 on googlevideo.com datacenter block), automatically retries via residential proxy.
  */
 async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) {
   const timeoutMs = options.timeoutMs || 300000;
-  console.log(`[YouTube-Downloader] [Stream] Starting direct stream to ${path.basename(targetFilePath)}...`);
+  const proxyUrl = getProxyUrl();
+  console.log(`[YouTube-Downloader] [Stream] Starting stream to ${path.basename(targetFilePath)}...`);
 
-  let currentUrl = streamUrl;
-  let response = null;
-  let redirectsFollowed = 0;
-  const maxRedirects = 10;
+  async function tryFetchStream(useProxy = false) {
+    let currentUrl = streamUrl;
+    let response = null;
+    let redirectsFollowed = 0;
+    const maxRedirects = 10;
 
-  while (redirectsFollowed < maxRedirects) {
-    console.log(`[YouTube-Downloader] [Stream] Requesting: ${currentUrl.slice(0, 110)}... (Hop #${redirectsFollowed + 1})`);
+    let agent = null;
+    if (useProxy && proxyUrl) {
+      try {
+        const { HttpsProxyAgent } = require("https-proxy-agent");
+        agent = new HttpsProxyAgent(proxyUrl);
+      } catch (e) {
+        console.warn(`[YouTube-Downloader] [Stream] Failed to initialize HttpsProxyAgent: ${e.message}`);
+      }
+    }
 
-    response = await axios({
-      method: "GET",
-      url: currentUrl,
-      responseType: "stream",
-      timeout: timeoutMs,
-      maxRedirects: 0, // Handled manually to log redirects and preserve headers
-      validateStatus: (status) => status >= 200 && status < 400,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Encoding": "identity",
-        ...(options.headers || {}),
-      },
+    while (redirectsFollowed < maxRedirects) {
+      console.log(`[YouTube-Downloader] [Stream] Requesting: ${currentUrl.slice(0, 90)}... (Hop #${redirectsFollowed + 1}, Proxy: ${Boolean(agent)})`);
+
+      response = await axios({
+        method: "GET",
+        url: currentUrl,
+        responseType: "stream",
+        timeout: timeoutMs,
+        maxRedirects: 0, // Handled manually to log redirects and preserve headers
+        validateStatus: (status) => status >= 200 && status < 400,
+        httpsAgent: agent || undefined,
+        proxy: false,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          "Accept": "*/*",
+          "Accept-Encoding": "identity",
+          "Referer": "https://www.youtube.com/",
+          "Origin": "https://www.youtube.com",
+          ...(options.headers || {}),
+        },
+      });
+
+      console.log(`[YouTube-Downloader] [Stream] Response Status: ${response.status} ${response.statusText || ""}`);
+
+      if (response.status >= 300 && response.status < 400 && response.headers.location) {
+        redirectsFollowed++;
+        const redirectLocation = response.headers.location;
+        currentUrl = new URL(redirectLocation, currentUrl).toString();
+        console.log(`[YouTube-Downloader] [Stream] Following HTTP ${response.status} redirect to: ${currentUrl.slice(0, 90)}...`);
+        try { response.data.destroy(); } catch {}
+        continue;
+      }
+
+      break;
+    }
+
+    if (!response || response.status < 200 || response.status >= 300) {
+      throw new Error(`Failed to stream MP4: Server returned HTTP ${response?.status || "UNKNOWN"}`);
+    }
+
+    const totalBytes = Number(response.headers["content-length"]) || 0;
+    console.log(`[YouTube-Downloader] [Stream] Streaming raw MP4 data (Total Size: ${totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(2) + " MB" : "chunked/unknown"})...`);
+
+    let downloadedBytes = 0;
+    let lastLoggedMb = 0;
+    const writer = fs.createWriteStream(targetFilePath);
+
+    return new Promise((resolve, reject) => {
+      response.data.on("data", (chunk) => {
+        downloadedBytes += chunk.length;
+        const currentMb = Math.floor(downloadedBytes / (5 * 1024 * 1024)) * 5;
+        if (currentMb > lastLoggedMb) {
+          lastLoggedMb = currentMb;
+          const progressStr = totalBytes > 0 ? ` (${Math.round((downloadedBytes / totalBytes) * 100)}%)` : "";
+          console.log(`[YouTube-Downloader] [Stream] Received: ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB${progressStr}`);
+        }
+      });
+
+      response.data.pipe(writer);
+
+      writer.on("finish", () => {
+        writer.close(() => {
+          if (!fs.existsSync(targetFilePath)) return reject(new Error("Target file was not created on disk."));
+          const stat = fs.statSync(targetFilePath);
+          if (stat.size < 10000) {
+            cleanupFile(targetFilePath);
+            return reject(new Error(`Downloaded video file is corrupt or too small (${stat.size} bytes).`));
+          }
+          console.log(`[YouTube-Downloader] [Stream] Download complete: ${(stat.size / (1024 * 1024)).toFixed(2)} MB written to ${path.basename(targetFilePath)}`);
+          resolve(targetFilePath);
+        });
+      });
+
+      writer.on("error", (err) => {
+        cleanupFile(targetFilePath);
+        reject(err);
+      });
+
+      response.data.on("error", (err) => {
+        cleanupFile(targetFilePath);
+        reject(err);
+      });
     });
+  }
 
-    console.log(`[YouTube-Downloader] [Stream] Response Status: ${response.status} ${response.statusText || ""}`);
-
-    // If redirect (301, 302, 303, 307, 308), follow the Location header
-    if (response.status >= 300 && response.status < 400 && response.headers.location) {
-      redirectsFollowed++;
-      const redirectLocation = response.headers.location;
-      currentUrl = new URL(redirectLocation, currentUrl).toString();
-      console.log(`[YouTube-Downloader] [Stream] Following HTTP ${response.status} redirect to: ${currentUrl.slice(0, 110)}...`);
-      // Drain previous stream to release socket
-      try { response.data.destroy(); } catch {}
-      continue;
+  // Attempt direct first; if blocked (e.g. 403 on googlevideo), retry via residential proxy
+  try {
+    return await tryFetchStream(false);
+  } catch (directErr) {
+    if (proxyUrl) {
+      console.warn(`[YouTube-Downloader] [Stream] Direct stream failed (${directErr.message}). Retrying via residential proxy...`);
+      return await tryFetchStream(true);
     }
-
-    // 200 OK — Ready to write stream
-    break;
+    throw directErr;
   }
-
-  if (!response || response.status < 200 || response.status >= 300) {
-    throw new Error(`Failed to stream MP4: Server returned HTTP ${response?.status || "UNKNOWN"}`);
-  }
-
-  const totalBytes = Number(response.headers["content-length"]) || 0;
-  console.log(`[YouTube-Downloader] [Stream] Streaming raw MP4 data (Total Size: ${totalBytes > 0 ? (totalBytes / (1024 * 1024)).toFixed(2) + " MB" : "chunked/unknown"})...`);
-
-  let downloadedBytes = 0;
-  let lastLoggedMb = 0;
-  const writer = fs.createWriteStream(targetFilePath);
-
-  response.data.on("data", (chunk) => {
-    downloadedBytes += chunk.length;
-    const currentMb = Math.floor(downloadedBytes / (5 * 1024 * 1024)) * 5;
-    if (currentMb > lastLoggedMb) {
-      lastLoggedMb = currentMb;
-      const progressStr = totalBytes > 0
-        ? ` (${Math.round((downloadedBytes / totalBytes) * 100)}%)`
-        : "";
-      console.log(`[YouTube-Downloader] [Stream] Received: ${(downloadedBytes / (1024 * 1024)).toFixed(1)} MB${progressStr}`);
-    }
-  });
-
-  response.data.pipe(writer);
-
-  await new Promise((resolve, reject) => {
-    writer.on("finish", resolve);
-    writer.on("error", reject);
-    response.data.on("error", reject);
-  });
-
-  if (!fs.existsSync(targetFilePath)) {
-    throw new Error("Target file was not created on disk.");
-  }
-
-  const stat = fs.statSync(targetFilePath);
-  if (stat.size < 10000) {
-    cleanupFile(targetFilePath);
-    throw new Error(`Downloaded video file is corrupt or too small (${stat.size} bytes).`);
-  }
-
-  console.log(`[YouTube-Downloader] [Stream] Download complete: ${(stat.size / (1024 * 1024)).toFixed(2)} MB written to ${path.basename(targetFilePath)}`);
-  return targetFilePath;
 }
 
 // ── Strategy 1: yt-dlp with Residential Proxy & Android Spoofing ──────────────
@@ -387,28 +416,29 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
   console.log(`[YouTube-Downloader] [Tier 1: yt-dlp] Initializing. Proxy: ${maskProxyUrl(proxyUrl)}, Cookies: ${effectiveCookies ? "available" : "none"}`);
 
-  // Multi-tier client configurations: tries direct unproxied first (fastest and clean),
-  // then proxied (if configured), then authenticated cookies, then alternative clients.
+  // Multi-tier client configurations: prioritizes Web client + cookies + proxy first
   const clientStrategies = [
-    // Tier 1: Direct Android & Android VR clients (unproxied — bypasses datacenter blocks cleanly)
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
-    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Android VR direct (no cookies)" },
+    // Priority 1: Web client + cookies via residential proxy (bypasses datacenter blocks & bot detection)
+    ...(effectiveCookies && proxyUrl ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Web client + cookies via proxy" },
+    ] : []),
 
-    // Tier 2: Proxied Android clients (if proxy configured)
+    // Priority 2: Web client with cookies direct
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Web client + cookies direct" },
+    ] : []),
+
+    // Priority 3: Proxied Android clients
     ...(proxyUrl ? [
       { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Android client via proxy" },
       { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Android VR via proxy" },
     ] : []),
 
-    // Tier 3: Cookies strategies (Web/MWeb clients)
-    ...(effectiveCookies ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Web client + cookies direct" },
-      ...(proxyUrl ? [
-        { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Web client + cookies via proxy" },
-      ] : []),
-    ] : []),
+    // Priority 4: Direct Android clients
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
+    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Android VR direct (no cookies)" },
 
-    // Tier 4: iOS and TV Embedded clients
+    // Priority 5: iOS and TV Embedded clients
     { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "iOS client direct" },
     { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "TV Embedded direct" },
     ...(proxyUrl ? [
@@ -833,18 +863,23 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
   const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
 
   const strategies = [
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Section Android direct (no cookies)" },
-    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Section Android VR direct (no cookies)" },
+    // Priority 1: Web client + cookies via residential proxy (bypasses datacenter blocks & bot detection)
+    ...(effectiveCookies && proxyUrl ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Section Web + cookies via proxy" },
+    ] : []),
+    // Priority 2: Web client with cookies direct
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Section Web + cookies direct" },
+    ] : []),
+    // Priority 3: Proxied Android clients
     ...(proxyUrl ? [
       { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Section Android via proxy" },
       { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Section Android VR via proxy" },
     ] : []),
-    ...(effectiveCookies ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Section Web + cookies direct" },
-      ...(proxyUrl ? [
-        { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Section Web + cookies via proxy" },
-      ] : []),
-    ] : []),
+    // Priority 4: Direct Android clients
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Section Android direct (no cookies)" },
+    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Section Android VR direct (no cookies)" },
+    // Priority 5: iOS and TV Embedded clients
     { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "Section iOS direct" },
     { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "Section TV Embedded direct" },
   ];
@@ -1010,7 +1045,7 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     }
   }
 
-  results.buildVersion = "hybrid-v2";
+  results.buildVersion = "hybrid-v3";
   return results;
 }
 
