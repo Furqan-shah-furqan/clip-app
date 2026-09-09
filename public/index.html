@@ -146,20 +146,21 @@
                   </div>
                 </div>
 
-                <!-- Embedded YouTube Video Metadata -->
-                <div
-                  class="yt-info-preview opus-info-preview mp-embedded-meta"
-                  id="ytInfoPreview"
-                  style="display: none;"
-                >
-                  <img class="yt-thumb" id="ytThumb" src="" alt="thumbnail" />
-                  <div class="yt-info-text">
-                    <strong id="ytTitle"></strong>
-                    <small id="ytDuration"></small>
-                  </div>
+                <!-- Hidden metadata holders (thumbnail becomes card bg, title shown below) -->
+                <div style="display:none;">
+                  <img id="ytThumb" src="" alt="thumbnail" />
+                  <span id="ytTitle"></span>
+                  <span id="ytDuration"></span>
+                  <div id="ytInfoPreview"></div>
                 </div>
 
-                <!-- Sleek Progress Track -->
+                <!-- Spacer to push title+bar to bottom -->
+                <div class="mp-spacer"></div>
+
+                <!-- Video title above progress bar -->
+                <div class="mp-video-title" id="mpVideoTitle"></div>
+
+                <!-- Progress bar at the bottom -->
                 <div class="mp-track">
                   <div class="mp-fill" id="progressFill" style="width: 0%;"></div>
                   <div class="mp-status-pill" id="progressLabel">Analyzing Video...</div>
