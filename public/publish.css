@@ -31,7 +31,7 @@ body.publish-page {
   background: #ffffff !important; /* Pure white background framing the container */
   color: #f6f4ef;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   display: flex;
@@ -139,7 +139,7 @@ input[type="submit"],
   height: 32px;
   border-radius: 10px;
   background: #1a1b1d;
-  color: #d9a535;
+  color: #ffffff;
   font-weight: 900;
   font-size: 13px;
   display: grid;
@@ -152,8 +152,8 @@ input[type="submit"],
 }
 
 .eyebrow {
-  color: #d9a535;
-  font-size: 10px;
+  color: #ffffff;
+  font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -163,7 +163,7 @@ input[type="submit"],
 
 .topbar-title {
   color: #ffffff;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;
@@ -182,7 +182,7 @@ input[type="submit"],
   border-radius: 999px;
   background: #1a1b1d;
   color: #a8a19a;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   gap: 6px;
   border: none !important;
@@ -198,13 +198,13 @@ input[type="submit"],
 }
 
 .publish-live-badge.is-active {
-  background: rgba(217, 165, 53, 0.15);
-  color: #f1cf74;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 
 .publish-live-badge.is-active .live-dot {
-  background: #d9a535;
-  box-shadow: 0 0 8px #d9a535;
+  background: #ffffff;
+  box-shadow: 0 0 8px #ffffff;
 }
 
 .topbar-actions {
@@ -217,9 +217,9 @@ input[type="submit"],
   height: 32px;
   padding: 0 18px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #d9a535 0%, #b8861e 100%);
+  background: #ffffff;
   color: #000000;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   border: none !important;
   cursor: pointer;
@@ -227,8 +227,8 @@ input[type="submit"],
 }
 
 .primary-btn:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 0 15px rgba(217, 165, 53, 0.4);
+  filter: brightness(1.08);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.35);
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -308,13 +308,13 @@ input[type="submit"],
   flex-shrink: 0;
 }
 .stat-dot--accounts { background: #00e5ff; box-shadow: 0 0 6px #00e5ff; }
-.stat-dot--queued { background: #f1cf74; box-shadow: 0 0 6px #f1cf74; }
+.stat-dot--queued { background: #ffffff; box-shadow: 0 0 6px rgba(255, 255, 255, 0.6); }
 .stat-dot--published { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
 .stat-dot--failed { background: #ff7c6c; box-shadow: 0 0 6px #ff7c6c; }
 
 .stat-label {
   color: #a8a19a;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -325,7 +325,7 @@ input[type="submit"],
 }
 
 .stat-card strong {
-  font-size: 22px;
+  font-size: 21px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -335,7 +335,7 @@ input[type="submit"],
 }
 
 .stat-queued {
-  color: #f1cf74 !important;
+  color: #ffffff !important;
 }
 
 .stat-published {
@@ -362,10 +362,10 @@ input[type="submit"],
   box-sizing: border-box;
 }
 
-/* ─── YELLOW SCROLLBAR ON 1ST COLUMN (Matching Button, Inset) ─── */
+/* ─── WHITE SCROLLBAR ON 1ST COLUMN (Inset) ─── */
 .publish-card.preview-card {
   scrollbar-width: thin;
-  scrollbar-color: #d9a535 transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 .publish-card.preview-card::-webkit-scrollbar {
@@ -379,17 +379,17 @@ input[type="submit"],
 }
 
 .publish-card.preview-card::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #d9a535 0%, #b8861e 100%);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 999px;
-  box-shadow: 0 0 10px rgba(217, 165, 53, 0.45);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
 }
 
 .publish-card.preview-card::-webkit-scrollbar-thumb:hover {
-  background: #f1cf74;
-  box-shadow: 0 0 14px rgba(241, 207, 116, 0.7);
+  background: #ffffff;
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.5);
 }
 
-/* ─── VIDEO STAGE (+50px More Height = 212px Height) ─────── */
+/* ─── VIDEO STAGE (Decreased 50px Height: 162px Height) ─────── */
 .selected-clip-card {
   display: grid;
   grid-template-columns: 125px 1fr;
@@ -406,7 +406,7 @@ input[type="submit"],
 .selected-clip-media {
   position: relative;
   width: 125px !important;
-  height: 212px !important; /* Increased +50px more (from 162px to 212px) */
+  height: 162px !important; /* Decreased 50px height as requested (from 212px to 162px) */
   border-radius: 20px;
   overflow: hidden;
   background: #1c1d22;
@@ -440,7 +440,7 @@ input[type="submit"],
 
 .fallback-icon {
   font-size: 20px;
-  color: #d9a535;
+  color: #ffffff;
 }
 
 .selected-clip-info {
@@ -457,8 +457,8 @@ input[type="submit"],
 }
 
 .selected-clip-label {
-  color: #d9a535;
-  font-size: 10px;
+  color: #ffffff;
+  font-size: 9.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -466,17 +466,17 @@ input[type="submit"],
 
 .selected-clip-ratio {
   padding: 2px 8px;
-  background: rgba(217, 165, 53, 0.15);
-  color: #f1cf74;
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
   border-radius: 999px;
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.05em;
 }
 
 .selected-clip-info h3 {
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   margin: 2px 0 0 0;
   white-space: nowrap;
@@ -646,9 +646,9 @@ input[type="submit"],
   height: 26px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(217, 165, 53, 0.12);
-  color: #f1cf74;
-  font-size: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 9.5px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -672,7 +672,7 @@ input[type="submit"],
 
 .field span {
   color: #a8a19a;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -688,7 +688,7 @@ textarea {
   border-radius: 25px !important;
   padding: 10px 16px !important;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   outline: none;
   box-sizing: border-box;
   transition: background 0.18s ease, box-shadow 0.18s ease;
@@ -698,7 +698,7 @@ input:focus,
 select:focus,
 textarea:focus {
   background: #25262c !important;
-  box-shadow: 0 0 0 2px rgba(217, 165, 53, 0.4) !important;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4) !important;
 }
 
 textarea {
@@ -722,31 +722,31 @@ textarea {
   gap: 8px;
 }
 
-/* ─── SUBMIT BUTTON (Centered, 25px Radius, Gold Gradient) ── */
+/* ─── SUBMIT BUTTON (Centered, 25px Radius, Pure White) ────── */
 .submit-btn {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
   width: 100% !important;
-  min-height: 48px;
-  height: 48px;
+  min-height: 46px;
+  height: 46px;
   border-radius: 25px !important;
   border: none !important;
-  background: linear-gradient(135deg, #d9a535 0%, #b8861e 100%) !important;
+  background: #ffffff !important;
   color: #000000 !important;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 800;
   cursor: pointer;
   margin-top: 2px;
-  box-shadow: 0 4px 20px rgba(217, 165, 53, 0.35);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.35);
   transition: all 0.2s ease;
   box-sizing: border-box;
 }
 
 .submit-btn:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 6px 25px rgba(217, 165, 53, 0.55);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 25px rgba(255, 255, 255, 0.55);
   transform: translateY(-1px);
 }
 
@@ -885,4 +885,198 @@ textarea {
   .two-col.clip-title-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ─── DAY / NIGHT PILL TOGGLE (Matching Home Page) ────────── */
+.day-night-toggle {
+  position: relative;
+  width: 148px;
+  height: 34px;
+  border-radius: 9999px;
+  background: #000000;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 3px;
+  user-select: none;
+  transition: background 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.28s ease;
+  overflow: hidden;
+}
+
+body.publish-page.theme-light .day-night-toggle {
+  background: #e9ecef;
+  border-color: #ced4da;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.dnt-thumb {
+  position: absolute;
+  top: 2px;
+  left: 3px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #000000;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.32s cubic-bezier(0.34, 1.25, 0.64, 1);
+  z-index: 3;
+}
+
+body.publish-page.theme-light .dnt-thumb {
+  transform: translateX(113px);
+  border-color: #111827;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+.dnt-icon {
+  width: 14px;
+  height: 14px;
+  color: #000000;
+  stroke: #000000;
+  stroke-width: 2.2;
+}
+
+.dnt-icon-moon {
+  display: block;
+}
+.dnt-icon-sun {
+  display: none;
+}
+
+body.publish-page.theme-light .dnt-icon-moon {
+  display: none;
+}
+body.publish-page.theme-light .dnt-icon-sun {
+  display: block;
+}
+
+.dnt-text {
+  font-family: 'Montserrat', 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.dnt-text-night {
+  position: absolute;
+  right: 12px;
+  color: #ffffff;
+  display: block;
+}
+
+.dnt-text-day {
+  position: absolute;
+  left: 14px;
+  color: #000000;
+  display: none;
+}
+
+body.publish-page.theme-light .dnt-text-night {
+  display: none;
+}
+body.publish-page.theme-light .dnt-text-day {
+  display: block;
+}
+
+/* Light Mode Theme Styles for Publish Page */
+body.publish-page.theme-light {
+  background: #000000 !important;
+}
+
+body.publish-page.theme-light .publish-main-container {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .publish-topbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+body.publish-page.theme-light .topbar-title,
+body.publish-page.theme-light .eyebrow {
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .brand-mark {
+  background: #f1f3f5 !important;
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .ce-back-btn {
+  background: #f1f3f5 !important;
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .publish-live-badge {
+  background: #f1f3f5 !important;
+  color: #495057 !important;
+}
+
+body.publish-page.theme-light .publish-live-badge.is-active {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+body.publish-page.theme-light .primary-btn {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+body.publish-page.theme-light .publish-card {
+  background: #f8f9fa !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06) !important;
+}
+
+body.publish-page.theme-light .stat-card {
+  background: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.publish-page.theme-light .stat-card strong {
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .selected-clip-card {
+  background: #ffffff !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+body.publish-page.theme-light .selected-clip-info h3,
+body.publish-page.theme-light .card-title,
+body.publish-page.theme-light .status-banner strong {
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .selected-clip-label {
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light .selected-clip-ratio {
+  background: #e9ecef !important;
+  color: #111827 !important;
+}
+
+body.publish-page.theme-light input,
+body.publish-page.theme-light select,
+body.publish-page.theme-light textarea {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #e9ecef !important;
+}
+
+body.publish-page.theme-light .submit-btn {
+  background: #111827 !important;
+  color: #ffffff !important;
 }

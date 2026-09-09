@@ -20,6 +20,7 @@ const state = {
 const els = {};
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initPublishTheme();
   cacheDom();
   forceCloseEditModal();
   bindEvents();
@@ -81,9 +82,38 @@ function cacheDom() {
   els.youtubeChannelInput = document.getElementById("youtubeChannelInput");
   els.useYoutubeChannelBtn = document.getElementById("useYoutubeChannelBtn");
   els.youtubeChannelHint = document.getElementById("youtubeChannelHint");
+  els.themeSwitchBtn = document.getElementById("themeSwitchBtn");
+}
+
+function initPublishTheme() {
+  const saved = localStorage.getItem("clipflow-theme");
+  const isDark = saved === null ? true : saved !== "light";
+  document.body.classList.toggle("theme-dark", isDark);
+  document.body.classList.toggle("theme-light", !isDark);
+  const btn = document.getElementById("themeSwitchBtn");
+  if (btn) {
+    btn.setAttribute("aria-checked", isDark ? "true" : "false");
+    btn.classList.toggle("is-day", !isDark);
+    btn.classList.toggle("is-night", isDark);
+  }
+}
+
+function togglePublishTheme() {
+  const isDark = document.body.classList.contains("theme-dark");
+  const newDark = !isDark;
+  localStorage.setItem("clipflow-theme", newDark ? "dark" : "light");
+  initPublishTheme();
 }
 
 function bindEvents() {
+  els.themeSwitchBtn?.addEventListener("click", togglePublishTheme);
+  els.themeSwitchBtn?.addEventListener("keydown", (e) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      togglePublishTheme();
+    }
+  });
+
   els.refreshBtn?.addEventListener("click", () => {
     loadPublishCenter({
       silent: false,

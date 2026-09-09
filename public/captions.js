@@ -364,27 +364,21 @@ function cacheDom() {
 
 // Theme
 function updateThemeState() {
-  document.body.classList.toggle("theme-dark", !!themeToggle?.checked);
+  const saved = localStorage.getItem("clipflow-theme");
+  const isDark = saved === null ? true : saved !== "light";
+  document.body.classList.toggle("theme-dark", isDark);
+  document.body.classList.toggle("theme-light", !isDark);
 }
 function initTheme() {
-  const isDark = localStorage.getItem("clipflow-theme") === "dark";
-  if (themeToggle) themeToggle.checked = isDark;
-  updateModePill();
   updateThemeState();
 }
 function updateModePill() {
   if (!modePill) return;
-  modePill.textContent = themeToggle?.checked ? "Dark" : "Light";
+  const isDark = document.body.classList.contains("theme-dark");
+  modePill.textContent = isDark ? "Dark" : "Light";
 }
 function bindTheme() {
-  themeToggle?.addEventListener("change", () => {
-    localStorage.setItem(
-      "clipflow-theme",
-      themeToggle.checked ? "dark" : "light",
-    );
-    updateModePill();
-    updateThemeState();
-  });
+  // Theme toggle removed from edit page as requested
 }
 
 // Tabs
