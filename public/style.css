@@ -5390,7 +5390,9 @@ body.home-page.theme-light .opus-project-empty {
 
 /* ─── 5. PURE MONOCHROME COLOR PALETTE CLEANUP ──────────────── */
 /* Theme strictly solid black (#000000) and pure white (#FFFFFF) */
-body.home-page.theme-dark,
+/* NOTE: body.home-page.theme-dark is intentionally excluded — body keeps its
+   white (#ffffff) background so the 7px white page frame remains visible around
+   the main black container. Only the inner container and topbar are black. */
 body.home-page.theme-dark .home-main-container,
 body.home-page.theme-dark .home-topbar {
   background: #000000 !important;
