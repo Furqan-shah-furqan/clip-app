@@ -982,7 +982,16 @@ function startModalCaptionLoop(clipIndex) {
 
 async function openClip(index) {
   const clip = state.generatedClips[index];
-  if (!clip?.downloadUrl || !clipModal || !clipModalVideo) return;
+  if (!clip || !clipModal || !clipModalVideo) return;
+
+  const rawFn = clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : "");
+  if (!clip.downloadUrl && rawFn) {
+    clip.downloadUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+  }
+  if (!clip.previewUrl && rawFn) {
+    clip.previewUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+  }
+  if (!clip.downloadUrl && !clip.previewUrl) return;
 
   state.activeModalClipIndex = index;
 
@@ -1019,6 +1028,38 @@ async function openClip(index) {
   startModalCaptionLoop(index);
 }
 
+// Sync top or selected clip to caption editor session
+function syncActiveClipToCaptionSession(index = 0) {
+  const clip = state.generatedClips[index];
+  if (!clip) return;
+
+  const rawFn = clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : "");
+  if (!clip.previewUrl && rawFn) {
+    clip.previewUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+  }
+  if (!clip.downloadUrl && rawFn) {
+    clip.downloadUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+  }
+  if (!clip.thumbnail && state.uploadedProject?.thumbnail) {
+    clip.thumbnail = state.uploadedProject.thumbnail;
+  }
+
+  try {
+    localStorage.setItem(
+      "clipflow-caption-clip",
+      JSON.stringify({
+        clip,
+        index,
+        captions: state.clipCaptions[index] || clip.captions || [],
+        captionStyle: state.captionStyle,
+        updatedAt: Date.now(),
+      }),
+    );
+  } catch (err) {
+    console.warn("Could not sync caption session:", err);
+  }
+}
+
 // Navigate to caption editor for a specific clip
 function editClipCaptions(index) {
   console.log("EDIT CLICKED:", index);
@@ -1030,23 +1071,7 @@ function editClipCaptions(index) {
     return;
   }
 
-  if (!clip.previewUrl && clip.fileName) {
-    clip.previewUrl = `/api/files/download/${encodeURIComponent(clip.fileName)}`;
-  }
-  if (!clip.downloadUrl && clip.fileName) {
-    clip.downloadUrl = `/api/files/download/${encodeURIComponent(clip.fileName)}`;
-  }
-
-  localStorage.setItem(
-    "clipflow-caption-clip",
-    JSON.stringify({
-      clip,
-      index,
-      captions: state.clipCaptions[index] || [],
-      captionStyle: state.captionStyle,
-    }),
-  );
-
+  syncActiveClipToCaptionSession(index);
   window.location.href = `captions.html?index=${index}`;
 }
 
@@ -1067,10 +1092,21 @@ function renderGeneratedClips() {
     return;
   }
 
+  // Automatically keep caption session synced to the newest top clip
+  syncActiveClipToCaptionSession(0);
+
   generatedClipsGrid.innerHTML = state.generatedClips
     .map((clip, index) => {
       const hook = escapeHtml(clip.hook || autoHookForClip(index));
-      const downloadUrl = escapeHtml(clip.downloadUrl || "");
+      const rawFn = clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : "");
+      let downloadUrl = clip.downloadUrl || "";
+      if (!downloadUrl && rawFn) {
+        downloadUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+        clip.downloadUrl = downloadUrl;
+      }
+      const safeDownloadUrl = escapeHtml(downloadUrl);
+      const videoSrc = downloadUrl ? (downloadUrl.includes("#t=") ? downloadUrl : `${downloadUrl}#t=0.001`) : "";
+      const posterUrl = escapeHtml(clip.thumbnail || state.uploadedProject?.thumbnail || "");
       const num = String(index + 1).padStart(2, "0");
 
       const exactDuration =
@@ -1085,26 +1121,16 @@ function renderGeneratedClips() {
             );
 
       return `
-      <article class="clip-card ${clip.smartScore ? "smart-generated-card" : ""}">
+      <article class="clip-card ${clip.smartScore ? "smart-generated-card" : ""}" data-card-index="${index}" style="cursor: pointer;" title="Click to edit captions">
         <div class="clip-card-video">
-  ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
+          ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
 
-  ${
-    downloadUrl
-      ? `
-        <a
-          class="clip-video-link"
-          href="${downloadUrl}"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Open clip in new tab"
-        >
-          <video src="${downloadUrl}" muted controls preload="metadata"></video>
-        </a>
-      `
-      : `<video muted controls preload="metadata"></video>`
-  }
-</div>
+          ${
+            videoSrc
+              ? `<video src="${videoSrc}" poster="${posterUrl}" muted loop playsinline preload="auto"></video>`
+              : `<video muted controls preload="metadata"></video>`
+          }
+        </div>
         <div class="clip-card-footer">
           <div class="clip-card-info">
             <span class="clip-card-num">#${num}</span>
@@ -1114,55 +1140,101 @@ function renderGeneratedClips() {
             ${clip.previewText ? `<span class="smart-preview-line">${escapeHtml(clip.previewText)}</span>` : ""}
           </div>
           <div class="clip-icon-btns">
-  <a
-    class="clip-icon-btn"
-    href="${downloadUrl || "#"}"
-    target="_blank"
-    rel="noopener noreferrer"
-    data-action="preview"
-    data-index="${index}"
-    title="Preview / Open in new tab"
-  >
-    ${SVG_PLAY}
-  </a>
+            <a
+              class="clip-icon-btn"
+              href="${safeDownloadUrl || "#"}"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-action="preview"
+              data-index="${index}"
+              title="Preview / Open in new tab"
+            >
+              ${SVG_PLAY}
+            </a>
 
-  <a
-    class="clip-icon-btn edit"
-    href="captions.html?index=${index}"
-    data-action="edit"
-    data-index="${index}"
-    title="Edit Captions"
-  >
-    ${SVG_EDIT}
-  </a>
+            <a
+              class="clip-icon-btn edit"
+              href="captions.html?index=${index}"
+              data-action="edit"
+              data-index="${index}"
+              title="Edit Captions"
+            >
+              ${SVG_EDIT}
+            </a>
 
-  <a
-    class="clip-icon-btn"
-    href="${downloadUrl || "#"}"
-    target="_blank"
-    rel="noopener noreferrer"
-    data-action="download"
-    data-index="${index}"
-    title="Download / Open in new tab"
-  >
-    ${SVG_DOWNLOAD}
-  </a>
+            <a
+              class="clip-icon-btn"
+              href="${safeDownloadUrl || "#"}"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-action="download"
+              data-index="${index}"
+              title="Download / Open in new tab"
+            >
+              ${SVG_DOWNLOAD}
+            </a>
 
-  <button
-    type="button"
-    class="clip-icon-btn danger"
-    data-action="delete"
-    data-index="${index}"
-    title="Delete"
-  >
-    ${SVG_DELETE}
-  </button>
-</div>
+            <button
+              type="button"
+              class="clip-icon-btn danger"
+              data-action="delete"
+              data-index="${index}"
+              title="Delete"
+            >
+              ${SVG_DELETE}
+            </button>
+          </div>
         </div>
       </article>
     `;
     })
     .join("");
+
+  // Attach interactive preview and frame decode hooks to every card
+  generatedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
+    const vid = card.querySelector("video");
+    const idx = Number(card.dataset.cardIndex);
+
+    if (vid) {
+      vid.addEventListener("loadedmetadata", () => {
+        if (vid.currentTime === 0) {
+          try { vid.currentTime = 0.001; } catch {}
+        }
+      });
+      vid.addEventListener("error", () => {
+        const curSrc = vid.getAttribute("src") || vid.src || "";
+        if (curSrc.includes("/api/files/download/")) {
+          const fn = curSrc.split("/api/files/download/")[1]?.split(/[?#]/)[0];
+          if (fn && !vid.dataset.triedExports) {
+            vid.dataset.triedExports = "true";
+            vid.src = `/exports/${fn}#t=0.001`;
+            vid.load();
+          }
+        }
+      });
+    }
+
+    card.addEventListener("mouseenter", () => {
+      if (vid) {
+        vid.play().catch(() => {});
+      }
+    });
+
+    card.addEventListener("mouseleave", () => {
+      if (vid) {
+        vid.pause();
+        try { vid.currentTime = 0.001; } catch {}
+      }
+    });
+
+    // Clicking anywhere on the card (except action buttons) opens Edit Captions
+    card.addEventListener("click", (evt) => {
+      if (evt.target.closest("[data-action]")) return;
+      if (!Number.isNaN(idx)) {
+        editClipCaptions(idx);
+      }
+    });
+  });
 }
 
 generatedClipsGrid?.addEventListener("click", async (event) => {

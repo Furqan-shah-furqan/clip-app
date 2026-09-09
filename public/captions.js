@@ -877,6 +877,42 @@ function loadSession() {
   const paramIndex = urlParams.get("index");
   const hasParamIndex = paramIndex !== null && !isNaN(parseInt(paramIndex, 10));
   const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
+  const targetIdx = requestedIdx !== null ? requestedIdx : (session?.index != null ? Number(session.index) : 0);
+
+  // Check studio session
+  let studio = null;
+  let studioClip = null;
+  const studioRaw = localStorage.getItem("clipflow-studio-session");
+  if (studioRaw) {
+    try {
+      studio = JSON.parse(studioRaw);
+      const clips = Array.isArray(studio.generatedClips)
+        ? studio.generatedClips
+        : [];
+      studioClip = clips[targetIdx] || (requestedIdx === null ? (clips[0] || studio.generatedClip) : null);
+    } catch {}
+  }
+
+  // If studio has a clip, check if it's different/newer than the stored caption session
+  if (studioClip && getClipSource(studioClip)) {
+    const sessionFn = session?.clip ? (session.clip.fileName || session.clip.downloadUrl || session.clip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0] : "";
+    const studioFn = (studioClip.fileName || studioClip.downloadUrl || studioClip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0];
+
+    // If requested index is different, or session has no clip, or session clip points to a different/old file
+    if (!session?.clip || (requestedIdx !== null && Number(session.index) !== requestedIdx) || (sessionFn && studioFn && sessionFn !== studioFn)) {
+      session = {
+        clip: studioClip,
+        index: targetIdx,
+        captions:
+          (studio.clipCaptions && studio.clipCaptions[targetIdx]) || studioClip.captions || [],
+        captionStyle: studio.captionStyle || null,
+      };
+      try {
+        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      } catch {}
+      return session;
+    }
+  }
 
   // If session has a clip and matches requestedIdx (or no index was requested), return it
   if (session?.clip && getClipSource(session.clip)) {
@@ -885,27 +921,18 @@ function loadSession() {
     }
   }
 
-  const targetIdx = requestedIdx !== null ? requestedIdx : 0;
-
-  // Fallback 1: check studio session
-  const studioRaw = localStorage.getItem("clipflow-studio-session");
-  if (studioRaw) {
+  if (studioClip && getClipSource(studioClip)) {
+    session = {
+      clip: studioClip,
+      index: targetIdx,
+      captions:
+        (studio.clipCaptions && studio.clipCaptions[targetIdx]) || studioClip.captions || [],
+      captionStyle: studio.captionStyle || null,
+    };
     try {
-      const studio = JSON.parse(studioRaw);
-      const clips = Array.isArray(studio.generatedClips)
-        ? studio.generatedClips
-        : [];
-      const clip = clips[targetIdx] || (requestedIdx === null ? (clips[0] || studio.generatedClip) : null);
-      if (clip) {
-        return {
-          clip,
-          index: targetIdx,
-          captions:
-            (studio.clipCaptions && studio.clipCaptions[targetIdx]) || clip.captions || [],
-          captionStyle: studio.captionStyle || null,
-        };
-      }
+      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     } catch {}
+    return session;
   }
 
   // Fallback 2: check all projects cache in localStorage
@@ -3410,9 +3437,9 @@ async function init() {
   const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
 
   // If session is missing, has no playable clip source, or session index does not match requested index, fetch from projects API
+  const searchIdx = requestedIdx !== null ? requestedIdx : 0;
   if (
-    (!session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)) &&
-    requestedIdx !== null
+    !session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)
   ) {
     try {
       const pRes = await fetch("/api/clips/projects");
@@ -3420,18 +3447,18 @@ async function init() {
         const pData = await pRes.json();
         const projects = pData.projects || [];
         for (const pSummary of projects) {
-          if (pSummary.clipCount > requestedIdx) {
+          if (pSummary.clipCount > searchIdx) {
             const detailRes = await fetch(`/api/clips/projects/${pSummary.id}`);
             if (detailRes.ok) {
               const detailData = await detailRes.json();
               const fullProj = detailData.project;
-              if (fullProj && fullProj.clips && fullProj.clips[requestedIdx]) {
-                const clip = fullProj.clips[requestedIdx];
+              if (fullProj && fullProj.clips && fullProj.clips[searchIdx]) {
+                const clip = fullProj.clips[searchIdx];
                 session = {
                   clip,
-                  index: requestedIdx,
+                  index: searchIdx,
                   captions:
-                    (fullProj.clipCaptions && fullProj.clipCaptions[requestedIdx]) ||
+                    (fullProj.clipCaptions && fullProj.clipCaptions[searchIdx]) ||
                     clip.captions ||
                     [],
                   captionStyle: fullProj.captionStyle || null,
@@ -3490,6 +3517,9 @@ async function init() {
     if (src) {
       captionVideo.src = src;
       captionVideo.preload = "auto";
+      if (session.clip.thumbnail) {
+        captionVideo.poster = session.clip.thumbnail;
+      }
       captionVideo.load();
       try {
         captionVideo.currentTime = 0;
@@ -3502,22 +3532,37 @@ async function init() {
       captionVideo.dataset.hasErrorFallback = "true";
       captionVideo.addEventListener("error", () => {
         const currentSrc = captionVideo.getAttribute("src") || captionVideo.src || "";
-        if (currentSrc.includes("/api/files/download/")) {
-          const fn = currentSrc.split("/api/files/download/")[1]?.split("?")[0];
-          if (fn && !captionVideo.dataset.triedExports) {
-            captionVideo.dataset.triedExports = "true";
-            captionVideo.src = `/exports/${fn}`;
-            captionVideo.load();
-            return;
-          }
+        const fn = currentSrc.split(/[/\\]/).pop()?.split(/[?#]/)[0];
+        if (currentSrc.includes("/api/files/download/") && fn && !captionVideo.dataset.triedExports) {
+          captionVideo.dataset.triedExports = "true";
+          captionVideo.src = `/exports/${fn}`;
+          captionVideo.load();
+          return;
         }
-        if (currentSrc.includes("/exports/")) {
-          const fn = currentSrc.split("/exports/")[1]?.split("?")[0];
-          if (fn && !captionVideo.dataset.triedUploads) {
-            captionVideo.dataset.triedUploads = "true";
-            captionVideo.src = `/uploads/${fn}`;
-            captionVideo.load();
-            return;
+        if (currentSrc.includes("/exports/") && fn && !captionVideo.dataset.triedUploads) {
+          captionVideo.dataset.triedUploads = "true";
+          captionVideo.src = `/uploads/${fn}`;
+          captionVideo.load();
+          return;
+        }
+        if (!captionVideo.dataset.triedStudioFallback) {
+          captionVideo.dataset.triedStudioFallback = "true";
+          const studioRaw = localStorage.getItem("clipflow-studio-session");
+          if (studioRaw) {
+            try {
+              const studio = JSON.parse(studioRaw);
+              const clips = Array.isArray(studio.generatedClips) ? studio.generatedClips : [];
+              for (const c of clips) {
+                const alt = getClipSource(c);
+                if (alt && alt !== currentSrc) {
+                  editorState.clip = c;
+                  session.clip = c;
+                  captionVideo.src = alt;
+                  captionVideo.load();
+                  return;
+                }
+              }
+            } catch {}
           }
         }
       });
