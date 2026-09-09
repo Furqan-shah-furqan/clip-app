@@ -1964,17 +1964,23 @@ function loadProjectIntoState(project = {}, options = {}) {
   if (state.uploadedProject?.source === "youtube" || state.uploadedProject?.sourceUrl || state.uploadedProject?.videoId) {
     const sUrl = state.uploadedProject.sourceUrl || (state.uploadedProject.videoId ? `https://www.youtube.com/watch?v=${state.uploadedProject.videoId}` : "");
     if (ytUrlInput && sUrl) ytUrlInput.value = sUrl;
-    if (ytInfoPreview) ytInfoPreview.style.display = "flex";
+    const savedThumb = state.uploadedProject.thumbnail || project.thumbnail || "";
+    const savedTitle = state.uploadedProject.originalName || state.uploadedProject.title || project.title || "YouTube video";
     const mpCard = document.getElementById("modernProgressCard");
-    if (mpCard) mpCard.style.display = "flex";
-    if (ytThumb) ytThumb.src = state.uploadedProject.thumbnail || project.thumbnail || "";
-    if (ytTitle) {
-      ytTitle.textContent =
-        state.uploadedProject.originalName ||
-        state.uploadedProject.title ||
-        project.title ||
-        "YouTube video";
+    if (mpCard) {
+      if (savedThumb) mpCard.style.backgroundImage = `url(${savedThumb})`;
+      mpCard.style.display = "flex";
+      // Keep progress bar hidden — only shown when user clicks Get Clips
+      const mpTrackEl = mpCard.querySelector(".mp-track");
+      if (mpTrackEl) mpTrackEl.style.display = "";
     }
+    const mpVideoTitleEl = document.getElementById("mpVideoTitle");
+    if (mpVideoTitleEl && savedTitle) {
+      mpVideoTitleEl.textContent = savedTitle;
+      mpVideoTitleEl.style.display = "block";
+    }
+    if (ytThumb) ytThumb.src = savedThumb;
+    if (ytTitle) ytTitle.textContent = savedTitle;
     if (ytDuration) {
       ytDuration.textContent = formatShortDuration(
         state.videoDurationSeconds || state.uploadedProject.duration || 0,
@@ -3244,6 +3250,20 @@ updateClipPlanner();
 renderProjectHistory([]);
 renderGeneratedClips();
 loadProjectHistory();
+
+// GUARD: ensure progress card is hidden on fresh load if no real session
+;(function guardProgressCard() {
+  const mpCard = document.getElementById("modernProgressCard");
+  if (!mpCard) return;
+  const mpTitle = document.getElementById("mpVideoTitle");
+  const hasTitle = mpTitle && mpTitle.textContent && mpTitle.style.display !== "none";
+  if (!hasTitle) {
+    mpCard.style.display = "none";
+    mpCard.style.backgroundImage = "";
+    const mpTrackEl = mpCard.querySelector(".mp-track");
+    if (mpTrackEl) mpTrackEl.style.display = "";
+  }
+})();
 
 // Restore saved caption style
 const savedStyle = localStorage.getItem("clipflow-caption-style");
