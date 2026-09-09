@@ -461,7 +461,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/bestvideo*+bestaudio/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--merge-output-format", "mp4",
       "--socket-timeout", "30",
@@ -795,9 +795,28 @@ async function downloadYouTubeSourceVideo(input) {
   console.log(`[YouTube-Downloader] Source URL: ${targetUrl}`);
   console.log(`[YouTube-Downloader] Target path: ${finalMp4Target}`);
 
-  let rapidApiError = null;
+  // ── Strategy 1: Prioritized yt-dlp with Residential Proxy & Session Cookies ──
+  const hasProxyAndCookies = Boolean(getProxyUrl() && resolveActiveCookieFile());
+  if (hasProxyAndCookies) {
+    try {
+      console.log(`[YouTube-Downloader] Priority Tier: Attempting yt-dlp via residential proxy + cookies...`);
+      const outputTemplate = path.join(tempDir, `yt_source_${clipStamp}.%(ext)s`);
+      const ytdlpPath = await downloadViaYtDlp({
+        targetUrl,
+        clipStamp,
+        outputTemplate,
+      });
 
-  // ── Strategy 1: RapidAPI ──
+      if (ytdlpPath && fs.existsSync(ytdlpPath) && fs.statSync(ytdlpPath).size > 10000) {
+        console.log(`[YouTube-Downloader] ✅ Source MP4 downloaded via proxied yt-dlp: ${ytdlpPath}`);
+        return ytdlpPath;
+      }
+    } catch (ytdlpErr) {
+      console.warn(`[YouTube-Downloader] Proxied yt-dlp attempt failed: ${ytdlpErr.message}. Trying RapidAPI fallback...`);
+    }
+  }
+
+  // ── Strategy 2: RapidAPI ──
   if (process.env.RAPIDAPI_KEY) {
     try {
       console.log(`[YouTube-Downloader] Attempting RapidAPI download...`);
@@ -814,13 +833,13 @@ async function downloadYouTubeSourceVideo(input) {
     } catch (apiErr) {
       rapidApiError = apiErr;
       const detail = apiErr.response?.data?.message || apiErr.response?.data?.error || apiErr.message;
-      console.warn(`[YouTube-Downloader] RapidAPI download failed: ${detail}. Falling back to yt-dlp...`);
+      console.warn(`[YouTube-Downloader] RapidAPI download failed: ${detail}. Falling back to general yt-dlp...`);
     }
   }
 
-  // ── Strategy 2: yt-dlp with Residential Proxy & Session Cookies ──
+  // ── Strategy 3: General yt-dlp (exhaust all client strategies) ──
   try {
-    console.log(`[YouTube-Downloader] Attempting yt-dlp download (with proxy & cookies)...`);
+    console.log(`[YouTube-Downloader] Attempting general yt-dlp download...`);
     const outputTemplate = path.join(tempDir, `yt_source_${clipStamp}.%(ext)s`);
     const ytdlpPath = await downloadViaYtDlp({
       targetUrl,
@@ -829,11 +848,11 @@ async function downloadYouTubeSourceVideo(input) {
     });
 
     if (ytdlpPath && fs.existsSync(ytdlpPath) && fs.statSync(ytdlpPath).size > 10000) {
-      console.log(`[YouTube-Downloader] ✅ Source MP4 downloaded via yt-dlp: ${ytdlpPath}`);
+      console.log(`[YouTube-Downloader] ✅ Source MP4 downloaded via general yt-dlp: ${ytdlpPath}`);
       return ytdlpPath;
     }
   } catch (ytdlpErr) {
-    console.error(`[YouTube-Downloader] yt-dlp fallback also failed: ${ytdlpErr.message}`);
+    console.error(`[YouTube-Downloader] All download pipelines failed: ${ytdlpErr.message}`);
     const apiDetail = rapidApiError?.response?.data?.message || rapidApiError?.message || "RapidAPI not configured or failed";
     throw new Error(
       `YouTube download failed across all pipelines.\n` +
@@ -897,7 +916,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "18/bv*[height<=720]+ba/b[height<=720]/b/best",
+      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/bestvideo*+bestaudio/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--download-sections", section,
       "--force-keyframes-at-cuts",
@@ -1045,7 +1064,7 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     }
   }
 
-  results.buildVersion = "hybrid-v3";
+  results.buildVersion = "hybrid-v4";
   return results;
 }
 
