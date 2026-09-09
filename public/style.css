@@ -5135,6 +5135,7 @@ body.home-page.theme-light .modern-progress-card {
 }
 
 /* ── Progress track at the very bottom ───────────────────── */
+/* Hidden by default — JS shows it ONLY when "Get clips in 1 click" is clicked */
 .mp-track {
   position: relative !important;
   z-index: 3 !important;
@@ -5146,7 +5147,7 @@ body.home-page.theme-light .modern-progress-card {
   border: none !important;
   outline: none !important;
   overflow: hidden !important;
-  display: flex !important;
+  display: none;   /* JS sets display:flex on button click */
   align-items: center !important;
   padding: 0 4px !important;
   margin: 0 !important;

@@ -445,26 +445,10 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   _currentProgress = p;
 
-  const modernProgressCard = document.getElementById("modernProgressCard");
-  if (modernProgressCard) {
-    const mpVideoTitle = document.getElementById("mpVideoTitle");
-    const hasTitleContent = mpVideoTitle && mpVideoTitle.textContent && mpVideoTitle.style.display !== "none";
-    const isWorking = (p > 0 && p < 100) || (label && !["Ready", "Ready ✓"].includes(label));
-    if (isWorking) {
-      modernProgressCard.style.display = "flex";
-    } else if (p >= 100) {
-      modernProgressCard.style.display = "flex";
-      setTimeout(() => {
-        if (_currentProgress >= 100 && modernProgressCard && !hasTitleContent) {
-          modernProgressCard.style.display = "none";
-        }
-      }, 2500);
-    } else {
-      if (!hasTitleContent) {
-        modernProgressCard.style.display = "none";
-      }
-    }
-  }
+  // Card visibility is managed exclusively by:
+  //   - fetchYtInfo (shows card when URL is pasted, no bar)
+  //   - smartClipBtn handler (reveals the progress bar on button click)
+  // updateProgress only updates the fill/percent/label text.
 
   if (progressFill) {
     progressFill.style.width = `${p}%`;
@@ -669,6 +653,9 @@ function resetYoutubeFetchUi() {
       const stillHasTitle = mpVideoTitle && mpVideoTitle.textContent && mpVideoTitle.style.display !== "none";
       if (_currentProgress >= 100 && !stillHasTitle) {
         modernProgressCard.style.display = "none";
+        // Also reset progress bar visibility for next use
+        const mpTrackEl = modernProgressCard.querySelector(".mp-track");
+        if (mpTrackEl) mpTrackEl.style.display = "";
       }
     }, 1500);
   }
@@ -2971,6 +2958,10 @@ smartClipBtn?.addEventListener("click", async () => {
     state.smartSuggestions = [];
     state.uploadRequiredActive = false;
     _currentProgress = 0;
+
+    // Reveal progress bar at bottom of the card (pushes title up)
+    const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
+    if (mpTrackEl) mpTrackEl.style.display = "flex";
 
     updateProgress(0, "Finding viral moments...", 300);
     stopCrawl = startProgressCrawl(88, "Finding and generating smart clips...");
