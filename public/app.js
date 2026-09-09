@@ -659,9 +659,11 @@ function resetYoutubeFetchUi() {
   if (ytFetchBtn) ytFetchBtn.disabled = false;
   if (ytFetchProgress) ytFetchProgress.style.display = "none";
   const modernProgressCard = document.getElementById("modernProgressCard");
-  if (modernProgressCard && _currentProgress >= 100) {
+  const hasYtInfo = ytInfoPreview && ytInfoPreview.style.display !== "none";
+  if (modernProgressCard && _currentProgress >= 100 && !hasYtInfo) {
     setTimeout(() => {
-      if (_currentProgress >= 100) {
+      const stillHasYtInfo = ytInfoPreview && ytInfoPreview.style.display !== "none";
+      if (_currentProgress >= 100 && !stillHasYtInfo) {
         modernProgressCard.style.display = "none";
       }
     }, 1500);
@@ -1316,6 +1318,17 @@ async function fetchYoutubeSource(url, options = {}) {
     if (ytProgressLabel) ytProgressLabel.textContent = "Source ready ✓";
 
     updateProgress(100, "YouTube source ready ✓");
+
+    if (ytThumb && project.thumbnail) ytThumb.src = project.thumbnail;
+    if (ytTitle) ytTitle.textContent = project.originalName || project.title || "YouTube video";
+    if (ytDuration) {
+      ytDuration.textContent = project.duration
+        ? `${Math.floor(project.duration / 60)} min ${project.duration % 60} sec`
+        : (project.metaText || "");
+    }
+    if (ytInfoPreview) ytInfoPreview.style.display = "flex";
+    const mpCard = document.getElementById("modernProgressCard");
+    if (mpCard) mpCard.style.display = "flex";
 
     renderGeneratedClips();
     renderProjectHistory(lastProjectsCache);

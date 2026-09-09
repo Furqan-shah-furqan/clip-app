@@ -4849,40 +4849,41 @@ body.home-page.theme-light .opus-import-brand {
 
 body.home-page .opus-import-card {
   width: min(100%, 640px);
-  padding: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
+  padding: 24px !important;
+  border-radius: 25px !important;
+  background: #000000 !important;
   border: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7) !important;
   display: grid;
   gap: 14px;
+  box-sizing: border-box !important;
 }
 
 body.home-page.theme-light .opus-import-card {
-  background: transparent !important;
+  background: #ffffff !important;
   border: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.12) !important;
 }
 
 body.home-page .opus-link-field {
   min-height: 56px;
-  background: #ffffff !important;
-  color: #000000 !important;
+  background: #141418 !important;
+  color: #ffffff !important;
   border: none !important;
   outline: none !important;
   border-radius: 25px !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 body.home-page .opus-link-field:focus-within {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
 }
 
 body.home-page.theme-light .opus-link-field {
-  background: #000000 !important;
-  color: #ffffff !important;
+  background: #f4f5f7 !important;
+  color: #000000 !important;
   border: none !important;
   outline: none !important;
   border-radius: 25px !important;
@@ -4909,35 +4910,35 @@ body.home-page.theme-light .opus-project-card:hover {
 }
 
 body.home-page .opus-link-icon {
-  color: #000000 !important;
+  color: rgba(255, 255, 255, 0.75) !important;
 }
 
 body.home-page.theme-light .opus-link-icon {
-  color: #ffffff !important;
+  color: rgba(0, 0, 0, 0.6) !important;
 }
 
 body.home-page .opus-url-input {
   background: transparent !important;
-  color: #000000 !important;
+  color: #ffffff !important;
   border: none !important;
   outline: none !important;
   border-radius: 25px !important;
 }
 
 body.home-page .opus-url-input::placeholder {
-  color: rgba(0, 0, 0, 0.45) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
 }
 
 body.home-page.theme-light .opus-url-input {
   background: transparent !important;
-  color: #ffffff !important;
+  color: #000000 !important;
   border: none !important;
   outline: none !important;
   border-radius: 25px !important;
 }
 
 body.home-page.theme-light .opus-url-input::placeholder {
-  color: rgba(255, 255, 255, 0.45) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
 }
 
 body.home-page .opus-main-generate-btn {
@@ -4985,12 +4986,12 @@ body.home-page.theme-light .opus-import-action span {
 .modern-progress-card {
   width: 100% !important;
   margin-top: 14px !important;
-  padding: 12px 18px !important;
+  padding: 14px 18px !important;
   border-radius: 20px !important;
-  background: #000000 !important;
+  background: #121217 !important;
   border: none !important;
   outline: none !important;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6) !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5) !important;
   display: flex !important;
   flex-direction: column !important;
   box-sizing: border-box !important;
@@ -4998,8 +4999,8 @@ body.home-page.theme-light .opus-import-action span {
 }
 
 body.home-page.theme-light .modern-progress-card {
-  background: #ffffff !important;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.08) !important;
+  background: #f4f5f7 !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08) !important;
 }
 
 @keyframes mpSlideIn {
@@ -5395,8 +5396,7 @@ body.home-page.theme-dark .home-topbar {
   background: #000000 !important;
 }
 
-/* Convert all dark grey/slate containers to deep black (#000000) */
-body.home-page.theme-dark .modern-progress-card,
+/* Convert secondary dark grey/slate containers to deep black (#000000) */
 body.home-page.theme-dark .clip-card,
 body.home-page.theme-dark .clips-story-row .clip-card,
 body.home-page.theme-dark .smart-upload-needed-card,
