@@ -4984,9 +4984,11 @@ body.home-page.theme-light .opus-import-action span {
    White card in dark theme · Black card in light theme
    ═══════════════════════════════════════════════════════════ */
 .modern-progress-card {
+  display: none !important;
   width: 100% !important;
-  margin-top: 14px !important;
-  min-height: 180px !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  height: 0 !important;
   padding: 0 !important;
   border-radius: 20px !important;
   /* White card fallback in dark theme (before thumbnail loads) */
@@ -4999,11 +5001,25 @@ body.home-page.theme-light .opus-import-action span {
   box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45) !important;
   position: relative !important;
   overflow: hidden !important;
-  display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
   box-sizing: border-box !important;
+}
+
+.modern-progress-card.is-active {
+  display: flex !important;
+  min-height: 180px !important;
+  height: auto !important;
+  margin-top: 14px !important;
   animation: mpSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.modern-progress-card.is-hidden {
+  display: none !important;
+  min-height: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Light theme: black card */

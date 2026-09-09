@@ -595,6 +595,20 @@ function clearYoutubePreview() {
     youtubeEmbedPreview.style.display = "none";
   }
   if (fetchedSourceCard) fetchedSourceCard.style.display = "none";
+  const mpCard = document.getElementById("modernProgressCard");
+  if (mpCard) {
+    mpCard.classList.remove("is-active");
+    mpCard.classList.add("is-hidden");
+    mpCard.style.display = "none";
+    mpCard.style.backgroundImage = "";
+    const mpTrackEl = mpCard.querySelector(".mp-track");
+    if (mpTrackEl) mpTrackEl.style.display = "none";
+  }
+  const mpVideoTitle = document.getElementById("mpVideoTitle");
+  if (mpVideoTitle) {
+    mpVideoTitle.textContent = "";
+    mpVideoTitle.style.display = "none";
+  }
 }
 
 function setPreviewVideo(src) {
@@ -641,23 +655,46 @@ function setFetchedSourceCard({ title, thumb, meta }) {
   setProjectInfo(title || "Source ready", meta || "Ready for clipping");
 }
 
+function hideModernProgressCard() {
+  const mpCard = document.getElementById("modernProgressCard");
+  if (mpCard) {
+    mpCard.classList.remove("is-active");
+    mpCard.classList.add("is-hidden");
+    mpCard.style.display = "none";
+    mpCard.style.backgroundImage = "";
+    const mpTrackEl = mpCard.querySelector(".mp-track");
+    if (mpTrackEl) mpTrackEl.style.display = "none";
+  }
+  const mpVideoTitle = document.getElementById("mpVideoTitle");
+  if (mpVideoTitle) {
+    mpVideoTitle.textContent = "";
+    mpVideoTitle.style.display = "none";
+  }
+}
+
+function showModernProgressCard(thumbUrl, titleText) {
+  const mpCard = document.getElementById("modernProgressCard");
+  if (!mpCard) return;
+  if (thumbUrl) {
+    mpCard.style.backgroundImage = `url(${thumbUrl})`;
+  }
+  mpCard.classList.remove("is-hidden");
+  mpCard.classList.add("is-active");
+  mpCard.style.display = "flex";
+
+  const mpVideoTitle = document.getElementById("mpVideoTitle");
+  if (mpVideoTitle && titleText) {
+    mpVideoTitle.textContent = titleText;
+    mpVideoTitle.style.display = "block";
+  }
+}
+
 function resetYoutubeFetchUi() {
   if (ytFetchBtn) ytFetchBtn.disabled = false;
   if (ytFetchProgress) ytFetchProgress.style.display = "none";
-  // Progress card stays visible as long as there's a title/thumbnail showing
-  const mpVideoTitle = document.getElementById("mpVideoTitle");
-  const hasTitleShowing = mpVideoTitle && mpVideoTitle.textContent && mpVideoTitle.style.display !== "none";
-  const modernProgressCard = document.getElementById("modernProgressCard");
-  if (modernProgressCard && _currentProgress >= 100 && !hasTitleShowing) {
-    setTimeout(() => {
-      const stillHasTitle = mpVideoTitle && mpVideoTitle.textContent && mpVideoTitle.style.display !== "none";
-      if (_currentProgress >= 100 && !stillHasTitle) {
-        modernProgressCard.style.display = "none";
-        // Also reset progress bar visibility for next use
-        const mpTrackEl = modernProgressCard.querySelector(".mp-track");
-        if (mpTrackEl) mpTrackEl.style.display = "";
-      }
-    }, 1500);
+  const url = ytUrlInput?.value?.trim() || "";
+  if (!url) {
+    hideModernProgressCard();
   }
 }
 
@@ -1216,18 +1253,8 @@ async function fetchYtInfo(url) {
       ytDuration.textContent = duration
         ? `${Math.floor(duration / 60)} min ${duration % 60} sec`
         : "";
-    // Set thumbnail as card background image
-    const mpCard = document.getElementById("modernProgressCard");
-    if (mpCard) {
-      if (thumbnail) mpCard.style.backgroundImage = `url(${thumbnail})`;
-      mpCard.style.display = "flex";
-    }
-    // Show video title above progress bar
-    const mpVideoTitle = document.getElementById("mpVideoTitle");
-    if (mpVideoTitle && title) {
-      mpVideoTitle.textContent = title;
-      mpVideoTitle.style.display = "block";
-    }
+    // Set thumbnail as card background image & show card with title
+    showModernProgressCard(thumbnail || "", title || "YouTube video");
   } catch {}
 }
 
@@ -1330,17 +1357,7 @@ async function fetchYoutubeSource(url, options = {}) {
         : (project.metaText || "");
     }
     // Set thumbnail as card background image and show card
-    const mpCard = document.getElementById("modernProgressCard");
-    if (mpCard) {
-      if (project.thumbnail) mpCard.style.backgroundImage = `url(${project.thumbnail})`;
-      mpCard.style.display = "flex";
-    }
-    // Show video title above progress bar
-    const mpVideoTitle = document.getElementById("mpVideoTitle");
-    if (mpVideoTitle && videoTitle) {
-      mpVideoTitle.textContent = videoTitle;
-      mpVideoTitle.style.display = "block";
-    }
+    showModernProgressCard(project.thumbnail || "", videoTitle);
 
     renderGeneratedClips();
     renderProjectHistory(lastProjectsCache);
@@ -1376,12 +1393,12 @@ function scheduleYoutubeAutoFetch() {
 
   if (!url) {
     if (ytInfoPreview) ytInfoPreview.style.display = "none";
-    const mpCard = document.getElementById("modernProgressCard");
-    if (mpCard && _currentProgress === 0) mpCard.style.display = "none";
+    hideModernProgressCard();
     return;
   }
 
   if (!isValidYouTubeUrl(url)) {
+    hideModernProgressCard();
     return;
   }
 
@@ -1456,17 +1473,7 @@ videoInput?.addEventListener("change", async (e) => {
     showClipControls();
 
     // Show progress card for upload (clear any previous thumbnail bg)
-    const mpCardUpload = document.getElementById("modernProgressCard");
-    if (mpCardUpload) {
-      mpCardUpload.style.backgroundImage = "";
-      mpCardUpload.style.display = "flex";
-    }
-    // Show file name as title above progress bar
-    const mpVideoTitleUpload = document.getElementById("mpVideoTitle");
-    if (mpVideoTitleUpload) {
-      mpVideoTitleUpload.textContent = file.name.replace(/\.[^.]+$/, "");
-      mpVideoTitleUpload.style.display = "block";
-    }
+    showModernProgressCard("", file.name.replace(/\.[^.]+$/, ""));
 
     _currentProgress = 0;
     updateProgress(0, "Starting upload…");
@@ -1966,18 +1973,11 @@ function loadProjectIntoState(project = {}, options = {}) {
     if (ytUrlInput && sUrl) ytUrlInput.value = sUrl;
     const savedThumb = state.uploadedProject.thumbnail || project.thumbnail || "";
     const savedTitle = state.uploadedProject.originalName || state.uploadedProject.title || project.title || "YouTube video";
-    const mpCard = document.getElementById("modernProgressCard");
-    if (mpCard) {
-      if (savedThumb) mpCard.style.backgroundImage = `url(${savedThumb})`;
-      mpCard.style.display = "flex";
-      // Keep progress bar hidden — only shown when user clicks Get Clips
-      const mpTrackEl = mpCard.querySelector(".mp-track");
-      if (mpTrackEl) mpTrackEl.style.display = "";
-    }
-    const mpVideoTitleEl = document.getElementById("mpVideoTitle");
-    if (mpVideoTitleEl && savedTitle) {
-      mpVideoTitleEl.textContent = savedTitle;
-      mpVideoTitleEl.style.display = "block";
+    if (savedThumb || savedTitle) {
+      showModernProgressCard(savedThumb, savedTitle);
+      const mpCard = document.getElementById("modernProgressCard");
+      const mpTrackEl = mpCard?.querySelector(".mp-track");
+      if (mpTrackEl) mpTrackEl.style.display = "none";
     }
     if (ytThumb) ytThumb.src = savedThumb;
     if (ytTitle) ytTitle.textContent = savedTitle;
@@ -3251,17 +3251,11 @@ renderProjectHistory([]);
 renderGeneratedClips();
 loadProjectHistory();
 
-// GUARD: ensure progress card is hidden on fresh load if no real session
+// GUARD: ensure progress card is hidden on initial boot unless a valid URL is present in the input
 ;(function guardProgressCard() {
-  const mpCard = document.getElementById("modernProgressCard");
-  if (!mpCard) return;
-  const mpTitle = document.getElementById("mpVideoTitle");
-  const hasTitle = mpTitle && mpTitle.textContent && mpTitle.style.display !== "none";
-  if (!hasTitle) {
-    mpCard.style.display = "none";
-    mpCard.style.backgroundImage = "";
-    const mpTrackEl = mpCard.querySelector(".mp-track");
-    if (mpTrackEl) mpTrackEl.style.display = "";
+  const url = ytUrlInput?.value?.trim() || "";
+  if (!url || !isValidYouTubeUrl(url)) {
+    hideModernProgressCard();
   }
 })();
 
