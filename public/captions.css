@@ -341,7 +341,7 @@ body.caption-editor-page .scene-grid {
 .ce-layout {
   height: 100%;
   display: grid;
-  grid-template-columns: 230px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 5px; /* 5px inner margin/gap between preview and workspace */
   padding: 5px; /* 5px inner margin around boxes */
   overflow: hidden;
@@ -375,13 +375,13 @@ body.caption-editor-page .scene-grid {
 
 .ce-phone-frame {
   position: relative;
-  width: 196px;
-  height: 485px; /* Decreased 50px height and width as requested (from 246x535 to 196x485) */
+  width: 226px; /* Decreased 50px height (485px -> 435px), increased 30px width (196px -> 226px) */
+  height: 435px;
   max-height: calc(100vh - 65px);
-  aspect-ratio: 196 / 485;
+  aspect-ratio: 226 / 435;
   margin: 0px !important;
   padding: 0px !important;
-  border-radius: 34px;
+  border-radius: 30px !important;
   background: #000000;
   box-shadow:
     0 0 0 2px rgba(255, 255, 255, 0.14),
@@ -1042,11 +1042,11 @@ body.caption-editor-page .scene-grid {
   overflow: hidden; /* Fits in first fold */
 }
 
-/* 45px BORDER RADIUS FOR BIGGER COMPONENTS — ZERO BORDERS */
+/* 30px BORDER RADIUS FOR 4 MAIN COMPONENTS — ZERO BORDERS */
 .ce-card {
   background: #141416 !important;
   border: none !important;
-  border-radius: 45px !important;
+  border-radius: 30px !important;
   padding: 13px 18px !important;
   display: flex;
   flex-direction: column;
@@ -1058,6 +1058,18 @@ body.caption-editor-page .scene-grid {
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Remove scrollbar from Typography & Cadence section */
+.ce-card--typo {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.ce-card--typo::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .ce-card::-webkit-scrollbar {
@@ -1509,13 +1521,13 @@ body.caption-editor-page .scene-grid {
   min-height: 0;
 }
 
-/* EXACT 60PX X 60PX PRESET BOXES — 25PX RADIUS — ZERO BORDER */
+/* EXACT 70PX X 60PX PRESET BOXES (+10px width) — 25PX RADIUS — ZERO BORDER */
 .preset-card {
-  width: 60px !important;
+  width: 70px !important;
   height: 60px !important;
-  min-width: 60px !important;
+  min-width: 70px !important;
   min-height: 60px !important;
-  max-width: 60px !important;
+  max-width: 70px !important;
   max-height: 60px !important;
   padding: 4px 2px !important;
   border-radius: 25px !important;
@@ -1546,7 +1558,7 @@ body.caption-editor-page .scene-grid {
   transform: scale(1.04);
 }
 
-/* 15px RADIUS FOR PRESET SWATCH INSIDE 60x60 BOX */
+/* 15px RADIUS FOR PRESET SWATCH INSIDE 70x60 BOX */
 .preset-swatch {
   height: 22px !important;
   width: 88% !important;
@@ -1567,7 +1579,7 @@ body.caption-editor-page .scene-grid {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  max-width: 52px !important;
+  max-width: 62px !important;
   text-align: center !important;
 }
 

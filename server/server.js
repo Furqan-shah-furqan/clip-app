@@ -1142,27 +1142,36 @@ app.post("/api/captions/burn", async (req, res) => {
 
 app.get("/api/files/download/:fileName", (req, res) => {
   try {
-    const safeName = path.basename(req.params.fileName);
+    const rawParam = req.params.fileName ? decodeURIComponent(req.params.fileName) : "";
+    const safeName = path.basename(rawParam);
 
-    const exportPath = path.join(exportsDir, safeName);
-    const uploadPath = path.join(uploadsDir, safeName);
-    const captionPath = path.join(captionsDir, safeName);
+    const candidates = [
+      path.join(exportsDir, safeName),
+      path.join(uploadsDir, safeName),
+      path.join(captionsDir, safeName),
+      typeof subtitlesDir !== "undefined" ? path.join(subtitlesDir, safeName) : null,
+      path.join(rootDir, "exports", safeName),
+      path.join(rootDir, "uploads", safeName),
+      path.join(rootDir, safeName),
+    ].filter(Boolean);
 
     let foundPath = null;
-
-    if (fs.existsSync(exportPath)) {
-      foundPath = exportPath;
-    } else if (fs.existsSync(uploadPath)) {
-      foundPath = uploadPath;
-    } else if (fs.existsSync(captionPath)) {
-      foundPath = captionPath;
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate)) {
+        foundPath = candidate;
+        break;
+      }
     }
 
     if (!foundPath) {
       return res.status(404).send("File not found");
     }
 
-    return res.sendFile(foundPath);
+    return res.sendFile(foundPath, { acceptRanges: true }, (err) => {
+      if (err && !res.headersSent) {
+        console.error("sendFile error:", err);
+      }
+    });
   } catch (error) {
     console.error("FILE DOWNLOAD ERROR:", error);
     return res.status(500).send("Could not open file");

@@ -480,47 +480,99 @@ function safeVideoTime() {
     ? Number(captionVideo.currentTime)
     : 0;
 }
+function isPlayableVideoUrl(val) {
+  if (!val || typeof val !== "string") return false;
+  const trimmed = val.trim();
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.includes("youtube.com") ||
+    lower.includes("youtu.be") ||
+    lower.includes("vimeo.com") ||
+    lower.includes("tiktok.com") ||
+    lower.includes("instagram.com")
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeVideoUrl(val) {
+  if (!val || typeof val !== "string") return "";
+  let clean = val.trim();
+  if (!isPlayableVideoUrl(clean)) return "";
+
+  // Strip localhost / 127.0.0.1 domain so relative paths work on Render or any host
+  clean = clean.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
+
+  // Convert Windows filesystem path or server relative path to download endpoint
+  if (
+    clean.includes("\\") ||
+    clean.startsWith("file:") ||
+    clean.includes("server/exports") ||
+    clean.includes("server\\exports") ||
+    clean.includes("server/uploads") ||
+    clean.includes("server\\uploads")
+  ) {
+    const rawFn = clean.replace(/\\/g, "/").split("/").pop();
+    const fn = rawFn ? rawFn.split("?")[0] : "";
+    if (fn && fn.toLowerCase().endsWith(".mp4")) {
+      return `/api/files/download/${encodeURIComponent(fn)}`;
+    }
+  }
+
+  return clean;
+}
+
 function getClipSource(clip = {}) {
   if (!clip) return "";
-  let url =
-    clip.previewUrl ||
-    clip.downloadUrl ||
-    clip.videoUrl ||
-    clip.directUrl ||
-    clip.url ||
-    clip.src ||
-    clip.fileUrl ||
-    clip.assetUrl ||
-    "";
 
-  // If url is a local Windows or file system path, convert to server download endpoint
-  if (
-    url &&
-    (url.includes("\\") ||
-      url.startsWith("file:") ||
-      url.includes("server/exports") ||
-      url.includes("server\\exports"))
-  ) {
-    const fileName = url.replace(/\\/g, "/").split("/").pop();
-    if (fileName && fileName.endsWith(".mp4")) {
-      url = `/api/files/download/${encodeURIComponent(fileName)}`;
+  // 1. If explicit fileName is provided and ends with .mp4
+  const rawFileName = clip.fileName || clip.filename;
+  if (rawFileName && typeof rawFileName === "string") {
+    const fn = rawFileName.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
+    if (fn && fn.toLowerCase().endsWith(".mp4")) {
+      return `/api/files/download/${encodeURIComponent(fn)}`;
     }
   }
 
-  // If no url yet, check fileName, outputPath, or filePath
-  if (
-    !url ||
-    (!url.startsWith("http") && !url.startsWith("/") && !url.startsWith("blob:"))
-  ) {
-    const rawName =
-      clip.fileName || clip.outputPath || clip.filePath || clip.localPath || "";
-    const fileName = String(rawName).replace(/\\/g, "/").split("/").pop();
-    if (fileName && fileName.endsWith(".mp4")) {
-      url = `/api/files/download/${encodeURIComponent(fileName)}`;
+  // 2. Check previewUrl and downloadUrl first
+  const candidates = [
+    clip.previewUrl,
+    clip.downloadUrl,
+    clip.directUrl,
+    clip.src,
+    clip.fileUrl,
+    clip.assetUrl,
+    clip.url,
+    clip.videoUrl,
+  ];
+
+  for (const c of candidates) {
+    const norm = normalizeVideoUrl(c);
+    if (norm) return norm;
+  }
+
+  // 3. Check outputPath, filePath, localPath, storagePath, clipPath
+  const pathCandidates = [
+    clip.outputPath,
+    clip.filePath,
+    clip.localPath,
+    clip.storagePath,
+    clip.clipPath,
+    clip.sourcePath,
+  ];
+
+  for (const p of pathCandidates) {
+    if (p && typeof p === "string") {
+      const fn = p.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
+      if (fn && fn.toLowerCase().endsWith(".mp4")) {
+        return `/api/files/download/${encodeURIComponent(fn)}`;
+      }
     }
   }
 
-  return url;
+  return "";
 }
 
 function wrapCaptionText(text, maxCharsPerLine) {
@@ -3357,9 +3409,9 @@ async function init() {
   const hasParamIndex = paramIndex !== null && !isNaN(parseInt(paramIndex, 10));
   const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
 
-  // If session is missing or session index does not match requested index, fetch from projects API
+  // If session is missing, has no playable clip source, or session index does not match requested index, fetch from projects API
   if (
-    (!session?.clip || (requestedIdx !== null && Number(session.index) !== requestedIdx)) &&
+    (!session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)) &&
     requestedIdx !== null
   ) {
     try {
@@ -3444,6 +3496,31 @@ async function init() {
       } catch {}
     } else {
       console.warn("No video source found for clip:", session.clip);
+    }
+
+    if (!captionVideo.dataset.hasErrorFallback) {
+      captionVideo.dataset.hasErrorFallback = "true";
+      captionVideo.addEventListener("error", () => {
+        const currentSrc = captionVideo.getAttribute("src") || captionVideo.src || "";
+        if (currentSrc.includes("/api/files/download/")) {
+          const fn = currentSrc.split("/api/files/download/")[1]?.split("?")[0];
+          if (fn && !captionVideo.dataset.triedExports) {
+            captionVideo.dataset.triedExports = "true";
+            captionVideo.src = `/exports/${fn}`;
+            captionVideo.load();
+            return;
+          }
+        }
+        if (currentSrc.includes("/exports/")) {
+          const fn = currentSrc.split("/exports/")[1]?.split("?")[0];
+          if (fn && !captionVideo.dataset.triedUploads) {
+            captionVideo.dataset.triedUploads = "true";
+            captionVideo.src = `/uploads/${fn}`;
+            captionVideo.load();
+            return;
+          }
+        }
+      });
     }
   }
 
