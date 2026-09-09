@@ -582,86 +582,88 @@ router.post("/smart-generate", async (req, res) => {
       let fullDownloadError = null;
 
       try {
-        // Step 1: Download raw MP4 stream directly to disk once via 3rd-party extraction API
-        console.log(`[SmartClip] Downloading source video once via API stream for ${suggestions.length} clips...`);
-        fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
+        try {
+          // Step 1: Download raw MP4 stream directly to disk once via 3rd-party extraction API
+          console.log(`[SmartClip] Downloading source video once via API stream for ${suggestions.length} clips...`);
+          fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
 
-        // Step 2: Local FFmpeg pipeline generates each clip from the downloaded local file
-        for (let i = 0; i < suggestions.length; i++) {
-          if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
+          // Step 2: Local FFmpeg pipeline generates each clip from the downloaded local file
+          for (let i = 0; i < suggestions.length; i++) {
+            if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
-          const suggestion = suggestions[i];
-          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-          const result = await smartGenerateClip({
-            inputPath: fullSourcePath,
-            startTime: secondsToTime(startSec),
-            endTime: secondsToTime(endSec),
-            aspectRatio: aspectRatio || "9:16",
-          });
-
-          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-        }
-      } catch (err) {
-        console.warn("[SmartClip] Full source video download failed, trying resilient section-by-section download:", err.message || err);
-        fullDownloadError = err;
-
-        // Resilient Fallback: Download each clip section directly using yt-dlp / stream extraction
-        for (let i = 0; i < suggestions.length; i++) {
-          if (Date.now() - startedAt > maxSmartGenerateMs) break;
-
-          const suggestion = suggestions[i];
-          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-          const durationSec = Math.max(1, endSec - startSec);
-
-          try {
-            const sectionFile = await downloadYouTubeSectionForSmartClipping({
-              sourceUrl,
-              startSec,
-              endSec,
-              index: i,
-            });
-            tempSectionFiles.push(sectionFile);
+            const suggestion = suggestions[i];
+            const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+            const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
 
             const result = await smartGenerateClip({
-              inputPath: sectionFile,
-              startTime: "00:00:00",
-              endTime: secondsToTime(durationSec),
+              inputPath: fullSourcePath,
+              startTime: secondsToTime(startSec),
+              endTime: secondsToTime(endSec),
               aspectRatio: aspectRatio || "9:16",
             });
 
             clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-          } catch (secErr) {
-            console.error(`[SmartClip] Direct section extraction failed for clip #${i + 1}:`, secErr.message || secErr);
+          }
+        } catch (err) {
+          console.warn("[SmartClip] Full source video download failed, trying resilient section-by-section download:", err.message || err);
+          fullDownloadError = err;
+
+          // Resilient Fallback: Download each clip section directly using yt-dlp / stream extraction
+          for (let i = 0; i < suggestions.length; i++) {
+            if (Date.now() - startedAt > maxSmartGenerateMs) break;
+
+            const suggestion = suggestions[i];
+            const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+            const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+            const durationSec = Math.max(1, endSec - startSec);
+
+            try {
+              const sectionFile = await downloadYouTubeSectionForSmartClipping({
+                sourceUrl,
+                startSec,
+                endSec,
+                index: i,
+              });
+              tempSectionFiles.push(sectionFile);
+
+              const result = await smartGenerateClip({
+                inputPath: sectionFile,
+                startTime: "00:00:00",
+                endTime: secondsToTime(durationSec),
+                aspectRatio: aspectRatio || "9:16",
+              });
+
+              clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+            } catch (secErr) {
+              console.error(`[SmartClip] Direct section extraction failed for clip #${i + 1}:`, secErr.message || secErr);
+            }
           }
         }
-      }
 
-      if (!clips.length) {
-        const err = fullDownloadError || new Error("All download pipelines failed");
-        console.error("[SmartClip] All YouTube clip generation pipelines failed:", err.message || err);
-        const errStr = String(err.message || err || "");
-        const isBotBlock = errStr.includes("not a bot") ||
-          errStr.includes("confirm you’re not a bot") ||
-          errStr.includes("confirm you're not a bot") ||
-          errStr.includes("--cookies") ||
-          errStr.includes("Sign in");
+        if (!clips.length) {
+          const err = fullDownloadError || new Error("All download pipelines failed");
+          console.error("[SmartClip] All YouTube clip generation pipelines failed:", err.message || err);
+          const errStr = String(err.message || err || "");
+          const isBotBlock = errStr.includes("not a bot") ||
+            errStr.includes("confirm you’re not a bot") ||
+            errStr.includes("confirm you're not a bot") ||
+            errStr.includes("--cookies") ||
+            errStr.includes("Sign in");
 
-        return res.json({
-          success: false,
-          needsUpload: true,
-          needsCookies: isBotBlock,
-          source: "transcript",
-          message: isBotBlock
-            ? "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links."
-            : `YouTube clip download failed: ${err.message || "download error"}.`,
-          rawError: errStr,
-          segmentCount: transcriptSegments.length,
-          suggestions,
-          clips: [],
-        });
+          return res.json({
+            success: false,
+            needsUpload: true,
+            needsCookies: isBotBlock,
+            source: "transcript",
+            message: isBotBlock
+              ? "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links."
+              : `YouTube clip download failed: ${err.message || "download error"}.`,
+            rawError: errStr,
+            segmentCount: transcriptSegments.length,
+            suggestions,
+            clips: [],
+          });
+        }
       } finally {
         for (const f of tempSectionFiles) {
           cleanupFile(f);

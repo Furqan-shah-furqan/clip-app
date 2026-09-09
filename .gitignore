@@ -23,3 +23,5 @@ __pycache__/
 # cookies.txt enabled for cloud bot bypass
 !cookies.txt
 /etc/secrets/
+scratch/
+
