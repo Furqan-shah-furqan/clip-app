@@ -453,12 +453,14 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
     } else if (p >= 100) {
       modernProgressCard.style.display = "flex";
       setTimeout(() => {
-        if (_currentProgress >= 100 && modernProgressCard) {
+        if (_currentProgress >= 100 && modernProgressCard && (!ytInfoPreview || ytInfoPreview.style.display === "none")) {
           modernProgressCard.style.display = "none";
         }
       }, 2500);
     } else {
-      modernProgressCard.style.display = "none";
+      if (!ytInfoPreview || ytInfoPreview.style.display === "none") {
+        modernProgressCard.style.display = "none";
+      }
     }
   }
 
@@ -1221,6 +1223,8 @@ async function fetchYtInfo(url) {
         ? `${Math.floor(duration / 60)} min ${duration % 60} sec`
         : "";
     if (ytInfoPreview) ytInfoPreview.style.display = "flex";
+    const mpCard = document.getElementById("modernProgressCard");
+    if (mpCard) mpCard.style.display = "flex";
   } catch {}
 }
 
@@ -1347,6 +1351,8 @@ function scheduleYoutubeAutoFetch() {
 
   if (!url) {
     if (ytInfoPreview) ytInfoPreview.style.display = "none";
+    const mpCard = document.getElementById("modernProgressCard");
+    if (mpCard && _currentProgress === 0) mpCard.style.display = "none";
     return;
   }
 
@@ -1921,6 +1927,8 @@ function loadProjectIntoState(project = {}, options = {}) {
     const sUrl = state.uploadedProject.sourceUrl || (state.uploadedProject.videoId ? `https://www.youtube.com/watch?v=${state.uploadedProject.videoId}` : "");
     if (ytUrlInput && sUrl) ytUrlInput.value = sUrl;
     if (ytInfoPreview) ytInfoPreview.style.display = "flex";
+    const mpCard = document.getElementById("modernProgressCard");
+    if (mpCard) mpCard.style.display = "flex";
     if (ytThumb) ytThumb.src = state.uploadedProject.thumbnail || project.thumbnail || "";
     if (ytTitle) {
       ytTitle.textContent =

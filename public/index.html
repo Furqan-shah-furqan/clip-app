@@ -132,47 +132,37 @@
                 Get clips in 1 click
               </button>
 
-              <div
-                class="yt-info-preview opus-info-preview"
-                id="ytInfoPreview"
-                style="display: none"
-              >
-                <img class="yt-thumb" id="ytThumb" src="" alt="thumbnail" />
-                <div class="yt-info-text">
-                  <strong id="ytTitle"></strong>
-                  <small id="ytDuration"></small>
-                </div>
-              </div>
-
-              <!-- ─── IMAGE 4 REPLICA: MODERN PROGRESS CARD (Hidden until link pasted/processing) ─── -->
+              <!-- ─── SLEEK MODERN PROGRESS CARD WITH EMBEDDED METADATA ─── -->
               <div class="modern-progress-card" id="modernProgressCard" style="display: none;">
                 <div class="mp-header">
                   <div class="mp-header-left">
                     <span class="mp-sparkle">✦</span>
                     <span class="mp-title" id="mpTitle">Project Progress</span>
+                    <span class="mp-badge" id="mpBadge">AI Video Engine</span>
                   </div>
-                  <span class="mp-badge" id="mpBadge">AI Video Engine</span>
+                  <div class="mp-header-right">
+                    <span class="mp-eta" id="progressEta" style="display: none;">ETA 0m</span>
+                    <span class="mp-percent" id="progressPercent">0%</span>
+                  </div>
                 </div>
-                <div class="mp-percent-row">
-                  <span class="mp-percent" id="progressPercent">0%</span>
+
+                <!-- Embedded YouTube Video Metadata -->
+                <div
+                  class="yt-info-preview opus-info-preview mp-embedded-meta"
+                  id="ytInfoPreview"
+                  style="display: none;"
+                >
+                  <img class="yt-thumb" id="ytThumb" src="" alt="thumbnail" />
+                  <div class="yt-info-text">
+                    <strong id="ytTitle"></strong>
+                    <small id="ytDuration"></small>
+                  </div>
                 </div>
+
+                <!-- Sleek Progress Track -->
                 <div class="mp-track">
                   <div class="mp-fill" id="progressFill" style="width: 0%;"></div>
                   <div class="mp-status-pill" id="progressLabel">Analyzing Video...</div>
-                </div>
-                <div class="mp-footer">
-                  <div class="mp-collaborators">
-                    <div class="mp-avatars">
-                      <span class="mp-avatar mp-avatar-1" title="Whisper AI">🧠</span>
-                      <span class="mp-avatar mp-avatar-2" title="Vision AI">⚡</span>
-                      <span class="mp-avatar mp-avatar-3" title="4K Pipeline">🎬</span>
-                    </div>
-                    <span class="mp-collab-text">Collaborators 3</span>
-                  </div>
-                  <div class="mp-footer-actions">
-                    <span class="mp-eta" id="progressEta" style="display: none;">ETA 0m</span>
-                    <button class="mp-details-btn" type="button" id="mpDetailsBtn">More details →</button>
-                  </div>
                 </div>
               </div>
             </div>
