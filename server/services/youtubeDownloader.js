@@ -416,34 +416,29 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
   console.log(`[YouTube-Downloader] [Tier 1: yt-dlp] Initializing. Proxy: ${maskProxyUrl(proxyUrl)}, Cookies: ${effectiveCookies ? "available" : "none"}`);
 
-  // Multi-tier client configurations: prioritizes Web client + cookies + proxy first
+  // Multi-tier client configurations: prioritizes VisionOS & Android VR clients
+  // (bypasses GVS PO Token format removal, SABR-only stream limitations, and bot blocks)
   const clientStrategies = [
-    // Priority 1: Web client + cookies via residential proxy (bypasses datacenter blocks & bot detection)
+    // Priority 1: visionos,android_vr with cookies & proxy
     ...(effectiveCookies && proxyUrl ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Web client + cookies via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
     ] : []),
 
-    // Priority 2: Web client with cookies direct
+    // Priority 2: visionos,android_vr direct with cookies
     ...(effectiveCookies ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Web client + cookies direct" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
     ] : []),
 
-    // Priority 3: Proxied Android clients
+    // Priority 3: visionos,android_vr via proxy (no cookies)
     ...(proxyUrl ? [
-      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Android client via proxy" },
-      { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Android VR via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
     ] : []),
 
-    // Priority 4: Direct Android clients
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
-    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Android VR direct (no cookies)" },
+    // Priority 4: visionos,android_vr direct (no cookies)
+    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "VisionOS/VR direct" },
 
-    // Priority 5: iOS and TV Embedded clients
-    { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "iOS client direct" },
-    { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "TV Embedded direct" },
-    ...(proxyUrl ? [
-      { client: "youtube:player_client=ios", withCookies: false, useProxy: true, label: "iOS client via proxy" },
-    ] : []),
+    // Fallbacks
+    { client: "youtube:player_client=android", withCookies: false, useProxy: Boolean(proxyUrl), label: "Android client fallback" },
   ];
 
   const strategyErrors = [];
@@ -882,25 +877,22 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
   const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
 
   const strategies = [
-    // Priority 1: Web client + cookies via residential proxy (bypasses datacenter blocks & bot detection)
+    // Priority 1: visionos,android_vr with cookies & proxy (bypasses PO token & format blocks)
     ...(effectiveCookies && proxyUrl ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: true, label: "Section Web + cookies via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "Section VisionOS/VR + cookies via proxy" },
     ] : []),
-    // Priority 2: Web client with cookies direct
+    // Priority 2: visionos,android_vr with cookies direct
     ...(effectiveCookies ? [
-      { client: "youtube:player_client=web,mweb", withCookies: true, useProxy: false, label: "Section Web + cookies direct" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "Section VisionOS/VR + cookies direct" },
     ] : []),
-    // Priority 3: Proxied Android clients
+    // Priority 3: visionos,android_vr via proxy
     ...(proxyUrl ? [
-      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Section Android via proxy" },
-      { client: "youtube:player_client=android_vr", withCookies: false, useProxy: true, label: "Section Android VR via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "Section VisionOS/VR via proxy" },
     ] : []),
-    // Priority 4: Direct Android clients
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Section Android direct (no cookies)" },
-    { client: "youtube:player_client=android_vr", withCookies: false, useProxy: false, label: "Section Android VR direct (no cookies)" },
-    // Priority 5: iOS and TV Embedded clients
-    { client: "youtube:player_client=ios", withCookies: false, useProxy: false, label: "Section iOS direct" },
-    { client: "youtube:player_client=tv_embedded", withCookies: false, useProxy: false, label: "Section TV Embedded direct" },
+    // Priority 4: visionos,android_vr direct
+    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "Section VisionOS/VR direct" },
+    // Priority 5: fallback android
+    { client: "youtube:player_client=android", withCookies: false, useProxy: Boolean(proxyUrl), label: "Section Android fallback" },
   ];
 
   const stratErrors = [];
@@ -1064,7 +1056,7 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     }
   }
 
-  results.buildVersion = "hybrid-v4";
+  results.buildVersion = "hybrid-v5";
   return results;
 }
 
