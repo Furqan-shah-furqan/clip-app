@@ -956,7 +956,25 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
 
   console.log(`[YouTube-Downloader] [Step 3: FFmpeg Handoff] Extracting section ${safeStart}s - ${safeEnd}s`);
 
-  // Step 1 & 2: Download raw MP4 stream via 3rd-party extraction API
+  // Step 1: Attempt direct section extraction via yt-dlp first (fast, 1-3s, ~2-3MB)
+  try {
+    const outputTemplate = path.join(uploadsDir, `yt_smart_section_${clipStamp}.%(ext)s`);
+    const mp4 = await downloadDirectSectionViaYtDlp({
+      targetUrl: sourceUrl,
+      startSec: safeStart,
+      endSec: safeEnd,
+      clipStamp,
+      outputTemplate,
+    });
+    if (mp4 && fs.existsSync(mp4) && fs.statSync(mp4).size > 1000) {
+      console.log(`[YouTube-Downloader] Direct section download succeeded: ${mp4}`);
+      return mp4;
+    }
+  } catch (secErr) {
+    console.warn(`[YouTube-Downloader] Direct section download failed (${secErr.message.slice(0, 100)}), falling back to full source...`);
+  }
+
+  // Step 2 & 3: Fall back to full source video download + FFmpeg cut
   const sourceMp4 = await downloadYouTubeSourceVideo({ sourceUrl });
   const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
 

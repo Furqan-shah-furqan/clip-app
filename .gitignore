@@ -20,7 +20,6 @@ captions/
 *.wav
 *.log
 __pycache__/
-cookies.txt
-cookies*.txt
-env_cookies.txt
+# cookies.txt enabled for cloud bot bypass
+!cookies.txt
 /etc/secrets/
