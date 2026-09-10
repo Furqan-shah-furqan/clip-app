@@ -1,9 +1,10 @@
 const path = require("path");
 const { spawn } = require("child_process");
+const { getPrimaryPythonPath } = require("../utils/pythonRuntime");
 
 function generatePreviewCaptions({ inputPath, captionsDir }) {
   return new Promise((resolve, reject) => {
-    const pythonBin = process.env.PYTHON_BIN || "python";
+    const pythonBin = process.env.PYTHON_BIN || getPrimaryPythonPath();
     const scriptPath = path.join(__dirname, "../../python/preview_captions.py");
 
     const args = [

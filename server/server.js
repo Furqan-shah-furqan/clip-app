@@ -1187,8 +1187,8 @@ app.get("/api/files/download/:fileName", (req, res) => {
 });
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
+app.get(["/health", "/api/health"], (req, res) => {
+  res.json({ ok: true, status: "healthy" });
 });
 
 app.get("/api/version", (req, res) => {

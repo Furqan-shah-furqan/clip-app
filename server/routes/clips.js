@@ -11,6 +11,7 @@ const {
   projectsFile,
 } = require("../utils/paths");
 const { smartGenerateClip } = require("../services/smartClipService");
+const { getPythonCandidates } = require("../utils/pythonRuntime");
 const { findSmartClipMoments } = require("../services/smartClipRanker");
 const {
   isValidYouTubeUrl,
@@ -265,13 +266,7 @@ async function getLocalSmartTranscript(inputPath) {
   const videoPath = resolveSmartInputVideo(inputPath);
   if (!videoPath) throw new Error("Input video file not found for smart clipping");
 
-  const python311 = "C:\\Users\\xpert computers\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
-  const pythonCandidates = [
-    process.env.PYTHON_PATH,
-    fs.existsSync(python311) ? python311 : null,
-    "python3",
-    "python",
-  ].filter(Boolean);
+  const pythonCandidates = getPythonCandidates();
   const TRANSCRIBE_SCRIPT = path.join(rootDir, "python", "transcribe_whisper.py");
 
   if (fs.existsSync(TRANSCRIBE_SCRIPT)) {

@@ -10,6 +10,7 @@ const {
   uploadsDir
 } = require("../utils/paths");
 const { burnSubtitles } = require("../services/ffmpegService");
+const { getPythonCandidates } = require("../utils/pythonRuntime");
 
 const router = express.Router();
 
@@ -114,21 +115,15 @@ async function extractAudioToWav(videoPath, wavPath) {
 }
 
 async function runPythonTranscription(wavPath) {
-  const python311 = "C:\\Users\\xpert computers\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
-  const defaultVenvPython = path.resolve(rootDir, ".venv", "Scripts", "python.exe");
-  const pythonCandidates = [
-    process.env.PYTHON_PATH,
-    fs.existsSync(python311) ? python311 : null,
-    fs.existsSync(defaultVenvPython) ? defaultVenvPython : null,
-    "python",
-    "py",
-  ].filter(Boolean);
+  const pythonCandidates = getPythonCandidates();
   let lastError = null;
   for (const candidate of pythonCandidates) {
     try {
       const { stdout } = await runCommand(candidate, [TRANSCRIBE_SCRIPT, wavPath]);
       const parsed = JSON.parse(stdout || "{}");
-      return Array.isArray(parsed.segments) ? parsed.segments : [];
+      if (Array.isArray(parsed.segments)) {
+        return parsed.segments;
+      }
     } catch (error) { lastError = error; }
   }
   throw lastError || new Error("No working Python runtime found");

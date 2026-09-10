@@ -15,15 +15,10 @@ function getFFmpegPath() {
   return "ffmpeg";
 }
 
+const { getPrimaryPythonPath } = require("../utils/pythonRuntime");
+
 function getPythonPath() {
-  if (process.env.PYTHON_PATH && (fs.existsSync(process.env.PYTHON_PATH) || process.env.PYTHON_PATH === "python3" || process.env.PYTHON_PATH === "python")) {
-    return process.env.PYTHON_PATH;
-  }
-  const linuxVenv = path.resolve(rootDir, ".venv", "bin", "python");
-  if (fs.existsSync(linuxVenv)) return linuxVenv;
-  const winVenv = path.resolve(rootDir, ".venv", "Scripts", "python.exe");
-  if (fs.existsSync(winVenv)) return winVenv;
-  return process.platform === "win32" ? "python" : "python3";
+  return getPrimaryPythonPath();
 }
 
 function toSeconds(t) {

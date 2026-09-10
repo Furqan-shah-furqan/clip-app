@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "server/server.js",
   "scripts": {
-    "build": "prisma generate",
+    "build": "prisma generate && (python3 -m pip install --no-cache-dir -r python/requirements.txt || pip3 install --no-cache-dir -r python/requirements.txt || pip install --no-cache-dir -r python/requirements.txt || true)",
     "start": "node server/server.js",
     "dev": "node server/server.js",
     "prisma:generate": "prisma generate",
