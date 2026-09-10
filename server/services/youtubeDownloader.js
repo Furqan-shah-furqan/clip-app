@@ -877,28 +877,22 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
   const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
 
   const strategies = [
-    // Priority 1: visionos,android_vr with cookies & proxy (bypasses PO token & format blocks)
+    // Priority 1: visionos,android_vr with cookies & proxy (if available)
     ...(effectiveCookies && proxyUrl ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "Section VisionOS/VR + cookies via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
     ] : []),
     // Priority 2: visionos,android_vr with cookies direct
     ...(effectiveCookies ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "Section VisionOS/VR + cookies direct" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
     ] : []),
     // Priority 3: visionos,android_vr via proxy
     ...(proxyUrl ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "Section VisionOS/VR via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
     ] : []),
-    // Priority 4: visionos,android_vr direct
-    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "Section VisionOS/VR direct" },
-    // Priority 5: fallback android
-    { client: "youtube:player_client=android", withCookies: false, useProxy: Boolean(proxyUrl), label: "Section Android fallback" },
-    // Priority 6: fallback android,ios
-    { client: "youtube:player_client=android,ios", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Android/iOS fallback" },
-    // Priority 7: fallback web,mweb
-    { client: "youtube:player_client=web,mweb", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Web fallback" },
-    // Priority 8: default extraction
-    { client: null, withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Default fallback" },
+    // Priority 4: Android client direct
+    { client: "youtube:player_client=android", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Android client" },
+    // Priority 5: Web client fallback
+    { client: "youtube:player_client=web", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Web client" },
   ];
 
   const stratErrors = [];
@@ -919,15 +913,15 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       "--download-sections", section,
       "--force-keyframes-at-cuts",
       "--merge-output-format", "mp4",
-      "--socket-timeout", "15",
-      "--retries", "2",
+      "--socket-timeout", "10",
+      "--retries", "1",
       "-o", outputTemplate,
       targetUrl,
     ];
 
     try {
       console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label}...`);
-      await runCommand(ytDlpPath, args, { timeoutMs: 35000 });
+      await runCommand(ytDlpPath, args, { timeoutMs: 15000 });
 
       const files = fs.readdirSync(uploadsDir)
         .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))

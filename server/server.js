@@ -59,6 +59,14 @@ try {
   console.error("ffmpeg NOT found");
 }
 
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[Server] Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("[Server] Uncaught Exception thrown:", err);
+});
+
 const express = require("express");
 const cors = require("cors");
 const os = require("os");

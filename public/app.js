@@ -3189,8 +3189,8 @@ function getCleanSmartClipError(error) {
     return "Internet/DNS failed. Check your connection and try again.";
   }
 
-  if (raw.includes("Failed to fetch")) {
-    return "Server request failed. Make sure npm start is running.";
+  if (raw.includes("Failed to fetch") || raw.includes("NetworkError")) {
+    return "Cloud server request timed out or was interrupted. Try uploading the video file directly or add cookies.txt.";
   }
 
   return (
