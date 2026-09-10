@@ -121,7 +121,13 @@ function getSentenceCount(text) {
 }
 
 function getTitleFromText(text = "") {
-  const clean = normalizeText(text);
+  let clean = normalizeText(text)
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/www\.\S+/gi, "")
+    .replace(/@\w+/g, "")
+    .replace(/[^\w\s.,!?'"-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const sentence =
     clean.split(/[.!?]/).find((part) => part.trim().length > 18) || clean;
   return sentence.trim().slice(0, 78) || "Smart viral moment";
@@ -135,6 +141,18 @@ function scoreWindow(window) {
   const wordsPerSecond = wordCount / duration;
   let score = 35;
   const signals = [];
+
+  // Filter out URLs, promotional links, social media handles, sponsor intros
+  const hasLinksOrPromos = /https?:\/\/|www\.|\.com\/|\.co\/|@\w+|\b(instagram|discord|youtube|twitter|subscribe|follow me|click here|tickets|apply\/|merch)\b/i.test(text);
+  if (hasLinksOrPromos) {
+    score -= 45; // Strongly disqualify promo / link dump segments
+  }
+
+  // Penalize the first 45 seconds of a video (usually channel intro, sponsor splash, disclaimers)
+  if (window.startSec < 45) {
+    score -= 25;
+  }
+
   if (HOOK_PATTERNS.some((pattern) => pattern.test(text.slice(0, 180)))) {
     score += 16;
     signals.push("strong hook");

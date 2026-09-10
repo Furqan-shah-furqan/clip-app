@@ -443,7 +443,7 @@ router.get("/diag", async (req, res) => {
 
 router.post("/smart-generate", async (req, res) => {
   const startedAt = Date.now();
-  const maxSmartGenerateMs = 50 * 1000;
+  const maxSmartGenerateMs = 85 * 1000;
 
   try {
     const {
@@ -623,26 +623,22 @@ router.post("/smart-generate", async (req, res) => {
             const isBotBlock = errStr.includes("not a bot") ||
               errStr.includes("confirm you’re not a bot") ||
               errStr.includes("confirm you're not a bot") ||
-              errStr.includes("--cookies") ||
-              errStr.includes("Sign in") ||
-              errStr.includes("unavailable") ||
-              errStr.includes("strategies exhausted");
+              errStr.includes("Sign in to confirm");
 
-            // If clip #1 is blocked by YouTube on this cloud IP, fail fast!
-            // Subsequent clips from the same URL will also fail and would cause Render's 100s timeout.
+            // If clip #1 is explicitly blocked by YouTube bot check on this cloud IP, fail fast
             if (isBotBlock && !clips.length) {
-              console.warn("[SmartClip] YouTube download blocked/unavailable on cloud host. Failing fast to guide user.");
+              console.warn("[SmartClip] YouTube bot check triggered on cloud host. Failing fast to guide user.");
               break;
             }
           }
         }
 
         // Step 2 (Fallback): ONLY if all section downloads failed AND clips.length === 0,
-        // and only if within safe time budget (< 22s elapsed) and not a bot block
+        // and only if within safe time budget (< 35s elapsed) and not a bot block
         const elapsed = Date.now() - startedAt;
         const isBot = String(fullDownloadError?.message || "").includes("not a bot") ||
           String(fullDownloadError?.message || "").includes("Sign in");
-        if (!clips.length && elapsed < 22000 && !isBot) {
+        if (!clips.length && elapsed < 35000 && !isBot) {
           console.warn("[SmartClip] Direct section downloads failed, attempting fallback full source download...");
           try {
             fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });

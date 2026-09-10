@@ -908,12 +908,12 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/bestvideo*+bestaudio/best",
+      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/best[height<=720]/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--download-sections", section,
       "--force-keyframes-at-cuts",
       "--merge-output-format", "mp4",
-      "--socket-timeout", "10",
+      "--socket-timeout", "15",
       "--retries", "1",
       "-o", outputTemplate,
       targetUrl,
@@ -921,7 +921,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
 
     try {
       console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label}...`);
-      await runCommand(ytDlpPath, args, { timeoutMs: 15000 });
+      await runCommand(ytDlpPath, args, { timeoutMs: 40000 });
 
       const files = fs.readdirSync(uploadsDir)
         .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
