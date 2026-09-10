@@ -582,61 +582,71 @@ router.post("/smart-generate", async (req, res) => {
       let fullDownloadError = null;
 
       try {
-        try {
-          // Step 1: Download raw MP4 stream directly to disk once via 3rd-party extraction API
-          console.log(`[SmartClip] Downloading source video once via API stream for ${suggestions.length} clips...`);
-          fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
+        console.log(`[SmartClip] Fast section-by-section extraction for ${suggestions.length} clips...`);
 
-          // Step 2: Local FFmpeg pipeline generates each clip from the downloaded local file
-          for (let i = 0; i < suggestions.length; i++) {
-            if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
+        // Step 1 (Primary): Download each clip section directly (fast: 2-4s each, ~3MB).
+        // Bypasses downloading full multi-gigabyte source videos on cloud hosting which causes 10-minute timeouts!
+        for (let i = 0; i < suggestions.length; i++) {
+          if (Date.now() - startedAt > maxSmartGenerateMs) {
+            console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
+            break;
+          }
 
-            const suggestion = suggestions[i];
-            const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-            const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+          const suggestion = suggestions[i];
+          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+          const durationSec = Math.max(1, endSec - startSec);
+
+          try {
+            console.log(`[SmartClip] Downloading section #${i + 1} (${startSec}s - ${endSec}s)...`);
+            const sectionFile = await downloadYouTubeSectionForSmartClipping({
+              sourceUrl,
+              startSec,
+              endSec,
+              index: i,
+            });
+            tempSectionFiles.push(sectionFile);
 
             const result = await smartGenerateClip({
-              inputPath: fullSourcePath,
-              startTime: secondsToTime(startSec),
-              endTime: secondsToTime(endSec),
+              inputPath: sectionFile,
+              startTime: "00:00:00",
+              endTime: secondsToTime(durationSec),
               aspectRatio: aspectRatio || "9:16",
             });
 
             clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+          } catch (secErr) {
+            console.error(`[SmartClip] Direct section extraction failed for clip #${i + 1}:`, secErr.message || secErr);
+            fullDownloadError = secErr;
           }
-        } catch (err) {
-          console.warn("[SmartClip] Full source video download failed, trying resilient section-by-section download:", err.message || err);
-          fullDownloadError = err;
+        }
 
-          // Resilient Fallback: Download each clip section directly using yt-dlp / stream extraction
-          for (let i = 0; i < suggestions.length; i++) {
-            if (Date.now() - startedAt > maxSmartGenerateMs) break;
+        // Step 2 (Fallback): ONLY if all section downloads failed AND clips.length === 0,
+        // attempt short full-source download fallback if time permits
+        if (!clips.length) {
+          console.warn("[SmartClip] Direct section downloads failed, attempting fallback full source download...");
+          try {
+            fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
 
-            const suggestion = suggestions[i];
-            const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-            const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-            const durationSec = Math.max(1, endSec - startSec);
+            for (let i = 0; i < suggestions.length; i++) {
+              if (Date.now() - startedAt > maxSmartGenerateMs) break;
 
-            try {
-              const sectionFile = await downloadYouTubeSectionForSmartClipping({
-                sourceUrl,
-                startSec,
-                endSec,
-                index: i,
-              });
-              tempSectionFiles.push(sectionFile);
+              const suggestion = suggestions[i];
+              const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+              const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
 
               const result = await smartGenerateClip({
-                inputPath: sectionFile,
-                startTime: "00:00:00",
-                endTime: secondsToTime(durationSec),
+                inputPath: fullSourcePath,
+                startTime: secondsToTime(startSec),
+                endTime: secondsToTime(endSec),
                 aspectRatio: aspectRatio || "9:16",
               });
 
               clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-            } catch (secErr) {
-              console.error(`[SmartClip] Direct section extraction failed for clip #${i + 1}:`, secErr.message || secErr);
             }
+          } catch (fullErr) {
+            console.error("[SmartClip] Full source download fallback also failed:", fullErr.message || fullErr);
+            fullDownloadError = fullErr;
           }
         }
 

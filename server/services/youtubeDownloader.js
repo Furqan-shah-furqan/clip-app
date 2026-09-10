@@ -476,7 +476,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
     console.log(`[YouTube-Downloader] Trying ${strategy.label} [Proxy: ${useProxy ? maskProxyUrl(proxyUrl) : "none"}]`);
 
     try {
-      await runCommand(ytDlpPath, args, { timeoutMs: 300000 });
+      await runCommand(ytDlpPath, args, { timeoutMs: 60000 });
 
       // Locate downloaded file
       const searchDir = path.dirname(outputTemplate);
@@ -893,6 +893,12 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
     { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "Section VisionOS/VR direct" },
     // Priority 5: fallback android
     { client: "youtube:player_client=android", withCookies: false, useProxy: Boolean(proxyUrl), label: "Section Android fallback" },
+    // Priority 6: fallback android,ios
+    { client: "youtube:player_client=android,ios", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Android/iOS fallback" },
+    // Priority 7: fallback web,mweb
+    { client: "youtube:player_client=web,mweb", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Web fallback" },
+    // Priority 8: default extraction
+    { client: null, withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Section Default fallback" },
   ];
 
   const stratErrors = [];
@@ -904,7 +910,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
-      "--extractor-args", strat.client,
+      ...(strat.client ? ["--extractor-args", strat.client] : []),
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
@@ -913,7 +919,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       "--download-sections", section,
       "--force-keyframes-at-cuts",
       "--merge-output-format", "mp4",
-      "--socket-timeout", "20",
+      "--socket-timeout", "15",
       "--retries", "2",
       "-o", outputTemplate,
       targetUrl,
@@ -921,7 +927,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
 
     try {
       console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label}...`);
-      await runCommand(ytDlpPath, args, { timeoutMs: 45000 });
+      await runCommand(ytDlpPath, args, { timeoutMs: 35000 });
 
       const files = fs.readdirSync(uploadsDir)
         .filter((f) => f.startsWith(`yt_smart_section_${clipStamp}`))
@@ -947,7 +953,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
 
 /**
  * Downloads a specific section of a YouTube video by attempting direct section download
- * first (1-3 seconds), and falling back to full source download + FFmpeg cut if needed.
+ * first (1-3 seconds), then remote RapidAPI slice, and falling back to full source download + FFmpeg cut if needed.
  */
 async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }) {
   const safeStart = Math.max(0, Number(startSec) || 0);
@@ -971,7 +977,36 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
       return mp4;
     }
   } catch (secErr) {
-    console.warn(`[YouTube-Downloader] Direct section download failed (${secErr.message.slice(0, 100)}), falling back to full source...`);
+    console.warn(`[YouTube-Downloader] Direct section download failed (${secErr.message.slice(0, 100)}), trying fallbacks...`);
+  }
+
+  // Step 1.5: RapidAPI remote stream extraction + FFmpeg remote slice (fast, 1-3s, ~2-3MB)
+  if (process.env.RAPIDAPI_KEY) {
+    try {
+      console.log(`[YouTube-Downloader] Attempting remote section slice via RapidAPI stream...`);
+      const videoId = extractYouTubeId(sourceUrl);
+      const streamUrl = await fetchRapidApiStreamUrl(videoId, sourceUrl);
+      if (streamUrl) {
+        const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
+        const cutDuration = Math.max(1, safeEnd - safeStart);
+        const ffmpegPath = getFfmpegPath();
+        await runCommand(ffmpegPath, [
+          "-y",
+          "-ss", String(safeStart),
+          "-i", streamUrl,
+          "-t", String(cutDuration),
+          "-c", "copy",
+          cutMp4,
+        ], { timeoutMs: 45000 });
+
+        if (fs.existsSync(cutMp4) && fs.statSync(cutMp4).size > 1000) {
+          console.log(`[YouTube-Downloader] Remote section slice successful via RapidAPI: ${cutMp4}`);
+          return cutMp4;
+        }
+      }
+    } catch (apiErr) {
+      console.warn(`[YouTube-Downloader] Remote RapidAPI section slice failed: ${apiErr.message}`);
+    }
   }
 
   // Step 2 & 3: Fall back to full source video download + FFmpeg cut
