@@ -1509,11 +1509,11 @@ body.caption-editor-page .scene-grid {
   font-size: 13px;
 }
 
-/* ─── CARD 4: PRESETS (60PX X 60PX BOXES) & EXPORT ───────── */
+/* ─── CARD 4: PRESETS (67PX X 60PX BOXES) & EXPORT ───────── */
 .presets-grid {
   display: flex !important;
   flex-wrap: wrap !important;
-  gap: 8px !important;
+  gap: 0 !important;
   align-items: center !important;
   justify-content: flex-start !important;
   padding: 4px 0 !important;
@@ -1521,16 +1521,17 @@ body.caption-editor-page .scene-grid {
   min-height: 0;
 }
 
-/* EXACT 70PX X 60PX PRESET BOXES (+10px width) — 25PX RADIUS — ZERO BORDER */
+/* EXACT 67PX X 60PX PRESET BOXES (-3px width) — 35PX RADIUS — 5PX MARGIN */
 .preset-card {
-  width: 70px !important;
+  width: 67px !important;
   height: 60px !important;
-  min-width: 70px !important;
+  min-width: 67px !important;
   min-height: 60px !important;
-  max-width: 70px !important;
+  max-width: 67px !important;
   max-height: 60px !important;
+  margin: 5px !important;
   padding: 4px 2px !important;
-  border-radius: 25px !important;
+  border-radius: 35px !important;
   border: none !important;
   background: #1c1d22 !important;
   display: flex !important;
@@ -1558,16 +1559,16 @@ body.caption-editor-page .scene-grid {
   transform: scale(1.04);
 }
 
-/* 15px RADIUS FOR PRESET SWATCH INSIDE 70x60 BOX */
+/* 20px RADIUS FOR PRESET SWATCH INSIDE 67x60 BOX */
 .preset-swatch {
   height: 22px !important;
-  width: 88% !important;
-  border-radius: 15px !important;
+  width: 86% !important;
+  border-radius: 20px !important;
   border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  font-size: 11.5px !important;
+  font-size: 11px !important;
   font-weight: 900 !important;
   letter-spacing: 0.02em;
 }
@@ -1579,7 +1580,7 @@ body.caption-editor-page .scene-grid {
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  max-width: 62px !important;
+  max-width: 58px !important;
   text-align: center !important;
 }
 
@@ -1905,4 +1906,377 @@ body.caption-editor-page .scene-grid {
 .ce-empty-sub {
   font-size: 12px;
   color: var(--muted);
+}
+
+/* ═════════════════════════════════════════════════════════════
+   PHONE VIDEO PLAYBACK CONTROLS
+   ═════════════════════════════════════════════════════════════ */
+.ce-video-play-btn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 35;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.ce-video-play-btn:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  background: rgba(0, 0, 0, 0.85);
+  border-color: #ffffff;
+  box-shadow: 0 0 25px rgba(255, 255, 255, 0.4);
+}
+
+.ce-video-play-btn.is-playing {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.8);
+}
+
+.caption-video-wrap:hover .ce-video-play-btn.is-playing {
+  opacity: 0.35;
+  pointer-events: auto;
+}
+
+.caption-video-wrap:hover .ce-video-play-btn.is-playing:hover {
+  opacity: 1;
+}
+
+.ce-video-controls-bar {
+  position: absolute;
+  bottom: 18px;
+  left: 10px;
+  right: 10px;
+  height: 32px;
+  background: rgba(15, 15, 20, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  z-index: 45;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.ce-video-bar-play-btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.ce-video-bar-play-btn:hover {
+  transform: scale(1.18);
+  color: #60a5fa;
+}
+
+.ce-video-scrubber-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.ce-video-scrubber-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 3px;
+  pointer-events: none;
+  transition: width 0.05s linear;
+}
+
+.ce-video-time-display {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+/* ═════════════════════════════════════════════════════════════
+   DAY / NIGHT MODE SWITCH (Capsule Switch Replica)
+   ═════════════════════════════════════════════════════════════ */
+.day-night-toggle {
+  position: relative;
+  width: 154px;
+  height: 42px;
+  border-radius: 9999px;
+  background: #000000;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  user-select: none;
+  transition: background 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.28s ease;
+  overflow: hidden;
+  margin-right: 6px;
+}
+
+.dnt-thumb {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.32s cubic-bezier(0.34, 1.25, 0.64, 1);
+  z-index: 3;
+}
+
+.dnt-icon {
+  width: 16px;
+  height: 16px;
+  color: #000000;
+}
+
+.dnt-icon-moon {
+  display: block;
+}
+
+.dnt-icon-sun {
+  display: none;
+}
+
+.dnt-text {
+  font-family: 'Montserrat', 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 2;
+  position: absolute;
+}
+
+.dnt-text-night {
+  right: 14px;
+  color: #ffffff;
+  display: block;
+}
+
+.dnt-text-day {
+  left: 14px;
+  color: #000000;
+  display: none;
+}
+
+/* ═════════════════════════════════════════════════════════════
+   THEME LIGHT STYLES FOR CAPTION STUDIO & WHOLE APP
+   ═════════════════════════════════════════════════════════════ */
+body.caption-editor-page.theme-light {
+  background: #0b0c0e !important;
+}
+
+body.caption-editor-page.theme-light .day-night-toggle {
+  background: #e9ecef;
+  border-color: #ced4da;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+body.caption-editor-page.theme-light .dnt-thumb {
+  transform: translateX(113px);
+  border-color: #111827;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+
+body.caption-editor-page.theme-light .dnt-icon-moon {
+  display: none;
+}
+
+body.caption-editor-page.theme-light .dnt-icon-sun {
+  display: block;
+}
+
+body.caption-editor-page.theme-light .dnt-text-night {
+  display: none;
+}
+
+body.caption-editor-page.theme-light .dnt-text-day {
+  display: block;
+}
+
+body.caption-editor-page.theme-light .ce-main-container {
+  background: #f8f9fa !important;
+  color: #111827 !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+body.caption-editor-page.theme-light .ce-topbar {
+  background: #ffffff !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+body.caption-editor-page.theme-light .ce-kicker {
+  color: #6b7280 !important;
+}
+
+body.caption-editor-page.theme-light .ce-clip-title {
+  color: #111827 !important;
+}
+
+body.caption-editor-page.theme-light .ce-back-btn {
+  background: #f1f3f5 !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-back-btn:hover {
+  background: #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-status-chip {
+  background: #f3f4f6 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-status-label {
+  color: #374151 !important;
+}
+
+body.caption-editor-page.theme-light .ce-sync-btn {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-sync-btn:hover {
+  background: #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05) !important;
+}
+
+body.caption-editor-page.theme-light .ce-card-title {
+  color: #111827 !important;
+}
+
+body.caption-editor-page.theme-light .ce-label,
+body.caption-editor-page.theme-light .ce-field-label {
+  color: #4b5563 !important;
+}
+
+body.caption-editor-page.theme-light .ce-value-badge {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-select,
+body.caption-editor-page.theme-light .ce-input {
+  background: #f9fafb !important;
+  color: #111827 !important;
+  border: 1.5px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-select:focus,
+body.caption-editor-page.theme-light .ce-input:focus {
+  border-color: #111827 !important;
+  background: #ffffff !important;
+}
+
+body.caption-editor-page.theme-light .ce-seg-btn,
+body.caption-editor-page.theme-light .ce-pos-btn {
+  background: #f3f4f6 !important;
+  color: #374151 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .ce-seg-btn.is-active,
+body.caption-editor-page.theme-light .ce-pos-btn.is-active {
+  background: #111827 !important;
+  color: #ffffff !important;
+  border-color: #111827 !important;
+}
+
+body.caption-editor-page.theme-light .ce-drag-hint {
+  background: #f3f4f6 !important;
+  color: #4b5563 !important;
+}
+
+body.caption-editor-page.theme-light .ce-hint {
+  color: #6b7280 !important;
+}
+
+body.caption-editor-page.theme-light .ce-btn--primary {
+  background: #111827 !important;
+  color: #ffffff !important;
+}
+
+body.caption-editor-page.theme-light .ce-btn--primary:hover {
+  background: #000000 !important;
+}
+
+body.caption-editor-page.theme-light .preset-card {
+  background: #f3f4f6 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .preset-card:hover {
+  background: #e5e7eb !important;
+}
+
+body.caption-editor-page.theme-light .preset-card--active {
+  background: #e0e7ff !important;
+  box-shadow: 0 0 0 2px #4f46e5, 0 4px 12px rgba(79, 70, 229, 0.25) !important;
+}
+
+body.caption-editor-page.theme-light .preset-name {
+  color: #374151 !important;
+}
+
+body.caption-editor-page.theme-light .ce-btn--export-hero {
+  background: #111827 !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !important;
+}
+
+body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
+  background: #000000 !important;
 }

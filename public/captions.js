@@ -257,9 +257,10 @@ let realtimeWordStreamSeen = false;
 let realtimeShouldPersistSegments = false;
 
 // DOM refs
-let themeToggle, modePill, backBtn, goBackBtn, saveAndBackBtn, publishNavBtn;
+let themeSwitchBtn, themeToggle, modePill, backBtn, goBackBtn, saveAndBackBtn, publishNavBtn;
 let noClipState, editorShell, clipTitleDisplay;
 let captionVideo, captionVideoWrap, captionOverlay, captionOverlayText, captionDragHandle;
+let videoPlayOverlayBtn, videoControlsBar, barPlayBtn, videoScrubberTrack, videoScrubberProgress, videoTimeDisplay;
 let captionPosDisplay, segmentCountBadge;
 let captionLoadingState, captionSegmentsList;
 let addSegmentBtn, regenerateBtn;
@@ -283,6 +284,7 @@ let syncAudioCaptionsBtn;
 let colorSwatchButtons = [];
 
 function cacheDom() {
+  themeSwitchBtn = document.getElementById("themeSwitchBtn");
   themeToggle = document.getElementById("themeToggle");
   modePill = document.getElementById("modePill");
   backBtn = document.getElementById("backBtn");
@@ -294,6 +296,12 @@ function cacheDom() {
   clipTitleDisplay = document.getElementById("clipTitleDisplay");
   captionVideo = document.getElementById("captionVideo");
   captionVideoWrap = document.getElementById("captionVideoWrap");
+  videoPlayOverlayBtn = document.getElementById("videoPlayOverlayBtn");
+  videoControlsBar = document.getElementById("videoControlsBar");
+  barPlayBtn = document.getElementById("barPlayBtn");
+  videoScrubberTrack = document.getElementById("videoScrubberTrack");
+  videoScrubberProgress = document.getElementById("videoScrubberProgress");
+  videoTimeDisplay = document.getElementById("videoTimeDisplay");
   captionOverlay = document.getElementById("captionOverlay");
   captionOverlayText = document.getElementById("captionOverlayText");
   captionDragHandle = document.getElementById("captionDragHandle");
@@ -368,17 +376,100 @@ function updateThemeState() {
   const isDark = saved === null ? true : saved !== "light";
   document.body.classList.toggle("theme-dark", isDark);
   document.body.classList.toggle("theme-light", !isDark);
+  if (themeSwitchBtn) {
+    themeSwitchBtn.setAttribute("aria-checked", isDark ? "true" : "false");
+    themeSwitchBtn.classList.toggle("is-day", !isDark);
+    themeSwitchBtn.classList.toggle("is-night", isDark);
+  }
+  if (modePill) {
+    modePill.textContent = isDark ? "Dark" : "Light";
+  }
+}
+function toggleTheme() {
+  const saved = localStorage.getItem("clipflow-theme");
+  const isDark = saved === null ? true : saved !== "light";
+  const newDark = !isDark;
+  localStorage.setItem("clipflow-theme", newDark ? "dark" : "light");
+  updateThemeState();
 }
 function initTheme() {
   updateThemeState();
 }
 function updateModePill() {
-  if (!modePill) return;
-  const isDark = document.body.classList.contains("theme-dark");
-  modePill.textContent = isDark ? "Dark" : "Light";
+  updateThemeState();
 }
 function bindTheme() {
-  // Theme toggle removed from edit page as requested
+  themeSwitchBtn?.addEventListener("click", toggleTheme);
+  themeSwitchBtn?.addEventListener("keydown", (e) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      toggleTheme();
+    }
+  });
+  window.addEventListener("storage", (e) => {
+    if (e.key === "clipflow-theme") {
+      updateThemeState();
+    }
+  });
+}
+
+// Video Playback Controls
+function formatVideoTime(sec) {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0;
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function updatePlaybackUI() {
+  if (!captionVideo) return;
+  const isPlaying = !captionVideo.paused && !captionVideo.ended;
+  const playIcon = videoPlayOverlayBtn?.querySelector(".ce-play-icon");
+  const pauseIcon = videoPlayOverlayBtn?.querySelector(".ce-pause-icon");
+  const barPlayIcon = barPlayBtn?.querySelector(".bar-icon-play");
+  const barPauseIcon = barPlayBtn?.querySelector(".bar-icon-pause");
+
+  if (videoPlayOverlayBtn) {
+    videoPlayOverlayBtn.classList.toggle("is-playing", isPlaying);
+    if (playIcon) playIcon.style.display = isPlaying ? "none" : "block";
+    if (pauseIcon) pauseIcon.style.display = isPlaying ? "block" : "none";
+  }
+  if (barPlayBtn) {
+    if (barPlayIcon) barPlayIcon.style.display = isPlaying ? "none" : "block";
+    if (barPauseIcon) barPauseIcon.style.display = isPlaying ? "block" : "none";
+  }
+
+  const cur = captionVideo.currentTime || 0;
+  const dur = captionVideo.duration && isFinite(captionVideo.duration) && captionVideo.duration > 0
+    ? captionVideo.duration
+    : (editorState.clip?.duration || 30);
+  const pct = Math.min(100, Math.max(0, (cur / dur) * 100));
+
+  if (videoScrubberProgress) videoScrubberProgress.style.width = `${pct}%`;
+  if (videoTimeDisplay) videoTimeDisplay.textContent = `${formatVideoTime(cur)} / ${formatVideoTime(dur)}`;
+}
+
+function toggleVideoPlayback() {
+  if (!captionVideo) return;
+  if (captionVideo.paused || captionVideo.ended) {
+    const playPromise = captionVideo.play();
+    if (playPromise !== undefined) {
+      playPromise
+        .then(() => {
+          updatePlaybackUI();
+        })
+        .catch((err) => {
+          console.warn("Video playback with audio blocked, attempting muted:", err);
+          captionVideo.muted = true;
+          captionVideo.play().then(() => {
+            updatePlaybackUI();
+          }).catch((e2) => console.error("Video play failed:", e2));
+        });
+    }
+  } else {
+    captionVideo.pause();
+    updatePlaybackUI();
+  }
 }
 
 // Tabs
@@ -527,16 +618,6 @@ function normalizeVideoUrl(val) {
 function getClipSource(clip = {}) {
   if (!clip) return "";
 
-  // 1. If explicit fileName is provided and ends with .mp4
-  const rawFileName = clip.fileName || clip.filename;
-  if (rawFileName && typeof rawFileName === "string") {
-    const fn = rawFileName.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
-    if (fn && fn.toLowerCase().endsWith(".mp4")) {
-      return `/api/files/download/${encodeURIComponent(fn)}`;
-    }
-  }
-
-  // 2. Check previewUrl and downloadUrl first
   const candidates = [
     clip.previewUrl,
     clip.downloadUrl,
@@ -548,12 +629,32 @@ function getClipSource(clip = {}) {
     clip.videoUrl,
   ];
 
+  // 1. Check for valid Cloudinary or external HTTPS URLs first
+  for (const c of candidates) {
+    if (c && typeof c === "string") {
+      const trimmed = c.trim();
+      if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
+        if (isPlayableVideoUrl(trimmed)) return trimmed;
+      }
+    }
+  }
+
+  // 2. If explicit fileName is provided and ends with .mp4
+  const rawFileName = clip.fileName || clip.filename;
+  if (rawFileName && typeof rawFileName === "string") {
+    const fn = rawFileName.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
+    if (fn && fn.toLowerCase().endsWith(".mp4")) {
+      return `/api/files/download/${encodeURIComponent(fn)}`;
+    }
+  }
+
+  // 3. Normalize candidates
   for (const c of candidates) {
     const norm = normalizeVideoUrl(c);
     if (norm) return norm;
   }
 
-  // 3. Check outputPath, filePath, localPath, storagePath, clipPath
+  // 4. Check outputPath, filePath, localPath, storagePath, clipPath
   const pathCandidates = [
     clip.outputPath,
     clip.filePath,
@@ -3418,6 +3519,62 @@ function bindControls() {
     }),
   );
 
+  // ── Video Playback & Controls ──
+  captionVideo?.addEventListener("play", updatePlaybackUI);
+  captionVideo?.addEventListener("pause", updatePlaybackUI);
+  captionVideo?.addEventListener("timeupdate", updatePlaybackUI);
+  captionVideo?.addEventListener("loadedmetadata", updatePlaybackUI);
+  captionVideo?.addEventListener("ended", () => {
+    if (captionVideo) {
+      captionVideo.currentTime = 0;
+      updatePlaybackUI();
+    }
+  });
+
+  videoPlayOverlayBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleVideoPlayback();
+  });
+
+  barPlayBtn?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggleVideoPlayback();
+  });
+
+  videoScrubberTrack?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!captionVideo) return;
+    const dur = captionVideo.duration && isFinite(captionVideo.duration) && captionVideo.duration > 0
+      ? captionVideo.duration
+      : (editorState.clip?.duration || 30);
+    const rect = videoScrubberTrack.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const ratio = Math.min(1, Math.max(0, clickX / rect.width));
+    captionVideo.currentTime = ratio * dur;
+    updatePlaybackUI();
+  });
+
+  captionVideoWrap?.addEventListener("click", (e) => {
+    if (
+      e.target.closest("#captionOverlay") ||
+      e.target.closest("#qualityEnhancerBtn") ||
+      e.target.closest("#videoControlsBar") ||
+      e.target.closest("#videoPlayOverlayBtn")
+    ) {
+      return;
+    }
+    toggleVideoPlayback();
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.key === " ") {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      e.preventDefault();
+      toggleVideoPlayback();
+    }
+  });
+
   bindColorSwatches();
 }
 
@@ -3524,6 +3681,7 @@ async function init() {
       try {
         captionVideo.currentTime = 0;
       } catch {}
+      updatePlaybackUI();
     } else {
       console.warn("No video source found for clip:", session.clip);
     }
@@ -3537,12 +3695,14 @@ async function init() {
           captionVideo.dataset.triedExports = "true";
           captionVideo.src = `/exports/${fn}`;
           captionVideo.load();
+          updatePlaybackUI();
           return;
         }
         if (currentSrc.includes("/exports/") && fn && !captionVideo.dataset.triedUploads) {
           captionVideo.dataset.triedUploads = "true";
           captionVideo.src = `/uploads/${fn}`;
           captionVideo.load();
+          updatePlaybackUI();
           return;
         }
         if (!captionVideo.dataset.triedStudioFallback) {
@@ -3559,6 +3719,7 @@ async function init() {
                   session.clip = c;
                   captionVideo.src = alt;
                   captionVideo.load();
+                  updatePlaybackUI();
                   return;
                 }
               }
