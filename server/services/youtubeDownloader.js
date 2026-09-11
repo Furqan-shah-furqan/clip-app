@@ -67,9 +67,11 @@ let proxyQuarantineUntil = 0;
 let lastProxyFailureReason = "";
 
 function quarantineProxy(reason = "failed", durationMs = 5 * 60 * 1000) {
-  proxyQuarantineUntil = Date.now() + durationMs;
+  const isPermanentError = String(reason).includes("402") || String(reason).includes("407");
+  const effectiveDuration = isPermanentError ? 24 * 60 * 60 * 1000 : durationMs;
+  proxyQuarantineUntil = Date.now() + effectiveDuration;
   lastProxyFailureReason = String(reason || "unknown");
-  console.warn(`[YouTube-Downloader] ⚠️ Proxy quarantined for ${Math.round(durationMs / 1000)}s due to: ${lastProxyFailureReason.slice(0, 160)}`);
+  console.warn(`[YouTube-Downloader] ⚠️ Proxy quarantined for ${Math.round(effectiveDuration / 1000)}s due to: ${lastProxyFailureReason.slice(0, 160)}`);
 }
 
 function isProxyQuarantined() {
@@ -81,6 +83,33 @@ function getProxyQuarantineInfo() {
     quarantined: isProxyQuarantined(),
     remainingSec: Math.max(0, Math.round((proxyQuarantineUntil - Date.now()) / 1000)),
     reason: lastProxyFailureReason,
+  };
+}
+
+let cookieQuarantineUntil = 0;
+let lastCookieFailureReason = "";
+
+function quarantineCookies(reason = "failed", durationMs = 24 * 60 * 60 * 1000) {
+  cookieQuarantineUntil = Date.now() + durationMs;
+  lastCookieFailureReason = String(reason || "unknown");
+  console.warn(`[YouTube-Downloader] ⚠️ Cookies quarantined for ${Math.round(durationMs / 1000)}s due to: ${lastCookieFailureReason.slice(0, 160)}`);
+}
+
+function isCookiesQuarantined() {
+  return Date.now() < cookieQuarantineUntil;
+}
+
+function resetCookieQuarantine() {
+  cookieQuarantineUntil = 0;
+  lastCookieFailureReason = "";
+  console.log("[YouTube-Downloader] ✅ Cookie quarantine reset (fresh cookies provided).");
+}
+
+function getCookieQuarantineInfo() {
+  return {
+    quarantined: isCookiesQuarantined(),
+    remainingSec: Math.max(0, Math.round((cookieQuarantineUntil - Date.now()) / 1000)),
+    reason: lastCookieFailureReason,
   };
 }
 
@@ -174,7 +203,12 @@ function getPoTokenArgs() {
 
 // ── Utility: Cookie Management & Domain Auto-Normalization ───────────────────
 
-function resolveActiveCookieFile() {
+function resolveActiveCookieFile(options = {}) {
+  const ignoreQuarantine = Boolean(options?.ignoreQuarantine);
+  if (!ignoreQuarantine && isCookiesQuarantined()) {
+    return null;
+  }
+
   if (fs.existsSync("/etc/secrets/cookies.txt")) return "/etc/secrets/cookies.txt";
 
   const rootCookie = path.join(rootDir, "cookies.txt");
@@ -468,45 +502,44 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
   // Multi-tier client configurations: prioritizes direct high-compatibility clients
   const clientStrategies = [
-    // Priority 1: visionos,android_vr with cookies & proxy (if proxy is healthy)
-    ...(effectiveCookies && proxyUrl ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
-    ] : []),
+    // Priority 1: Android client direct (no cookies) - fastest, highly compatible on YouTube datacenter IPs
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
 
-    // Priority 2: visionos,android_vr direct with cookies
-    ...(effectiveCookies ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
-    ] : []),
+    // Priority 2: Web client direct (no cookies)
+    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct (no cookies)" },
 
-    // Priority 3: Android client direct with cookies
+    // Priority 3: VisionOS/VR direct (no cookies)
+    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "VisionOS/VR direct" },
+
+    // Priority 4: Android client direct with cookies (only if healthy cookies configured)
     ...(effectiveCookies ? [
       { client: "youtube:player_client=android", withCookies: true, useProxy: false, label: "Android client direct + cookies" },
     ] : []),
 
-    // Priority 4: Android client direct (no cookies)
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct" },
-
-    // Priority 5: visionos,android_vr via proxy (no cookies)
-    ...(proxyUrl ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
+    // Priority 5: VisionOS/VR direct with cookies (only if healthy cookies configured)
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
     ] : []),
 
-    // Priority 6: visionos,android_vr direct (no cookies)
-    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "VisionOS/VR direct" },
-
-    // Priority 7: Web client direct with cookies
+    // Priority 6: Web client direct with cookies
     ...(effectiveCookies ? [
       { client: "youtube:player_client=web", withCookies: true, useProxy: false, label: "Web client direct + cookies" },
     ] : []),
 
-    // Priority 8: Web client direct (no cookies)
-    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct" },
+    // Priority 7: Proxied fallbacks (ONLY if proxy is active and NOT quarantined)
+    ...(proxyUrl && !isProxyQuarantined() ? [
+      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Android client via proxy" },
+      { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
+      ...(effectiveCookies ? [
+        { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
+      ] : []),
+    ] : []),
   ];
 
   const strategyErrors = [];
 
   for (const strategy of clientStrategies) {
-    const useCookies = strategy.withCookies && Boolean(effectiveCookies);
+    const useCookies = strategy.withCookies && Boolean(effectiveCookies) && !isCookiesQuarantined();
     const useProxy = strategy.useProxy && Boolean(proxyUrl) && !isProxyQuarantined();
 
     // Build arguments
@@ -519,7 +552,7 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/bestvideo*+bestaudio/best",
+      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--merge-output-format", "mp4",
       "--socket-timeout", "30",
@@ -557,7 +590,11 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
     } catch (err) {
       const msg = err.message || String(err);
       if (useProxy && isProxyFailureError(err)) {
-        quarantineProxy(msg);
+        const isBilledError = msg.includes("402") || msg.includes("407");
+        quarantineProxy(msg, isBilledError ? 24 * 60 * 60 * 1000 : 10 * 60 * 1000);
+      }
+      if (useCookies && (msg.includes("not a bot") || msg.includes("Sign in") || msg.includes("--cookies"))) {
+        quarantineCookies(msg, 24 * 60 * 60 * 1000);
       }
       strategyErrors.push(`[${strategy.label}]: ${msg}`);
       console.warn(`[YouTube-Downloader] ${strategy.label} failed: ${msg.slice(0, 160)}`);
@@ -951,36 +988,44 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
   const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
 
   const strategies = [
-    // Priority 1: visionos,android_vr with cookies & proxy (if available and healthy)
-    ...(effectiveCookies && proxyUrl ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
-    ] : []),
-    // Priority 2: visionos,android_vr with cookies direct
-    ...(effectiveCookies ? [
-      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
-    ] : []),
-    // Priority 3: Android client direct with cookies (extremely reliable for direct sections)
+    // Priority 1: Android client direct (no cookies) - fastest, direct slice extraction (2-3s), bypasses bot blocks
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct (no cookies)" },
+
+    // Priority 2: Web client direct (no cookies)
+    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct (no cookies)" },
+
+    // Priority 3: VisionOS/VR direct (no cookies)
+    { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "VisionOS/VR direct (no cookies)" },
+
+    // Priority 4: Android client direct with cookies (only if healthy cookies configured)
     ...(effectiveCookies ? [
       { client: "youtube:player_client=android", withCookies: true, useProxy: false, label: "Android client direct + cookies" },
     ] : []),
-    // Priority 4: Android client direct (no cookies)
-    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct" },
-    // Priority 5: Web client direct with cookies
+
+    // Priority 5: VisionOS/VR with cookies direct (only if healthy cookies configured)
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
+    ] : []),
+
+    // Priority 6: Web client direct with cookies
     ...(effectiveCookies ? [
       { client: "youtube:player_client=web", withCookies: true, useProxy: false, label: "Web client direct + cookies" },
     ] : []),
-    // Priority 6: Web client direct
-    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct" },
-    // Priority 7: VisionOS/VR via proxy fallback
-    ...(proxyUrl ? [
+
+    // Priority 7: Proxied fallbacks (ONLY if proxy is active and NOT quarantined)
+    ...(proxyUrl && !isProxyQuarantined() ? [
+      { client: "youtube:player_client=android", withCookies: false, useProxy: true, label: "Android client via proxy" },
       { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
+      ...(effectiveCookies ? [
+        { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
+      ] : []),
     ] : []),
   ];
 
   const stratErrors = [];
 
   for (const strat of strategies) {
-    const useCookies = strat.withCookies && Boolean(effectiveCookies);
+    const useCookies = strat.withCookies && Boolean(effectiveCookies) && !isCookiesQuarantined();
     const useProxy = strat.useProxy && Boolean(proxyUrl) && !isProxyQuarantined();
     const args = [
       "--no-playlist",
@@ -991,7 +1036,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
       ...(useCookies ? ["--cookies", effectiveCookies] : []),
-      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/best[height<=720]/best",
+      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
       ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
       "--download-sections", section,
       "--force-keyframes-at-cuts",
@@ -1020,7 +1065,11 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
     } catch (err) {
       const msg = err.message || String(err);
       if (useProxy && isProxyFailureError(err)) {
-        quarantineProxy(msg);
+        const isBilledError = msg.includes("402") || msg.includes("407");
+        quarantineProxy(msg, isBilledError ? 24 * 60 * 60 * 1000 : 10 * 60 * 1000);
+      }
+      if (useCookies && (msg.includes("not a bot") || msg.includes("Sign in") || msg.includes("--cookies"))) {
+        quarantineCookies(msg, 24 * 60 * 60 * 1000);
       }
       stratErrors.push(`[${strat.label}]: ${msg}`);
       console.warn(`[YouTube-Downloader] ${strat.label} failed: ${msg.slice(0, 120)}`);
@@ -1214,7 +1263,8 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
   }
 
   results.proxyQuarantine = getProxyQuarantineInfo();
-  results.buildVersion = "hybrid-v6-resilient";
+  results.cookieQuarantine = getCookieQuarantineInfo();
+  results.buildVersion = "hybrid-v7-direct-android";
   return results;
 }
 
@@ -1225,6 +1275,10 @@ module.exports = {
   maskProxyUrl,
   quarantineProxy,
   getProxyQuarantineInfo,
+  quarantineCookies,
+  isCookiesQuarantined,
+  resetCookieQuarantine,
+  getCookieQuarantineInfo,
   isProxyFailureError,
   getYtDlpPath,
   getFfmpegPath,

@@ -2759,7 +2759,7 @@ function formatSmartReason(suggestion = {}) {
 function showUploadRequiredForSmartClips(data) {
   state.uploadRequiredActive = true;
   if (data?.isUnavailable) {
-    const unavailMsg = data.message || "This video is unavailable or private on YouTube. Please try another video.";
+    const unavailMsg = data.message || "This video is unavailable, private, or has been removed on YouTube. (Note: YouTube video IDs are case-sensitive; please check capitalization).";
     updateProgress(0, unavailMsg);
     if (smartClipBtn) {
       smartClipBtn.disabled = false;

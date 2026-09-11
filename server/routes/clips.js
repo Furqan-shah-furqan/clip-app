@@ -22,6 +22,7 @@ const {
   cleanupStaleSourceVideos,
   getDownloaderDiagnostics,
   resolveActiveCookieFile,
+  resetCookieQuarantine,
 } = require("../services/youtubeDownloader");
 
 const router = express.Router();
@@ -628,21 +629,20 @@ router.post("/smart-generate", async (req, res) => {
               errStr.includes("Sign in to confirm")
             );
 
-            // If clip #1 is explicitly blocked or video is unavailable, fail fast to avoid long timeouts
-            if ((isBotBlock || isUnavailable) && !clips.length) {
-              console.warn(`[SmartClip] Early fail condition met (unavailable: ${isUnavailable}, botBlock: ${isBotBlock}). Exiting section extraction.`);
+            // If video is confirmed unavailable/private on YouTube, fail fast
+            if (isUnavailable && !clips.length) {
+              console.warn(`[SmartClip] Early fail condition met (video is unavailable on YouTube). Exiting section extraction.`);
               break;
             }
           }
         }
 
         // Step 2 (Fallback): ONLY if all section downloads failed AND clips.length === 0,
-        // and only if within safe time budget (< 35s elapsed), not a bot block, and not unavailable
+        // and only if within safe time budget (< 55s elapsed) and not unavailable
         const elapsed = Date.now() - startedAt;
         const fullErrStr = String(fullDownloadError?.message || fullDownloadError || "");
-        const isBot = fullErrStr.includes("not a bot") || fullErrStr.includes("Sign in");
         const isUnavail = fullErrStr.includes("This video is unavailable") || fullErrStr.includes("Video unavailable");
-        if (!clips.length && elapsed < 35000 && !isBot && !isUnavail) {
+        if (!clips.length && elapsed < 55000 && !isUnavail) {
           console.warn("[SmartClip] Direct section downloads failed, attempting fallback full source download...");
           try {
             fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
@@ -694,9 +694,9 @@ router.post("/smart-generate", async (req, res) => {
 
           let userMessage = `YouTube clip download failed: ${err.message || "download error"}.`;
           if (isUnavailable) {
-            userMessage = "This video is unavailable, private, or has been removed on YouTube. Please check the URL or try another video.";
+            userMessage = "This video is unavailable, private, or has been removed on YouTube. (Note: YouTube video IDs like '5pV3D14y1FQ' are case-sensitive; please check capitalization).";
           } else if (isBotBlock) {
-            userMessage = "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links.";
+            userMessage = "YouTube bot protection encountered. You can upload cookies.txt or upload your source video directly.";
           } else if (isProxyError) {
             userMessage = "Proxy quota exceeded on cloud server. Direct download fallback failed. Upload source video directly.";
           }
@@ -960,6 +960,8 @@ router.post("/upload-cookies", express.json({ limit: "10mb" }), (req, res) => {
     try {
       fs.writeFileSync(path.join(uploadsDir, "cookies.txt"), content, "utf8");
     } catch {}
+
+    resetCookieQuarantine();
 
     return res.json({
       success: true,
