@@ -3042,11 +3042,14 @@ function getCleanSmartClipError(error) {
   if (
     raw.includes("challenge solving failed") ||
     raw.includes("PO Token") ||
-    raw.includes("HTTP Error 403") ||
     raw.includes("Sign in to confirm") ||
     raw.includes("not a bot")
   ) {
-    return "This YouTube video could not be downloaded. Try Upload or update yt-dlp.";
+    return "This YouTube video could not be downloaded from cloud servers. Try uploading the video directly.";
+  }
+
+  if (raw.includes("403") || raw.includes("Forbidden")) {
+    return "Video downloader received HTTP 403 Forbidden. RapidAPI host/key might need verification, or use Upload.";
   }
 
   if (
@@ -3054,15 +3057,15 @@ function getCleanSmartClipError(error) {
     raw.includes("getaddrinfo failed") ||
     raw.includes("ENOTFOUND")
   ) {
-    return "Internet/DNS failed. Check your connection and try again.";
+    return "Internet or DNS connection failed. Please check your connection and try again.";
   }
 
   if (raw.includes("Failed to fetch") || raw.includes("NetworkError")) {
-    return "Cloud server request timed out or was interrupted. Try uploading the video file directly or add cookies.txt.";
+    return "Cloud server request timed out or was interrupted. Try uploading the video file directly.";
   }
 
   return (
-    raw || "Smart clipping failed. Try another video or upload the source file."
+    raw || "Smart clipping failed. Try another video or upload the source file directly."
   );
 }
 

@@ -1,4 +1,5 @@
 const express = require("express");
+const axios = require("axios");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
@@ -408,13 +409,19 @@ router.post("/smart-suggest", async (req, res) => {
 router.get("/diag", async (req, res) => {
   const videoId = req.query.id || "1_t6l6ObfRc";
   const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
-  const rapidApiHost = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
+  const rawRapidApiHost = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
+  const rapidApiHost = rawRapidApiHost
+    .replace(/^(?:x-)?rapidapi-host:\s*/i, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .trim() || "youtube-video-fast-downloader-24-7.p.rapidapi.com";
 
   const results = {
     rapidApiKeyConfigured: !!rapidApiKey,
     rapidApiKeyLength: rapidApiKey.length,
     rapidApiKeyPrefix: rapidApiKey ? rapidApiKey.slice(0, 5) + "..." : null,
-    rapidApiHost,
+    rawRapidApiHost,
+    sanitizedRapidApiHost: rapidApiHost,
     testVideoId: videoId,
     fastDownloaderTest: null,
     ytstreamTest: null,

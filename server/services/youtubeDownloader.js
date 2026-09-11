@@ -222,14 +222,28 @@ async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) 
 
 // ── RapidAPI Providers ──────────────────────────────────────────────────────
 
+/**
+ * Strips any accidental header labels or URL prefixes from the host configuration.
+ */
+function sanitizeRapidApiHost(rawHost) {
+  if (!rawHost || typeof rawHost !== "string") {
+    return "youtube-video-fast-downloader-24-7.p.rapidapi.com";
+  }
+  let clean = rawHost.trim();
+  clean = clean.replace(/^(?:x-)?rapidapi-host:\s*/i, "");
+  clean = clean.replace(/^https?:\/\//i, "");
+  clean = clean.replace(/\/.*$/, "").trim();
+  return clean || "youtube-video-fast-downloader-24-7.p.rapidapi.com";
+}
+
 async function fetchFromFastDownloader(videoId, rapidApiKey) {
-  const host = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
+  const host = sanitizeRapidApiHost(process.env.RAPIDAPI_HOST);
 
   // Step 1: Discover quality ID
   let selectedQualityId = null;
   try {
     const qualityUrl = `https://${host}/get_available_quality/${videoId}`;
-    console.log(`[RapidAPI][FAST] Discovering qualities at: ${qualityUrl}`);
+    console.log(`[RapidAPI][FAST] Discovering qualities at: ${qualityUrl} (host: ${host})`);
     const qRes = await axios.get(qualityUrl, {
       headers: {
         "x-rapidapi-host": host,
@@ -256,7 +270,7 @@ async function fetchFromFastDownloader(videoId, rapidApiKey) {
       }
     }
   } catch (qErr) {
-    console.warn(`[RapidAPI][FAST] Quality discovery note: ${qErr.message}`);
+    console.warn(`[RapidAPI][FAST] Quality discovery note: ${qErr.response?.data?.message || qErr.message}`);
   }
 
   // Step 2: Request video download URL
@@ -266,14 +280,21 @@ async function fetchFromFastDownloader(videoId, rapidApiKey) {
 
   console.log(`[RapidAPI][FAST] Requesting video download URL: ${endpoint}`);
 
-  const response = await axios.get(endpoint, {
-    headers: {
-      "x-rapidapi-host": host,
-      "x-rapidapi-key": rapidApiKey,
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-    timeout: 30000,
-  });
+  let response;
+  try {
+    response = await axios.get(endpoint, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 30000,
+    });
+  } catch (err) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+    throw new Error(`RapidAPI FAST Downloader error (HTTP ${status || "UNKNOWN"}): ${msg}`);
+  }
 
   const rawUrl = parseStreamUrlFromResponse(response.data);
   if (!rawUrl) {
@@ -292,14 +313,21 @@ async function fetchFromYtStream(videoId, rapidApiKey) {
 
   console.log(`[RapidAPI][ytstream] Requesting direct MP4 link: ${endpoint}`);
 
-  const response = await axios.get(endpoint, {
-    headers: {
-      "x-rapidapi-host": host,
-      "x-rapidapi-key": rapidApiKey,
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    },
-    timeout: 30000,
-  });
+  let response;
+  try {
+    response = await axios.get(endpoint, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 30000,
+    });
+  } catch (err) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+    throw new Error(`RapidAPI ytstream error (HTTP ${status || "UNKNOWN"}): ${msg}`);
+  }
 
   const url = parseStreamUrlFromResponse(response.data);
   if (!url) {
@@ -334,7 +362,7 @@ async function downloadYouTubeSource(url) {
 
   console.log(`[YouTube-Downloader] Starting source download for Video ID: ${videoId}`);
 
-  const hostConfig = (process.env.RAPIDAPI_HOST || "").trim().toLowerCase();
+  const hostConfig = sanitizeRapidApiHost(process.env.RAPIDAPI_HOST).toLowerCase();
   let streamUrl = null;
 
   // Attempt configured provider or FAST Downloader with ytstream fallback
