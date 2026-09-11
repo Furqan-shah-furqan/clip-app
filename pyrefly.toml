@@ -5,7 +5,6 @@ project-includes = [
 project-excludes = [
     "**/node_modules/**",
     "**/.venv/**",
-    "**/clip-app/**",
 ]
 
 search-path = [

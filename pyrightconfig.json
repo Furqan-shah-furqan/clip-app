@@ -1,6 +1,6 @@
 {
   "include": ["python"],
-  "exclude": ["node_modules", ".venv", "clip-app"],
+  "exclude": ["node_modules", ".venv"],
   "venvPath": ".",
   "venv": ".venv",
   "extraPaths": ["python", ".venv/Lib/site-packages"],

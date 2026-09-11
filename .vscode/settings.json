@@ -16,7 +16,6 @@
     "reportPrivateImportUsage": "none"
   },
   "python.analysis.ignore": [
-    "**/clip-app/**",
     "**/.venv/**",
     "**/node_modules/**"
   ],
@@ -24,9 +23,11 @@
   "typescript.validate.enable": false,
   "javascript.implicitProjectConfig.checkJs": false,
   "files.exclude": {
-    "**/clip-app": true
+    "**/.venv": true,
+    "**/node_modules": true
   },
   "search.exclude": {
-    "**/clip-app": true
+    "**/.venv": true,
+    "**/node_modules": true
   }
 }
