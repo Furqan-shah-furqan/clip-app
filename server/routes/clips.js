@@ -615,25 +615,34 @@ router.post("/smart-generate", async (req, res) => {
             fullDownloadError = secErr;
 
             const errStr = String(secErr.message || secErr || "");
-            const isBotBlock = errStr.includes("not a bot") ||
+            const isUnavailable = errStr.includes("This video is unavailable") ||
+              errStr.includes("Video unavailable") ||
+              errStr.includes("Private video") ||
+              errStr.includes("has been removed") ||
+              errStr.includes("not available");
+
+            const isBotBlock = !isUnavailable && (
+              errStr.includes("not a bot") ||
               errStr.includes("confirm you’re not a bot") ||
               errStr.includes("confirm you're not a bot") ||
-              errStr.includes("Sign in to confirm");
+              errStr.includes("Sign in to confirm")
+            );
 
-            // If clip #1 is explicitly blocked by YouTube bot check on this cloud IP, fail fast
-            if (isBotBlock && !clips.length) {
-              console.warn("[SmartClip] YouTube bot check triggered on cloud host. Failing fast to guide user.");
+            // If clip #1 is explicitly blocked or video is unavailable, fail fast to avoid long timeouts
+            if ((isBotBlock || isUnavailable) && !clips.length) {
+              console.warn(`[SmartClip] Early fail condition met (unavailable: ${isUnavailable}, botBlock: ${isBotBlock}). Exiting section extraction.`);
               break;
             }
           }
         }
 
         // Step 2 (Fallback): ONLY if all section downloads failed AND clips.length === 0,
-        // and only if within safe time budget (< 35s elapsed) and not a bot block
+        // and only if within safe time budget (< 35s elapsed), not a bot block, and not unavailable
         const elapsed = Date.now() - startedAt;
-        const isBot = String(fullDownloadError?.message || "").includes("not a bot") ||
-          String(fullDownloadError?.message || "").includes("Sign in");
-        if (!clips.length && elapsed < 35000 && !isBot) {
+        const fullErrStr = String(fullDownloadError?.message || fullDownloadError || "");
+        const isBot = fullErrStr.includes("not a bot") || fullErrStr.includes("Sign in");
+        const isUnavail = fullErrStr.includes("This video is unavailable") || fullErrStr.includes("Video unavailable");
+        if (!clips.length && elapsed < 35000 && !isBot && !isUnavail) {
           console.warn("[SmartClip] Direct section downloads failed, attempting fallback full source download...");
           try {
             fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
@@ -664,20 +673,41 @@ router.post("/smart-generate", async (req, res) => {
           const err = fullDownloadError || new Error("All download pipelines failed");
           console.error("[SmartClip] All YouTube clip generation pipelines failed:", err.message || err);
           const errStr = String(err.message || err || "");
-          const isBotBlock = errStr.includes("not a bot") ||
+
+          const isUnavailable = errStr.includes("This video is unavailable") ||
+            errStr.includes("Video unavailable") ||
+            errStr.includes("Private video") ||
+            errStr.includes("has been removed") ||
+            errStr.includes("not available");
+
+          const isProxyError = errStr.includes("402 Payment Required") ||
+            errStr.includes("407 Proxy Authentication Required") ||
+            errStr.includes("Tunnel connection failed: 402");
+
+          const isBotBlock = !isUnavailable && (
+            errStr.includes("not a bot") ||
             errStr.includes("confirm you’re not a bot") ||
             errStr.includes("confirm you're not a bot") ||
             errStr.includes("--cookies") ||
-            errStr.includes("Sign in");
+            errStr.includes("Sign in")
+          );
+
+          let userMessage = `YouTube clip download failed: ${err.message || "download error"}.`;
+          if (isUnavailable) {
+            userMessage = "This video is unavailable, private, or has been removed on YouTube. Please check the URL or try another video.";
+          } else if (isBotBlock) {
+            userMessage = "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links.";
+          } else if (isProxyError) {
+            userMessage = "Proxy quota exceeded on cloud server. Direct download fallback failed. Upload source video directly.";
+          }
 
           return res.json({
             success: false,
-            needsUpload: true,
+            needsUpload: !isUnavailable,
             needsCookies: isBotBlock,
+            isUnavailable,
             source: "transcript",
-            message: isBotBlock
-              ? "YouTube blocked this download on cloud hosting. Upload cookies.txt to activate YouTube links."
-              : `YouTube clip download failed: ${err.message || "download error"}.`,
+            message: userMessage,
             rawError: errStr,
             segmentCount: transcriptSegments.length,
             suggestions,

@@ -17,6 +17,10 @@ elif [ -f "/etc/secrets/youtube_cookies.txt" ]; then
   echo "[clip-app] Syncing /etc/secrets/youtube_cookies.txt to /app/uploads/cookies.txt..."
   cp /etc/secrets/youtube_cookies.txt /app/uploads/cookies.txt || true
   chmod 666 /app/uploads/cookies.txt || true
+elif [ -f "/app/cookies.txt" ]; then
+  echo "[clip-app] Syncing bundled /app/cookies.txt to /app/uploads/cookies.txt..."
+  cp /app/cookies.txt /app/uploads/cookies.txt || true
+  chmod 666 /app/uploads/cookies.txt || true
 fi
 
 exec "$@"

@@ -2758,6 +2758,17 @@ function formatSmartReason(suggestion = {}) {
 
 function showUploadRequiredForSmartClips(data) {
   state.uploadRequiredActive = true;
+  if (data?.isUnavailable) {
+    const unavailMsg = data.message || "This video is unavailable or private on YouTube. Please try another video.";
+    updateProgress(0, unavailMsg);
+    if (smartClipBtn) {
+      smartClipBtn.disabled = false;
+      smartClipBtn.textContent = "Get clips in 1 click";
+    }
+    alert(unavailMsg);
+    return;
+  }
+
   const isBotBlock =
     Boolean(data?.needsCookies) ||
     String(data?.message || "").includes("bot") ||

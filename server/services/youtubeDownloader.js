@@ -63,12 +63,54 @@ function normalizeProxyUrl(rawProxy) {
   }
 }
 
+let proxyQuarantineUntil = 0;
+let lastProxyFailureReason = "";
+
+function quarantineProxy(reason = "failed", durationMs = 5 * 60 * 1000) {
+  proxyQuarantineUntil = Date.now() + durationMs;
+  lastProxyFailureReason = String(reason || "unknown");
+  console.warn(`[YouTube-Downloader] ⚠️ Proxy quarantined for ${Math.round(durationMs / 1000)}s due to: ${lastProxyFailureReason.slice(0, 160)}`);
+}
+
+function isProxyQuarantined() {
+  return Date.now() < proxyQuarantineUntil;
+}
+
+function getProxyQuarantineInfo() {
+  return {
+    quarantined: isProxyQuarantined(),
+    remainingSec: Math.max(0, Math.round((proxyQuarantineUntil - Date.now()) / 1000)),
+    reason: lastProxyFailureReason,
+  };
+}
+
+function isProxyFailureError(err) {
+  if (!err) return false;
+  const str = String(err.message || err.rawError || err || "");
+  const status = err.response?.status;
+  return (
+    status === 402 ||
+    status === 407 ||
+    str.includes("402 Payment Required") ||
+    str.includes("407 Proxy Authentication Required") ||
+    str.includes("Tunnel connection failed: 402") ||
+    str.includes("Tunnel connection failed: 407") ||
+    str.includes("ProxyError") ||
+    str.includes("ECONNRESET") ||
+    str.includes("ECONNREFUSED")
+  );
+}
+
 /**
- * Returns residential proxy URL if configured in environment variables.
+ * Returns residential proxy URL if configured in environment variables and not quarantined.
  * Supported variables: YTDLP_PROXY, PROXY_URL, HTTPS_PROXY, HTTP_PROXY
  * Format: http://username:password@proxy-ip:port or socks5://...
  */
-function getProxyUrl() {
+function getProxyUrl(options = {}) {
+  const ignoreQuarantine = Boolean(options?.ignoreQuarantine);
+  if (!ignoreQuarantine && isProxyQuarantined()) {
+    return null;
+  }
   const proxy = process.env.YTDLP_PROXY || process.env.PROXY_URL || process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "";
   return normalizeProxyUrl(proxy);
 }
@@ -389,13 +431,21 @@ async function streamRemoteVideoToFile(streamUrl, targetFilePath, options = {}) 
     });
   }
 
-  // Attempt direct first; if blocked (e.g. 403 on googlevideo), retry via residential proxy
+  // Attempt direct first; if blocked (e.g. 403 on googlevideo), retry via residential proxy if available and healthy
   try {
     return await tryFetchStream(false);
   } catch (directErr) {
-    if (proxyUrl) {
-      console.warn(`[YouTube-Downloader] [Stream] Direct stream failed (${directErr.message}). Retrying via residential proxy...`);
-      return await tryFetchStream(true);
+    const activeProxy = getProxyUrl();
+    if (activeProxy) {
+      try {
+        console.warn(`[YouTube-Downloader] [Stream] Direct stream failed (${directErr.message}). Retrying via residential proxy...`);
+        return await tryFetchStream(true);
+      } catch (proxyErr) {
+        if (isProxyFailureError(proxyErr)) {
+          quarantineProxy(proxyErr.message);
+        }
+        console.warn(`[YouTube-Downloader] [Stream] Proxy retry also failed (${proxyErr.message}).`);
+      }
     }
     throw directErr;
   }
@@ -416,10 +466,9 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
 
   console.log(`[YouTube-Downloader] [Tier 1: yt-dlp] Initializing. Proxy: ${maskProxyUrl(proxyUrl)}, Cookies: ${effectiveCookies ? "available" : "none"}`);
 
-  // Multi-tier client configurations: prioritizes VisionOS & Android VR clients
-  // (bypasses GVS PO Token format removal, SABR-only stream limitations, and bot blocks)
+  // Multi-tier client configurations: prioritizes direct high-compatibility clients
   const clientStrategies = [
-    // Priority 1: visionos,android_vr with cookies & proxy
+    // Priority 1: visionos,android_vr with cookies & proxy (if proxy is healthy)
     ...(effectiveCookies && proxyUrl ? [
       { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
     ] : []),
@@ -429,29 +478,43 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
     ] : []),
 
-    // Priority 3: visionos,android_vr via proxy (no cookies)
+    // Priority 3: Android client direct with cookies
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=android", withCookies: true, useProxy: false, label: "Android client direct + cookies" },
+    ] : []),
+
+    // Priority 4: Android client direct (no cookies)
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct" },
+
+    // Priority 5: visionos,android_vr via proxy (no cookies)
     ...(proxyUrl ? [
       { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
     ] : []),
 
-    // Priority 4: visionos,android_vr direct (no cookies)
+    // Priority 6: visionos,android_vr direct (no cookies)
     { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: false, label: "VisionOS/VR direct" },
 
-    // Fallbacks
-    { client: "youtube:player_client=android", withCookies: false, useProxy: Boolean(proxyUrl), label: "Android client fallback" },
+    // Priority 7: Web client direct with cookies
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web", withCookies: true, useProxy: false, label: "Web client direct + cookies" },
+    ] : []),
+
+    // Priority 8: Web client direct (no cookies)
+    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct" },
   ];
 
   const strategyErrors = [];
 
   for (const strategy of clientStrategies) {
     const useCookies = strategy.withCookies && Boolean(effectiveCookies);
-    const useProxy = strategy.useProxy && Boolean(proxyUrl);
+    const useProxy = strategy.useProxy && Boolean(proxyUrl) && !isProxyQuarantined();
 
     // Build arguments
     const args = [
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
+      "--js-runtimes", "node",
       "--extractor-args", strategy.client,
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
@@ -493,6 +556,9 @@ async function downloadViaYtDlp({ targetUrl, clipStamp, outputTemplate }) {
       }
     } catch (err) {
       const msg = err.message || String(err);
+      if (useProxy && isProxyFailureError(err)) {
+        quarantineProxy(msg);
+      }
       strategyErrors.push(`[${strategy.label}]: ${msg}`);
       console.warn(`[YouTube-Downloader] ${strategy.label} failed: ${msg.slice(0, 160)}`);
     }
@@ -775,6 +841,7 @@ async function downloadYouTubeSourceVideo(input) {
     throw new Error("A valid YouTube source URL is required.");
   }
 
+  let rapidApiError = null;
   cleanupStaleSourceVideos();
 
   const videoId = extractYouTubeId(sourceUrl);
@@ -791,7 +858,8 @@ async function downloadYouTubeSourceVideo(input) {
   console.log(`[YouTube-Downloader] Target path: ${finalMp4Target}`);
 
   // ── Strategy 1: Prioritized yt-dlp with Residential Proxy & Session Cookies ──
-  const hasProxyAndCookies = Boolean(getProxyUrl() && resolveActiveCookieFile());
+  const proxyUrl = getProxyUrl();
+  const hasProxyAndCookies = Boolean(proxyUrl && resolveActiveCookieFile());
   if (hasProxyAndCookies) {
     try {
       console.log(`[YouTube-Downloader] Priority Tier: Attempting yt-dlp via residential proxy + cookies...`);
@@ -807,6 +875,9 @@ async function downloadYouTubeSourceVideo(input) {
         return ytdlpPath;
       }
     } catch (ytdlpErr) {
+      if (isProxyFailureError(ytdlpErr)) {
+        quarantineProxy(ytdlpErr.message);
+      }
       console.warn(`[YouTube-Downloader] Proxied yt-dlp attempt failed: ${ytdlpErr.message}. Trying RapidAPI fallback...`);
     }
   }
@@ -827,6 +898,9 @@ async function downloadYouTubeSourceVideo(input) {
       }
     } catch (apiErr) {
       rapidApiError = apiErr;
+      if (isProxyFailureError(apiErr)) {
+        quarantineProxy(apiErr.message);
+      }
       const detail = apiErr.response?.data?.message || apiErr.response?.data?.error || apiErr.message;
       console.warn(`[YouTube-Downloader] RapidAPI download failed: ${detail}. Falling back to general yt-dlp...`);
     }
@@ -877,7 +951,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
   const section = `*${Number(startSec).toFixed(2)}-${Number(endSec).toFixed(2)}`;
 
   const strategies = [
-    // Priority 1: visionos,android_vr with cookies & proxy (if available)
+    // Priority 1: visionos,android_vr with cookies & proxy (if available and healthy)
     ...(effectiveCookies && proxyUrl ? [
       { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: true, label: "VisionOS/VR + cookies via proxy" },
     ] : []),
@@ -885,25 +959,34 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
     ...(effectiveCookies ? [
       { client: "youtube:player_client=visionos,android_vr", withCookies: true, useProxy: false, label: "VisionOS/VR + cookies direct" },
     ] : []),
-    // Priority 3: visionos,android_vr via proxy
+    // Priority 3: Android client direct with cookies (extremely reliable for direct sections)
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=android", withCookies: true, useProxy: false, label: "Android client direct + cookies" },
+    ] : []),
+    // Priority 4: Android client direct (no cookies)
+    { client: "youtube:player_client=android", withCookies: false, useProxy: false, label: "Android client direct" },
+    // Priority 5: Web client direct with cookies
+    ...(effectiveCookies ? [
+      { client: "youtube:player_client=web", withCookies: true, useProxy: false, label: "Web client direct + cookies" },
+    ] : []),
+    // Priority 6: Web client direct
+    { client: "youtube:player_client=web", withCookies: false, useProxy: false, label: "Web client direct" },
+    // Priority 7: VisionOS/VR via proxy fallback
     ...(proxyUrl ? [
       { client: "youtube:player_client=visionos,android_vr", withCookies: false, useProxy: true, label: "VisionOS/VR via proxy" },
     ] : []),
-    // Priority 4: Android client direct
-    { client: "youtube:player_client=android", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Android client" },
-    // Priority 5: Web client fallback
-    { client: "youtube:player_client=web", withCookies: Boolean(effectiveCookies), useProxy: Boolean(proxyUrl), label: "Web client" },
   ];
 
   const stratErrors = [];
 
   for (const strat of strategies) {
     const useCookies = strat.withCookies && Boolean(effectiveCookies);
-    const useProxy = strat.useProxy && Boolean(proxyUrl);
+    const useProxy = strat.useProxy && Boolean(proxyUrl) && !isProxyQuarantined();
     const args = [
       "--no-playlist",
       "--no-check-certificates",
       "--no-warnings",
+      "--js-runtimes", "node",
       ...(strat.client ? ["--extractor-args", strat.client] : []),
       ...poTokenArgs,
       ...(useProxy ? ["--proxy", proxyUrl] : []),
@@ -920,7 +1003,7 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
     ];
 
     try {
-      console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label}...`);
+      console.log(`[YouTube-Downloader] Trying direct section download with ${strat.label} [Proxy: ${useProxy ? maskProxyUrl(proxyUrl) : "none"}]...`);
       await runCommand(ytDlpPath, args, { timeoutMs: 40000 });
 
       const files = fs.readdirSync(uploadsDir)
@@ -936,6 +1019,9 @@ async function downloadDirectSectionViaYtDlp({ targetUrl, startSec, endSec, clip
       }
     } catch (err) {
       const msg = err.message || String(err);
+      if (useProxy && isProxyFailureError(err)) {
+        quarantineProxy(msg);
+      }
       stratErrors.push(`[${strat.label}]: ${msg}`);
       console.warn(`[YouTube-Downloader] ${strat.label} failed: ${msg.slice(0, 120)}`);
     }
@@ -984,14 +1070,35 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
         const cutMp4 = path.join(uploadsDir, `yt_smart_section_${clipStamp}.mp4`);
         const cutDuration = Math.max(1, safeEnd - safeStart);
         const ffmpegPath = getFfmpegPath();
-        await runCommand(ffmpegPath, [
+
+        const ffmpegArgs = [
           "-y",
+          "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+          "-headers", "Referer: https://www.youtube.com/\r\nOrigin: https://www.youtube.com\r\n",
           "-ss", String(safeStart),
           "-i", streamUrl,
           "-t", String(cutDuration),
           "-c", "copy",
           cutMp4,
-        ], { timeoutMs: 45000 });
+        ];
+
+        try {
+          await runCommand(ffmpegPath, ffmpegArgs, { timeoutMs: 45000 });
+        } catch (copyErr) {
+          console.warn(`[YouTube-Downloader] Direct stream copy slice failed (${copyErr.message}), retrying with fast transcode...`);
+          await runCommand(ffmpegPath, [
+            "-y",
+            "-user_agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+            "-headers", "Referer: https://www.youtube.com/\r\nOrigin: https://www.youtube.com\r\n",
+            "-ss", String(safeStart),
+            "-i", streamUrl,
+            "-t", String(cutDuration),
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-c:a", "aac",
+            cutMp4,
+          ], { timeoutMs: 60000 });
+        }
 
         if (fs.existsSync(cutMp4) && fs.statSync(cutMp4).size > 1000) {
           console.log(`[YouTube-Downloader] Remote section slice successful via RapidAPI: ${cutMp4}`);
@@ -999,6 +1106,9 @@ async function downloadYouTubeSection({ sourceUrl, startSec, endSec, index = 0 }
         }
       }
     } catch (apiErr) {
+      if (isProxyFailureError(apiErr)) {
+        quarantineProxy(apiErr.message);
+      }
       console.warn(`[YouTube-Downloader] Remote RapidAPI section slice failed: ${apiErr.message}`);
     }
   }
@@ -1103,7 +1213,8 @@ async function getDownloaderDiagnostics(testUrl = "https://www.youtube.com/watch
     }
   }
 
-  results.buildVersion = "hybrid-v5";
+  results.proxyQuarantine = getProxyQuarantineInfo();
+  results.buildVersion = "hybrid-v6-resilient";
   return results;
 }
 
@@ -1112,6 +1223,9 @@ module.exports = {
   extractYouTubeId,
   getProxyUrl,
   maskProxyUrl,
+  quarantineProxy,
+  getProxyQuarantineInfo,
+  isProxyFailureError,
   getYtDlpPath,
   getFfmpegPath,
   resolveActiveCookieFile,

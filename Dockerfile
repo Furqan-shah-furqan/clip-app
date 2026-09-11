@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     python3-venv \
     curl \
+    unzip \
     ca-certificates \
     libgl1 \
     libglib2.0-0 \
@@ -23,9 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install latest yt-dlp binary
+# 2. Install latest yt-dlp binary and Deno (native JS runtime for yt-dlp YouTube challenge solving)
 RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp
+    && chmod a+rx /usr/local/bin/yt-dlp \
+    && curl -fsSL https://deno.land/install.sh | sh \
+    && cp /root/.deno/bin/deno /usr/local/bin/deno \
+    && chmod a+rx /usr/local/bin/deno
 
 # 3. Setup Python virtual environment & install Python AI dependencies
 COPY python/requirements.txt ./python/requirements.txt
