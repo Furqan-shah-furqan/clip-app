@@ -406,30 +406,73 @@ router.post("/smart-suggest", async (req, res) => {
 });
 
 router.get("/diag", async (req, res) => {
-  const url = req.query.url || "https://www.youtube.com/watch?v=AxRd9vXZ1kc";
-  try {
-    const diag = await getDownloaderDiagnostics(url);
-    const activeCookies = resolveActiveCookieFile();
+  const videoId = req.query.id || "1_t6l6ObfRc";
+  const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
+  const rapidApiHost = (process.env.RAPIDAPI_HOST || "youtube-video-fast-downloader-24-7.p.rapidapi.com").trim();
 
-    let ytStats = { totalLines: 0, ytLines: 0, hasLoginInfo: false, hasSid: false };
-    if (activeCookies && fs.existsSync(activeCookies)) {
-      try {
-        const content = fs.readFileSync(activeCookies, "utf8");
-        const lines = content.split(/\r?\n/);
-        ytStats.totalLines = lines.length;
-        ytStats.ytLines = lines.filter((l) => l.includes("youtube.com")).length;
-        ytStats.hasLoginInfo = lines.some((l) => l.includes("LOGIN_INFO"));
-        ytStats.hasSid = lines.some((l) => l.includes("\tSID\t"));
-      } catch {}
-    }
+  const results = {
+    rapidApiKeyConfigured: !!rapidApiKey,
+    rapidApiKeyLength: rapidApiKey.length,
+    rapidApiKeyPrefix: rapidApiKey ? rapidApiKey.slice(0, 5) + "..." : null,
+    rapidApiHost,
+    testVideoId: videoId,
+    fastDownloaderTest: null,
+    ytstreamTest: null,
+  };
 
-    return res.json({
-      ...diag,
-      ytStats,
-    });
-  } catch (err) {
-    return res.status(500).json({ error: "Diagnostics failed", details: err.message });
+  if (!rapidApiKey) {
+    results.fastDownloaderTest = { error: "RAPIDAPI_KEY environment variable is not configured." };
+    return res.json(results);
   }
+
+  // Test FAST Downloader quality endpoint
+  try {
+    const qUrl = `https://${rapidApiHost}/get_available_quality/${videoId}`;
+    const qRes = await axios.get(qUrl, {
+      headers: {
+        "x-rapidapi-host": rapidApiHost,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 10000,
+    });
+    results.fastDownloaderTest = {
+      status: qRes.status,
+      qualityCount: Array.isArray(qRes.data) ? qRes.data.length : 0,
+      data: qRes.data,
+    };
+  } catch (err) {
+    results.fastDownloaderTest = {
+      error: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+    };
+  }
+
+  // Test ytstream endpoint
+  try {
+    const ytUrl = `https://ytstream-download-youtube-videos.p.rapidapi.com/dl?id=${videoId}`;
+    const ytRes = await axios.get(ytUrl, {
+      headers: {
+        "x-rapidapi-host": "ytstream-download-youtube-videos.p.rapidapi.com",
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 10000,
+    });
+    results.ytstreamTest = {
+      status: ytRes.status,
+      data: ytRes.data,
+    };
+  } catch (err) {
+    results.ytstreamTest = {
+      error: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+    };
+  }
+
+  return res.json(results);
 });
 
 router.post("/smart-generate", async (req, res) => {
