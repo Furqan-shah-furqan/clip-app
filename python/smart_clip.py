@@ -7,9 +7,29 @@ import tempfile
 import subprocess
 from pathlib import Path
 
-import cv2
-import numpy as np
-from faster_whisper import WhisperModel
+try:
+    from env_setup import ensure_runtime, get_ffmpeg_cmd
+    ensure_runtime(["cv2", "numpy", "faster_whisper"])
+except ImportError:
+    def get_ffmpeg_cmd():
+        bin_ffmpeg = Path(__file__).resolve().parent.parent / "bin" / "ffmpeg.exe"
+        if bin_ffmpeg.exists():
+            return str(bin_ffmpeg)
+        return shutil.which("ffmpeg") or "ffmpeg"
+
+try:
+    import cv2
+    import numpy as np
+except Exception as exc:
+    print(json.dumps({"success": False, "error": f"Missing OpenCV or NumPy: {exc}"}))
+    sys.exit(1)
+
+WhisperModel = None
+try:
+    from faster_whisper import WhisperModel as FWWhipserModel
+    WhisperModel = FWWhipserModel
+except Exception:
+    pass
 
 
 def run_cmd(cmd):
@@ -113,8 +133,6 @@ def smart_reframe_video(input_path: str, output_path: str, aspect_ratio: str):
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    if face_cascade.empty():
-        raise RuntimeError("OpenCV Haar cascade could not be loaded")
 
     prev_cx = src_w // 2
     prev_cy = src_h // 2
@@ -125,7 +143,12 @@ def smart_reframe_video(input_path: str, output_path: str, aspect_ratio: str):
         if not ok:
             break
 
-        face = detect_largest_face(face_cascade, frame)
+        face = None
+        if not face_cascade.empty():
+            try:
+                face = detect_largest_face(face_cascade, frame)
+            except Exception:
+                face = None
 
         if face is not None:
             desired_cx = face["cx"]
@@ -157,21 +180,44 @@ def smart_reframe_video(input_path: str, output_path: str, aspect_ratio: str):
 
 
 def transcribe_to_srt(input_path: str, srt_path: str, model_size: str = "small"):
-    model = WhisperModel(model_size, device="auto", compute_type="int8")
-    segments, _info = model.transcribe(
-        input_path,
-        vad_filter=True,
-        word_timestamps=False
-    )
-
-    with open(srt_path, "w", encoding="utf-8") as f:
-        for i, segment in enumerate(segments, start=1):
-            text = (segment.text or "").strip()
-            if not text:
+    if WhisperModel is not None:
+        model = None
+        for compute_type in ["int8", "default", "float32"]:
+            try:
+                model = WhisperModel(model_size, device="cpu", compute_type=compute_type)
+                break
+            except Exception:
                 continue
-            f.write(f"{i}\n")
-            f.write(f"{seconds_to_srt_time(segment.start)} --> {seconds_to_srt_time(segment.end)}\n")
-            f.write(text + "\n\n")
+
+        if model is None:
+            model = WhisperModel(model_size, device="cpu")
+
+        segments, _info = model.transcribe(
+            input_path,
+            vad_filter=True,
+            word_timestamps=False
+        )
+
+        with open(srt_path, "w", encoding="utf-8") as f:
+            for i, segment in enumerate(segments, start=1):
+                text = (segment.text or "").strip()
+                if not text:
+                    continue
+                f.write(f"{i}\n")
+                f.write(f"{seconds_to_srt_time(segment.start)} --> {seconds_to_srt_time(segment.end)}\n")
+                f.write(text + "\n\n")
+    else:
+        import whisper
+        wmodel = whisper.load_model(model_size)
+        result = wmodel.transcribe(input_path)
+        with open(srt_path, "w", encoding="utf-8") as f:
+            for i, segment in enumerate(result.get("segments", []), start=1):
+                text = (segment.get("text") or "").strip()
+                if not text:
+                    continue
+                f.write(f"{i}\n")
+                f.write(f"{seconds_to_srt_time(segment.get('start', 0))} --> {seconds_to_srt_time(segment.get('end', 0))}\n")
+                f.write(text + "\n\n")
 
 
 def burn_subtitles_and_mux_audio(
@@ -197,7 +243,7 @@ def burn_subtitles_and_mux_audio(
     )
 
     cmd = [
-        "ffmpeg", "-y",
+        get_ffmpeg_cmd(), "-y",
         "-i", silent_video,
         "-i", source_with_audio,
         "-map", "0:v:0",
@@ -219,7 +265,7 @@ def trim_clip(input_path: str, start_time: str, end_time: str, trimmed_path: str
     duration = max(end_seconds - start_seconds, 1)
 
     cmd = [
-        "ffmpeg", "-y",
+        get_ffmpeg_cmd(), "-y",
         "-ss", str(start_seconds),
         "-i", input_path,
         "-t", str(duration),

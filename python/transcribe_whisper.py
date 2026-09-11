@@ -3,6 +3,12 @@ import os
 import sys
 import subprocess
 
+try:
+    from env_setup import setup_environment
+    setup_environment()
+except ImportError:
+    pass
+
 def find_working_python():
     """
     If running under a Python interpreter that lacks faster-whisper (such as a system

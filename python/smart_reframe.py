@@ -6,14 +6,21 @@ import tempfile
 import subprocess
 from pathlib import Path
 
-import cv2
+try:
+    from env_setup import ensure_runtime, get_ffmpeg_cmd
+    ensure_runtime(["cv2"])
+except ImportError:
+    def get_ffmpeg_cmd():
+        bin_ffmpeg = Path(__file__).resolve().parent.parent / "bin" / "ffmpeg.exe"
+        if bin_ffmpeg.exists():
+            return str(bin_ffmpeg)
+        return shutil.which("ffmpeg") or "ffmpeg"
 
-
-def get_ffmpeg_cmd():
-    bin_ffmpeg = Path(__file__).resolve().parent.parent / "bin" / "ffmpeg.exe"
-    if bin_ffmpeg.exists():
-        return str(bin_ffmpeg)
-    return shutil.which("ffmpeg") or "ffmpeg"
+try:
+    import cv2
+except Exception as exc:
+    print(json.dumps({"success": False, "error": f"OpenCV (cv2) not available: {exc}"}))
+    sys.exit(1)
 
 
 def run_cmd(cmd):
