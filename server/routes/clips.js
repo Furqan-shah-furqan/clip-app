@@ -484,7 +484,7 @@ router.get("/diag", async (req, res) => {
 
 router.post("/smart-generate", async (req, res) => {
   const startedAt = Date.now();
-  const maxSmartGenerateMs = 85 * 1000;
+  const maxSmartGenerateMs = 240 * 1000;
 
   try {
     const {
@@ -623,7 +623,7 @@ router.post("/smart-generate", async (req, res) => {
         sourceVideoPath = await downloadYouTubeSource(sourceUrl);
 
         for (let i = 0; i < suggestions.length; i++) {
-          if (Date.now() - startedAt > maxSmartGenerateMs) {
+          if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
             console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
             break;
           }
