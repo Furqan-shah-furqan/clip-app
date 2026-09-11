@@ -16,13 +16,8 @@ const { findSmartClipMoments } = require("../services/smartClipRanker");
 const {
   isValidYouTubeUrl,
   extractYouTubeId,
-  downloadYouTubeSourceVideo,
-  downloadYouTubeSection,
+  downloadYouTubeSource,
   cleanupFile,
-  cleanupStaleSourceVideos,
-  getDownloaderDiagnostics,
-  resolveActiveCookieFile,
-  resetCookieQuarantine,
 } = require("../services/youtubeDownloader");
 
 const router = express.Router();
@@ -570,18 +565,13 @@ router.post("/smart-generate", async (req, res) => {
     const clips = [];
     fs.mkdirSync(exportsDir, { recursive: true });
 
-    // ── YouTube → direct section download per clip (fast, 2-4s each) with full source fallback ──
+    // ── YouTube → Download source via isolated RapidAPI module and slice clips ──
     if (normalizedSourceType === "youtube") {
-      const tempSectionFiles = [];
-      let fullSourcePath = null;
-
-      let fullDownloadError = null;
-
+      let sourceVideoPath = null;
       try {
-        console.log(`[SmartClip] Fast section-by-section extraction for ${suggestions.length} clips...`);
+        console.log(`[SmartClip] Downloading YouTube source via RapidAPI module: ${sourceUrl}`);
+        sourceVideoPath = await downloadYouTubeSource(sourceUrl);
 
-        // Step 1 (Primary): Download each clip section directly (fast: 2-4s each, ~3MB).
-        // Bypasses downloading full multi-gigabyte source videos on cloud hosting which causes 10-minute timeouts!
         for (let i = 0; i < suggestions.length; i++) {
           if (Date.now() - startedAt > maxSmartGenerateMs) {
             console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
@@ -591,135 +581,33 @@ router.post("/smart-generate", async (req, res) => {
           const suggestion = suggestions[i];
           const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
           const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-          const durationSec = Math.max(1, endSec - startSec);
 
-          try {
-            console.log(`[SmartClip] Downloading section #${i + 1} (${startSec}s - ${endSec}s)...`);
-            const sectionFile = await downloadYouTubeSectionForSmartClipping({
-              sourceUrl,
-              startSec,
-              endSec,
-              index: i,
-            });
-            tempSectionFiles.push(sectionFile);
+          console.log(`[SmartClip] Generating clip #${i + 1} (${startSec}s - ${endSec}s)...`);
+          const result = await smartGenerateClip({
+            inputPath: sourceVideoPath,
+            startTime: secondsToTime(startSec),
+            endTime: secondsToTime(endSec),
+            aspectRatio: aspectRatio || "9:16",
+          });
 
-            const result = await smartGenerateClip({
-              inputPath: sectionFile,
-              startTime: "00:00:00",
-              endTime: secondsToTime(durationSec),
-              aspectRatio: aspectRatio || "9:16",
-            });
-
-            clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-          } catch (secErr) {
-            console.error(`[SmartClip] Direct section extraction failed for clip #${i + 1}:`, secErr.message || secErr);
-            fullDownloadError = secErr;
-
-            const errStr = String(secErr.message || secErr || "");
-            const isUnavailable = errStr.includes("This video is unavailable") ||
-              errStr.includes("Video unavailable") ||
-              errStr.includes("Private video") ||
-              errStr.includes("has been removed") ||
-              errStr.includes("not available");
-
-            const isBotBlock = !isUnavailable && (
-              errStr.includes("not a bot") ||
-              errStr.includes("confirm you’re not a bot") ||
-              errStr.includes("confirm you're not a bot") ||
-              errStr.includes("Sign in to confirm")
-            );
-
-            // If video is confirmed unavailable/private on YouTube, fail fast
-            if (isUnavailable && !clips.length) {
-              console.warn(`[SmartClip] Early fail condition met (video is unavailable on YouTube). Exiting section extraction.`);
-              break;
-            }
-          }
-        }
-
-        // Step 2 (Fallback): ONLY if all section downloads failed AND clips.length === 0,
-        // and only if within safe time budget (< 55s elapsed) and not unavailable
-        const elapsed = Date.now() - startedAt;
-        const fullErrStr = String(fullDownloadError?.message || fullDownloadError || "");
-        const isUnavail = fullErrStr.includes("This video is unavailable") || fullErrStr.includes("Video unavailable");
-        if (!clips.length && elapsed < 55000 && !isUnavail) {
-          console.warn("[SmartClip] Direct section downloads failed, attempting fallback full source download...");
-          try {
-            fullSourcePath = await downloadYouTubeSourceVideoForSmartClipping({ sourceUrl });
-
-            for (let i = 0; i < suggestions.length; i++) {
-              if (Date.now() - startedAt > maxSmartGenerateMs) break;
-
-              const suggestion = suggestions[i];
-              const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-              const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-              const result = await smartGenerateClip({
-                inputPath: fullSourcePath,
-                startTime: secondsToTime(startSec),
-                endTime: secondsToTime(endSec),
-                aspectRatio: aspectRatio || "9:16",
-              });
-
-              clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-            }
-          } catch (fullErr) {
-            console.error("[SmartClip] Full source download fallback also failed:", fullErr.message || fullErr);
-            fullDownloadError = fullErr;
-          }
+          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
         }
 
         if (!clips.length) {
-          const err = fullDownloadError || new Error("All download pipelines failed");
-          console.error("[SmartClip] All YouTube clip generation pipelines failed:", err.message || err);
-          const errStr = String(err.message || err || "");
-
-          const isUnavailable = errStr.includes("This video is unavailable") ||
-            errStr.includes("Video unavailable") ||
-            errStr.includes("Private video") ||
-            errStr.includes("has been removed") ||
-            errStr.includes("not available");
-
-          const isProxyError = errStr.includes("402 Payment Required") ||
-            errStr.includes("407 Proxy Authentication Required") ||
-            errStr.includes("Tunnel connection failed: 402");
-
-          const isBotBlock = !isUnavailable && (
-            errStr.includes("not a bot") ||
-            errStr.includes("confirm you’re not a bot") ||
-            errStr.includes("confirm you're not a bot") ||
-            errStr.includes("--cookies") ||
-            errStr.includes("Sign in")
-          );
-
-          let userMessage = `YouTube clip download failed: ${err.message || "download error"}.`;
-          if (isUnavailable) {
-            userMessage = "This video is unavailable, private, or has been removed on YouTube. (Note: YouTube video IDs like '5pV3D14y1FQ' are case-sensitive; please check capitalization).";
-          } else if (isBotBlock) {
-            userMessage = "YouTube bot protection encountered. You can upload cookies.txt or upload your source video directly.";
-          } else if (isProxyError) {
-            userMessage = "Proxy quota exceeded on cloud server. Direct download fallback failed. Upload source video directly.";
-          }
-
-          return res.json({
-            success: false,
-            needsUpload: !isUnavailable,
-            needsCookies: isBotBlock,
-            isUnavailable,
-            source: "transcript",
-            message: userMessage,
-            rawError: errStr,
-            segmentCount: transcriptSegments.length,
-            suggestions,
-            clips: [],
-          });
+          throw new Error("No clips could be produced from the source video.");
         }
+      } catch (err) {
+        console.error("[SmartClip] YouTube clip generation failed:", err.message || err);
+        return res.status(500).json({
+          success: false,
+          error: "YouTube clip generation failed",
+          details: err.message || "Failed to download and process YouTube video",
+          suggestions,
+          clips: [],
+        });
       } finally {
-        for (const f of tempSectionFiles) {
-          cleanupFile(f);
-        }
-        if (fullSourcePath) {
-          cleanupFile(fullSourcePath);
+        if (sourceVideoPath) {
+          cleanupFile(sourceVideoPath);
         }
       }
     } else {
