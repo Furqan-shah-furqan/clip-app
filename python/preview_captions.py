@@ -21,7 +21,7 @@ def format_vtt_time(seconds: float) -> str:
     if seconds < 0:
         seconds = 0
 
-    total_ms = int(round(seconds * 1000))
+    total_ms = round(seconds * 1000)
     hours = total_ms // 3600000
     minutes = (total_ms % 3600000) // 60000
     secs = (total_ms % 60000) // 1000

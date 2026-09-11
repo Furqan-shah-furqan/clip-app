@@ -40,16 +40,16 @@ def run_cmd(cmd):
 
 
 def parse_time_to_seconds(time_str: str) -> float:
-    parts = [float(p) for p in str(time_str).split(":")]
+    parts = [float(p) for p in time_str.split(":")]
     if len(parts) == 3:
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
-    return float(parts[0])
+    return parts[0]
 
 
 def seconds_to_srt_time(seconds: float) -> str:
-    ms = int(round((seconds - int(seconds)) * 1000))
+    ms = round((seconds - int(seconds)) * 1000)
     total = int(seconds)
     s = total % 60
     m = (total // 60) % 60

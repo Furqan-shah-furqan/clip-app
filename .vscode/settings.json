@@ -10,6 +10,23 @@
     "reportMissingTypeStubs": "none",
     "reportAttributeAccessIssue": "none",
     "reportUndefinedVariable": "none",
-    "reportGeneralTypeIssues": "none"
+    "reportGeneralTypeIssues": "none",
+    "reportOptionalMemberAccess": "none",
+    "reportOptionalSubscript": "none",
+    "reportPrivateImportUsage": "none"
+  },
+  "python.analysis.ignore": [
+    "**/clip-app/**",
+    "**/.venv/**",
+    "**/node_modules/**"
+  ],
+  "javascript.validate.enable": false,
+  "typescript.validate.enable": false,
+  "javascript.implicitProjectConfig.checkJs": false,
+  "files.exclude": {
+    "**/clip-app": true
+  },
+  "search.exclude": {
+    "**/clip-app": true
   }
 }

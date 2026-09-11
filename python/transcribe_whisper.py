@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-import subprocess
 
 try:
     from env_setup import ensure_runtime

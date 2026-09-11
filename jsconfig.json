@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "checkJs": false,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "target": "ES2022"
+  },
+  "exclude": [
+    "node_modules",
+    ".venv",
+    "clip-app",
+    "dist"
+  ]
+}

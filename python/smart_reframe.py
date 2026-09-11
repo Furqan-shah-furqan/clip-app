@@ -31,12 +31,12 @@ def run_cmd(cmd):
 
 
 def parse_time_to_seconds(time_str: str) -> float:
-    parts = [float(p) for p in str(time_str).split(":")]
+    parts = [float(p) for p in time_str.split(":")]
     if len(parts) == 3:
         return parts[0] * 3600 + parts[1] * 60 + parts[2]
     if len(parts) == 2:
         return parts[0] * 60 + parts[1]
-    return float(parts[0])
+    return parts[0]
 
 
 def get_target_size(aspect_ratio: str):

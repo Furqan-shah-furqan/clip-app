@@ -5,6 +5,7 @@ project-includes = [
 project-excludes = [
     "**/node_modules/**",
     "**/.venv/**",
+    "**/clip-app/**",
 ]
 
 search-path = [
@@ -25,5 +26,5 @@ replace-imports-with-any = [
     "numpy",
 ]
 
-permissive-ignores = true
+enabled-ignores = ["type", "pyrefly", "pyright", "mypy", "ty", "pyre", "zuban"]
 check-unannotated-defs = false
