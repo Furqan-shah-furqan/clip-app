@@ -54,12 +54,29 @@ def get_ffmpeg_cmd():
 
     return shutil.which("ffmpeg") or "ffmpeg"
 
+def _has_site_packages_module(cand_path, module_name):
+    """
+    Quick filesystem check for a module in a virtualenv or python install directory.
+    """
+    try:
+        p = Path(cand_path).resolve()
+        base = p.parent.parent  # e.g. .venv or Python311
+        for sp in [base / "Lib" / "site-packages", base / "lib" / "site-packages"]:
+            if (sp / module_name).is_dir() or (sp / f"{module_name}.py").is_file():
+                return True
+        for sub in base.glob("lib/python*/site-packages"):
+            if (sub / module_name).is_dir() or (sub / f"{module_name}.py").is_file():
+                return True
+    except Exception:
+        pass
+    return False
+
 def find_working_python(required_modules=None):
     """
     Search candidate Python interpreters for one that has all required modules installed.
     """
     if required_modules is None:
-        required_modules = ["faster_whisper", "cv2"]
+        required_modules = ["faster_whisper"]
 
     project_root = Path(__file__).resolve().parent.parent
     candidates = [
@@ -73,8 +90,6 @@ def find_working_python(required_modules=None):
         "python"
     ]
 
-    import_check = "; ".join(f"import {m}" for m in required_modules)
-
     for cand in candidates:
         if not cand:
             continue
@@ -82,16 +97,25 @@ def find_working_python(required_modules=None):
             continue
         if cand == sys.executable:
             continue
+
+        # Fast filesystem check for virtualenvs
+        if os.path.isabs(cand) and os.path.isfile(cand):
+            if all(_has_site_packages_module(cand, m) for m in required_modules):
+                return cand
+
+        # Fallback to subprocess verification with reasonable timeout
         try:
+            import_check = "; ".join(f"import {m}" for m in required_modules)
             res = subprocess.run(
                 [cand, "-c", import_check],
                 capture_output=True,
-                timeout=5
+                timeout=25
             )
             if res.returncode == 0:
                 return cand
         except Exception:
             continue
+
     return None
 
 def ensure_runtime(required_modules=None):

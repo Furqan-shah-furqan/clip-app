@@ -1,0 +1,29 @@
+project-includes = [
+    "python/**/*.py",
+]
+
+project-excludes = [
+    "**/node_modules/**",
+    "**/.venv/**",
+]
+
+search-path = [
+    "python",
+    ".",
+]
+
+site-package-path = [
+    ".venv/Lib/site-packages",
+]
+
+python-interpreter-path = ".venv/Scripts/python.exe"
+
+replace-imports-with-any = [
+    "faster_whisper",
+    "whisper",
+    "cv2",
+    "numpy",
+]
+
+permissive-ignores = true
+check-unannotated-defs = false
