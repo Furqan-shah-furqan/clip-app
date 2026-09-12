@@ -5,7 +5,8 @@ FROM node:20-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     NODE_ENV=production \
-    PORT=3000
+    PORT=3000 \
+    NODE_OPTIONS="--max-old-space-size=300"
 
 WORKDIR /app
 

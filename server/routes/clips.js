@@ -320,7 +320,39 @@ async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
   return await downloadYouTubeSource(sourceUrl);
 }
 
-async function downloadYouTubeSectionForSmartClipping({ sourceUrl, index = 0 }) {
+async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec = 0, endSec = 30, index = 0 }) {
+  const videoId = extractYouTubeId(sourceUrl);
+  if (!videoId) throw new Error("Invalid YouTube URL");
+
+  const start = secondsToTime(startSec || 0);
+  const end = secondsToTime(endSec || (startSec || 0) + 30);
+  const targetPath = path.join(uploadsDir, `yt_section_${videoId}_${Date.now()}_${index}.mp4`);
+
+  const { getYtDlpPath, runCommand } = require("../services/youtubeDownloader");
+  const ytDlpPath = getYtDlpPath();
+
+  const args = [
+    "--no-playlist",
+    "--no-warnings",
+    "--extractor-args", "youtube:player_client=android",
+    "--download-sections", `*${start}-${end}`,
+    "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
+    "--force-keyframes-at-cuts",
+    "-o", targetPath,
+    `https://www.youtube.com/watch?v=${videoId}`,
+  ];
+
+  console.log(`[SmartClip] Downloading precise section: ${start} - ${end} for ${videoId}...`);
+  try {
+    await runCommand(ytDlpPath, args, { timeoutMs: 40000 });
+    if (fs.existsSync(targetPath) && fs.statSync(targetPath).size > 1000) {
+      console.log(`[SmartClip] ✅ Section downloaded successfully: ${(fs.statSync(targetPath).size / 1024 / 1024).toFixed(2)} MB`);
+      return targetPath;
+    }
+  } catch (err) {
+    console.warn(`[SmartClip] Section download failed (${err.message}). Falling back to full video source download...`);
+  }
+
   return await downloadYouTubeSource(sourceUrl);
 }
 
@@ -688,13 +720,9 @@ router.post("/smart-generate", async (req, res) => {
     const clips = [];
     fs.mkdirSync(exportsDir, { recursive: true });
 
-    // ── YouTube → Download source via isolated RapidAPI module and slice clips ──
+    // ── YouTube → Download precise clip sections and slice clips ──
     if (normalizedSourceType === "youtube") {
-      let sourceVideoPath = null;
       try {
-        console.log(`[SmartClip] Downloading YouTube source via RapidAPI module: ${sourceUrl}`);
-        sourceVideoPath = await downloadYouTubeSource(sourceUrl);
-
         for (let i = 0; i < suggestions.length; i++) {
           if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
             console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
@@ -704,16 +732,29 @@ router.post("/smart-generate", async (req, res) => {
           const suggestion = suggestions[i];
           const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
           const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+          const durationSec = Math.max(1, endSec - startSec);
 
-          console.log(`[SmartClip] Generating clip #${i + 1} (${startSec}s - ${endSec}s)...`);
-          const result = await smartGenerateClip({
-            inputPath: sourceVideoPath,
-            startTime: secondsToTime(startSec),
-            endTime: secondsToTime(endSec),
-            aspectRatio: aspectRatio || "9:16",
-          });
+          console.log(`[SmartClip] Generating section clip #${i + 1} (${startSec}s - ${endSec}s)...`);
+          let clipSectionPath = null;
+          try {
+            clipSectionPath = await downloadYouTubeSectionForSmartClipping({
+              sourceUrl,
+              startSec,
+              endSec,
+              index: i,
+            });
 
-          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+            const result = await smartGenerateClip({
+              inputPath: clipSectionPath,
+              startTime: "00:00:00",
+              endTime: secondsToTime(durationSec),
+              aspectRatio: aspectRatio || "9:16",
+            });
+
+            clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+          } finally {
+            cleanupFile(clipSectionPath);
+          }
         }
 
         if (!clips.length) {
@@ -801,15 +842,21 @@ router.post("/generate", async (req, res) => {
 
     try {
       if (normalizedSourceType === "youtube") {
+        const startSec = timeToSeconds(startTime);
+        const endSec = timeToSeconds(endTime);
+        const durationSec = Math.max(1, endSec - startSec);
+
         tempSectionPath = await downloadYouTubeSectionForSmartClipping({
           sourceUrl,
+          startSec,
+          endSec,
           index: Date.now(),
         });
 
         result = await smartGenerateClip({
           inputPath: tempSectionPath,
-          startTime,
-          endTime,
+          startTime: "00:00:00",
+          endTime: secondsToTime(durationSec),
           aspectRatio: aspectRatio || "9:16",
         });
       } else {

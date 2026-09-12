@@ -2984,6 +2984,10 @@ smartClipBtn?.addEventListener("click", async () => {
   }
 }
 
+    if (!finalClips.length) {
+      throw new Error("Could not produce clips for this video. Please check the video link or upload a file directly.");
+    }
+
     updateProgress(96, "Adding scores and captions...", 8);
     state.generatedClips = [...finalClips, ...state.generatedClips];
     state.generatedClip = state.generatedClips[0] || null;
