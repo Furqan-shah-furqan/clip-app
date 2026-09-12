@@ -17,8 +17,6 @@ const { findSmartClipMoments } = require("../services/smartClipRanker");
 const {
   isValidYouTubeUrl,
   extractYouTubeId,
-  downloadYouTubeSource,
-  downloadViaYtDlp,
   cleanupFile,
 } = require("../services/youtubeDownloader");
 
@@ -131,13 +129,14 @@ function saveProject(project) {
 
 function cleanSmartClipError(error) {
   const raw = String(error?.message || error || "");
-  if (raw.includes("PO Token") || raw.includes("challenge solving failed") ||
-    raw.includes("HTTP Error 403") || raw.includes("Sign in to confirm") ||
-    raw.includes("not a bot")) {
-    return "YouTube blocked this video. Try another video or use Upload instead.";
+  if (raw.includes("RAPIDAPI_KEY is not configured")) {
+    return "RAPIDAPI_KEY is not configured on the server. Please add your key in Render environment settings.";
   }
-  if (raw.includes("ENOENT") && raw.includes("yt-dlp")) {
-    return "Smart clipping failed. Try uploading the source video directly.";
+  if (raw.includes("RapidAPI file preparation timed out") || raw.includes("Timed out waiting for RapidAPI")) {
+    return "RapidAPI CDN video preparation timed out. Try another video or upload directly.";
+  }
+  if (raw.includes("HTTP 403") || raw.includes("Forbidden")) {
+    return "RapidAPI authentication failed. Please verify your RAPIDAPI_KEY.";
   }
   if (raw.includes("transcript")) return raw;
   return raw || "Smart clipping failed. Try uploading the source video directly.";
@@ -315,45 +314,162 @@ function generateFallbackSegments() {
   return segments;
 }
 
-// ── YouTube Downloader Bridges ───────────────────────────────────────────────
-async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
-  return await downloadYouTubeSource(sourceUrl);
-}
+// ── Exclusive RapidAPI Video Downloader ("YouTube Video FAST Downloader 24/7") ──
+const RAPIDAPI_FAST_HOST = "youtube-video-fast-downloader-24-7.p.rapidapi.com";
 
-async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec = 0, endSec = 30, index = 0 }) {
+async function downloadVideoViaRapidApi(sourceUrl) {
   const videoId = extractYouTubeId(sourceUrl);
-  if (!videoId) throw new Error("Invalid YouTube URL");
+  if (!videoId) throw new Error("Invalid YouTube URL: unable to extract Video ID");
 
-  const start = secondsToTime(startSec || 0);
-  const end = secondsToTime(endSec || (startSec || 0) + 30);
-  const targetPath = path.join(uploadsDir, `yt_section_${videoId}_${Date.now()}_${index}.mp4`);
-
-  const { getYtDlpPath, runCommand } = require("../services/youtubeDownloader");
-  const ytDlpPath = getYtDlpPath();
-
-  const args = [
-    "--no-playlist",
-    "--no-warnings",
-    "--extractor-args", "youtube:player_client=android",
-    "--download-sections", `*${start}-${end}`,
-    "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
-    "--force-keyframes-at-cuts",
-    "-o", targetPath,
-    `https://www.youtube.com/watch?v=${videoId}`,
-  ];
-
-  console.log(`[SmartClip] Downloading precise section: ${start} - ${end} for ${videoId}...`);
-  try {
-    await runCommand(ytDlpPath, args, { timeoutMs: 40000 });
-    if (fs.existsSync(targetPath) && fs.statSync(targetPath).size > 1000) {
-      console.log(`[SmartClip] ✅ Section downloaded successfully: ${(fs.statSync(targetPath).size / 1024 / 1024).toFixed(2)} MB`);
-      return targetPath;
-    }
-  } catch (err) {
-    console.warn(`[SmartClip] Section download failed (${err.message}). Falling back to full video source download...`);
+  const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
+  if (!rapidApiKey) {
+    throw new Error("RAPIDAPI_KEY is not configured on the server. Please configure your RapidAPI key in environment variables.");
   }
 
-  return await downloadYouTubeSource(sourceUrl);
+  const host = RAPIDAPI_FAST_HOST;
+  const headers = {
+    "x-rapidapi-key": rapidApiKey,
+    "x-rapidapi-host": host,
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+  };
+
+  // 1. Call RapidAPI once to get the JSON payload targeting 'Get Video Download URL'
+  const candidateEndpoints = [
+    `https://${host}/download_video/${videoId}`,
+    `https://${host}/dl/video/${videoId}`,
+    `https://${host}/download/${videoId}`,
+  ];
+
+  let rawPayload = null;
+  let lastErr = null;
+
+  for (const endpoint of candidateEndpoints) {
+    try {
+      console.log(`[RapidAPI][FAST] Requesting video download payload from: ${endpoint}`);
+      const res = await axios.get(endpoint, {
+        headers,
+        timeout: 30000,
+      });
+      if (res.data) {
+        rawPayload = res.data;
+        console.log(`[RapidAPI][FAST] Successfully received payload from: ${endpoint}`);
+        break;
+      }
+    } catch (err) {
+      lastErr = err;
+      const status = err.response?.status;
+      const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+      console.warn(`[RapidAPI][FAST] Endpoint ${endpoint} returned HTTP ${status || "ERR"}: ${msg}`);
+    }
+  }
+
+  if (!rawPayload) {
+    throw new Error(`RapidAPI FAST Downloader returned no payload: ${lastErr?.message || "Request failed"}`);
+  }
+
+  // 2. Extract the direct CDN 'file' URL
+  let cdnFileUrl = null;
+  if (typeof rawPayload.file === "string" && rawPayload.file.startsWith("http")) {
+    cdnFileUrl = rawPayload.file;
+  } else if (rawPayload.video && typeof rawPayload.video.file === "string" && rawPayload.video.file.startsWith("http")) {
+    cdnFileUrl = rawPayload.video.file;
+  } else if (typeof rawPayload.downloadUrl === "string" && rawPayload.downloadUrl.startsWith("http")) {
+    cdnFileUrl = rawPayload.downloadUrl;
+  } else if (typeof rawPayload.url === "string" && rawPayload.url.startsWith("http")) {
+    cdnFileUrl = rawPayload.url;
+  } else if (typeof rawPayload.link === "string" && rawPayload.link.startsWith("http")) {
+    cdnFileUrl = rawPayload.link;
+  } else if (Array.isArray(rawPayload.formats) && rawPayload.formats.length > 0) {
+    const progressive = rawPayload.formats.find(
+      (f) => f.url && (String(f.mimeType || "").includes("mp4") || f.ext === "mp4" || f.itag === 22 || f.itag === 18)
+    );
+    cdnFileUrl = progressive?.url || rawPayload.formats[0]?.url;
+  }
+
+  if (!cdnFileUrl) {
+    throw new Error(`RapidAPI response did not contain a direct CDN file URL.`);
+  }
+
+  console.log(`[RapidAPI][FAST] Extracted direct CDN file URL: ${cdnFileUrl.slice(0, 80)}...`);
+
+  // 3. Maintain polling loop: poll ONLY direct CDN file URL until it returns 200 OK (resolves 404 delay)
+  const pollStart = Date.now();
+  const maxPollMs = 90000;
+  const pollIntervalMs = 2500;
+  let fileReady = false;
+
+  console.log(`[RapidAPI-Poll] Polling CDN file readiness until 200 OK...`);
+  while (Date.now() - pollStart < maxPollMs) {
+    try {
+      const probe = await axios.get(cdnFileUrl, {
+        timeout: 10000,
+        maxRedirects: 5,
+        validateStatus: (s) => s < 500,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          Range: "bytes=0-10",
+        },
+      });
+
+      if (probe.status === 200 || probe.status === 206) {
+        const elapsed = Math.round((Date.now() - pollStart) / 1000);
+        console.log(`[RapidAPI-Poll] ✅ CDN file ready after ${elapsed}s (HTTP ${probe.status})`);
+        fileReady = true;
+        break;
+      }
+      console.log(`[RapidAPI-Poll] CDN returned HTTP ${probe.status}, waiting for file preparation...`);
+    } catch (probeErr) {
+      console.log(`[RapidAPI-Poll] Probe waiting (${probeErr.message})...`);
+    }
+
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  if (!fileReady) {
+    throw new Error(`Timed out waiting for RapidAPI CDN file to complete preparation after ${Math.round(maxPollMs / 1000)}s.`);
+  }
+
+  // 4. Save the stream to disk and pass the local path to ffmpegService
+  const targetPath = path.join(uploadsDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
+  console.log(`[RapidAPI-Stream] Streaming CDN file to disk: ${targetPath}`);
+
+  const writer = fs.createWriteStream(targetPath);
+  const streamRes = await axios({
+    method: "GET",
+    url: cdnFileUrl,
+    responseType: "stream",
+    timeout: 120000,
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      Accept: "*/*",
+    },
+  });
+
+  await new Promise((resolve, reject) => {
+    streamRes.data.pipe(writer);
+    writer.on("finish", () => {
+      writer.close(() => {
+        if (!fs.existsSync(targetPath)) return reject(new Error("File stream failed to write to disk."));
+        const stat = fs.statSync(targetPath);
+        if (stat.size < 5000) {
+          cleanupFile(targetPath);
+          return reject(new Error(`Downloaded file is too small or incomplete (${stat.size} bytes).`));
+        }
+        console.log(`[RapidAPI-Stream] ✅ Saved ${(stat.size / 1024 / 1024).toFixed(2)} MB to ${targetPath}`);
+        resolve();
+      });
+    });
+    writer.on("error", (err) => {
+      cleanupFile(targetPath);
+      reject(err);
+    });
+    streamRes.data.on("error", (err) => {
+      cleanupFile(targetPath);
+      reject(err);
+    });
+  });
+
+  return targetPath;
 }
 
 function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
@@ -546,30 +662,14 @@ router.get("/diag", async (req, res) => {
     };
   }
 
-  // Test 4: Local yt-dlp availability on server
-  try {
-    const { getYtDlpPath, runCommand } = require("../services/youtubeDownloader");
-    const ytDlpPath = getYtDlpPath();
-    const ver = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 25000 });
-    results.ytdlpTest = {
-      path: ytDlpPath,
-      version: ver.stdout.trim(),
-      available: true,
-    };
-  } catch (err) {
-    results.ytdlpTest = {
-      error: err.message,
-      available: false,
-    };
-  }
-
-  // Test 5: Full download test
+  // Test 4: RapidAPI FAST Downloader test
   if (req.query.testDownload === "1") {
     try {
       const t0 = Date.now();
-      const downloadedPath = await downloadYouTubeSource(`https://www.youtube.com/watch?v=${videoId}`);
+      const downloadedPath = await downloadVideoViaRapidApi(`https://www.youtube.com/watch?v=${videoId}`);
       results.downloadTest = {
         success: true,
+        provider: "RapidAPI FAST Downloader",
         timeSec: ((Date.now() - t0) / 1000).toFixed(1),
         path: downloadedPath,
         size: fs.existsSync(downloadedPath) ? fs.statSync(downloadedPath).size : 0,
@@ -578,6 +678,7 @@ router.get("/diag", async (req, res) => {
     } catch (err) {
       results.downloadTest = {
         success: false,
+        provider: "RapidAPI FAST Downloader",
         error: err.message,
       };
     }
@@ -720,9 +821,13 @@ router.post("/smart-generate", async (req, res) => {
     const clips = [];
     fs.mkdirSync(exportsDir, { recursive: true });
 
-    // ── YouTube → Download precise clip sections and slice clips ──
+    // ── YouTube → Download source video ONCE via RapidAPI FAST Downloader and slice clips with FFmpeg ──
     if (normalizedSourceType === "youtube") {
+      let sourceVideoPath = null;
       try {
+        console.log(`[SmartClip] Downloading YouTube source via RapidAPI for ${sourceUrl}...`);
+        sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl);
+
         for (let i = 0; i < suggestions.length; i++) {
           if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
             console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
@@ -732,29 +837,15 @@ router.post("/smart-generate", async (req, res) => {
           const suggestion = suggestions[i];
           const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
           const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-          const durationSec = Math.max(1, endSec - startSec);
 
-          console.log(`[SmartClip] Generating section clip #${i + 1} (${startSec}s - ${endSec}s)...`);
-          let clipSectionPath = null;
-          try {
-            clipSectionPath = await downloadYouTubeSectionForSmartClipping({
-              sourceUrl,
-              startSec,
-              endSec,
-              index: i,
-            });
+          const result = await smartGenerateClip({
+            inputPath: sourceVideoPath,
+            startTime: secondsToTime(startSec),
+            endTime: secondsToTime(endSec),
+            aspectRatio: aspectRatio || "9:16",
+          });
 
-            const result = await smartGenerateClip({
-              inputPath: clipSectionPath,
-              startTime: "00:00:00",
-              endTime: secondsToTime(durationSec),
-              aspectRatio: aspectRatio || "9:16",
-            });
-
-            clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-          } finally {
-            cleanupFile(clipSectionPath);
-          }
+          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
         }
 
         if (!clips.length) {
@@ -845,21 +936,12 @@ router.post("/generate", async (req, res) => {
 
     try {
       if (normalizedSourceType === "youtube") {
-        const startSec = timeToSeconds(startTime);
-        const endSec = timeToSeconds(endTime);
-        const durationSec = Math.max(1, endSec - startSec);
-
-        tempSectionPath = await downloadYouTubeSectionForSmartClipping({
-          sourceUrl,
-          startSec,
-          endSec,
-          index: Date.now(),
-        });
+        tempSectionPath = await downloadVideoViaRapidApi(sourceUrl);
 
         result = await smartGenerateClip({
           inputPath: tempSectionPath,
-          startTime: "00:00:00",
-          endTime: secondsToTime(durationSec),
+          startTime,
+          endTime,
           aspectRatio: aspectRatio || "9:16",
         });
       } else {
