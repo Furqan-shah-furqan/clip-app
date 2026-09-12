@@ -235,6 +235,11 @@ function PresetCard({ preset, isSelected, onClick }) {
           ✦ NEW
         </div>
       )}
+      {preset.behindPerson && !badge && (
+        <div style={{ ...styles.badgeRibbon, ...styles.badgeBehindPerson }}>
+          👤 BEHIND
+        </div>
+      )}
 
       {/* Selected Indicator Checkmark */}
       {isSelected && (
@@ -257,11 +262,20 @@ function PresetCard({ preset, isSelected, onClick }) {
             borderRadius: `${style.borderRadius || 6}px`,
             letterSpacing: `${style.letterSpacing || 0}px`,
             lineHeight: style.lineSpacing || 1.3,
-            WebkitTextStroke: `${Math.min(style.strokeWidth || 0, 2.5)}px ${style.strokeColor || "#000000"}`,
-            paintOrder: "stroke fill",
-            textShadow: style.shadowBlur
-              ? `0 0 ${Math.min(style.shadowBlur, 12)}px ${style.shadowColor || "rgba(0,0,0,0.8)"}`
+            WebkitFontSmoothing: "antialiased",
+            MozOsxFontSmoothing: "grayscale",
+            textRendering: "optimizeLegibility",
+            paintOrder: "stroke fill markers",
+            strokeLinejoin: "round",
+            WebkitTextStroke: (style.strokeWidth && Number(style.strokeWidth) > 0)
+              ? `${Math.min(style.strokeWidth, 2)}px ${style.strokeColor || "#000000"}`
               : "none",
+            textShadow: style.textShadow || (style.shadowBlur
+              ? `0 0 ${Math.min(style.shadowBlur, 12)}px ${style.shadowColor || "rgba(0,0,0,0.8)"}`
+              : "none"),
+            boxShadow: style.boxShadow || "none",
+            backdropFilter: style.backdropFilter || "none",
+            filter: style.filter || "none",
             textAlign: "center",
             maxWidth: "90%",
             wordBreak: "break-word",
@@ -271,13 +285,14 @@ function PresetCard({ preset, isSelected, onClick }) {
           }}
         >
           {words.map((word, idx) => {
-            const isHighlight = idx === 0 && words.length > 1 && style.highlightColor;
+            const isHighlight = idx === 0 && style.highlightColor;
             return (
               <span
                 key={idx}
                 style={{
-                  color: isHighlight ? style.highlightColor : undefined,
+                  color: isHighlight ? style.highlightColor : style.textColor || "#FFFFFF",
                   marginRight: idx < words.length - 1 ? "4px" : "0",
+                  transition: "color 0.15s ease",
                 }}
               >
                 {word}
@@ -503,6 +518,10 @@ const styles = {
   badgeNew: {
     background: "linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)",
     boxShadow: "0 2px 8px rgba(245, 158, 11, 0.4)",
+  },
+  badgeBehindPerson: {
+    background: "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+    boxShadow: "0 2px 8px rgba(16, 185, 129, 0.4)",
   },
   selectedCheckmark: {
     position: "absolute",

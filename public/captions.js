@@ -25,30 +25,35 @@ const DEFAULT_STYLE = {
   fontFamily: "'Montserrat', sans-serif",
   fontSize: 28,
   textColor: "#ffffff",
-  bgColor: "#000000",
-  bgOpacity: 70,
+  highlightColor: "#22c55e",
+  bgColor: "transparent",
+  bgOpacity: 0,
   position: "bottom",
   positionX: 50,
   positionY: 82,
   wordsPerRow: 0,
-  textShadow: true,
+  textShadow: "none",
   shadowColor: "#000000",
-  shadowBlur: 8,
+  shadowBlur: 0,
   shadowOffsetX: 0,
   shadowOffsetY: 2,
+  boxShadow: "none",
+  backdropFilter: "none",
+  filter: "none",
   animationStyle: "pop",
   fontWeight: 800,
   textTransform: "none",
   letterSpacing: 0,
   lineSpacing: 1.35,
-  borderRadius: 14,
+  borderRadius: 10,
   paddingX: 14,
-  paddingY: 10,
+  paddingY: 8,
   presetDuration: 0.6,
   strokeWidth: 0,
   strokeColor: "#000000",
   glowIntensity: 0,
   rotateAngle: 0,
+  behindPerson: false,
   activePresetId: null,
 };
 
@@ -260,6 +265,7 @@ let realtimeShouldPersistSegments = false;
 let themeSwitchBtn, themeToggle, modePill, backBtn, goBackBtn, saveAndBackBtn, publishNavBtn;
 let noClipState, editorShell, clipTitleDisplay;
 let captionVideo, captionVideoWrap, captionOverlay, captionOverlayText, captionDragHandle;
+let captionSubjectCanvas, subjectSegmentationInstance = null;
 let videoPlayOverlayBtn, videoControlsBar, barPlayBtn, videoScrubberTrack, videoScrubberProgress, videoTimeDisplay;
 let captionPosDisplay, segmentCountBadge;
 let captionLoadingState, captionSegmentsList;
@@ -311,6 +317,7 @@ function cacheDom() {
   captionOverlay = document.getElementById("captionOverlay");
   captionOverlayText = document.getElementById("captionOverlayText");
   captionDragHandle = document.getElementById("captionDragHandle");
+  captionSubjectCanvas = document.getElementById("captionSubjectCanvas");
   capBoxFrame = document.getElementById("capBoxFrame");
   capBoxSizeLabel = document.getElementById("capBoxSizeLabel");
   captionPosDisplay = document.getElementById("captionPosDisplay");
@@ -530,17 +537,19 @@ function escapeHtml(value = "") {
     .replace(/'/g, "&#039;");
 }
 function hexToRgb(hex) {
-  const clean = (hex || "#000000").replace("#", "");
+  if (!hex || hex === "transparent") return [0, 0, 0];
+  const clean = String(hex).replace("#", "").trim();
+  if (clean.length !== 3 && clean.length !== 6) return [0, 0, 0];
   const normalized =
     clean.length === 3
       ? clean
           .split("")
           .map((p) => p + p)
           .join("")
-      : clean.padEnd(6, "0");
-  const r = parseInt(normalized.slice(0, 2), 16);
-  const g = parseInt(normalized.slice(2, 4), 16);
-  const b = parseInt(normalized.slice(4, 6), 16);
+      : clean;
+  const r = parseInt(normalized.slice(0, 2), 16) || 0;
+  const g = parseInt(normalized.slice(2, 4), 16) || 0;
+  const b = parseInt(normalized.slice(4, 6), 16) || 0;
   return [r, g, b];
 }
 function secondsToClock(totalSeconds) {
@@ -1978,8 +1987,8 @@ function normalizeStyle(style = {}) {
   merged.positionY = Number(merged.positionY ?? 82);
   merged.wordsPerRow = Number(merged.wordsPerRow ?? 0);
   merged.fontSize = clamp(Number(merged.fontSize ?? 28), 12, 72);
-  merged.paddingX = clamp(Number(merged.paddingX ?? 14), 4, 60);
-  merged.paddingY = clamp(Number(merged.paddingY ?? 10), 2, 40);
+  merged.paddingX = clamp(Number(merged.paddingX ?? 14), 0, 60);
+  merged.paddingY = clamp(Number(merged.paddingY ?? 8), 0, 40);
   merged.lineSpacing = clamp(parseFloat(merged.lineSpacing ?? 1.35), 0.8, 2.5);
   merged.presetDuration = clamp(parseFloat(merged.presetDuration ?? 0.6), 0.2, 2.5);
   merged.letterSpacing = clamp(parseFloat(merged.letterSpacing ?? 0), -2, 14);
@@ -1988,6 +1997,14 @@ function normalizeStyle(style = {}) {
   merged.glowIntensity = clamp(parseInt(merged.glowIntensity ?? 0, 10), 0, 30);
   merged.rotateAngle = clamp(parseInt(merged.rotateAngle ?? 0, 10), -15, 15);
   merged.textTransform = merged.textTransform || "none";
+  if (style?.bgColor !== undefined) merged.bgColor = style.bgColor;
+  if (style?.bgOpacity !== undefined) merged.bgOpacity = Number(style.bgOpacity);
+  if (style?.boxShadow !== undefined) merged.boxShadow = style.boxShadow;
+  if (style?.backdropFilter !== undefined) merged.backdropFilter = style.backdropFilter;
+  if (style?.filter !== undefined) merged.filter = style.filter;
+  if (style?.textShadow !== undefined) merged.textShadow = style.textShadow;
+  if (style?.highlightColor !== undefined) merged.highlightColor = style.highlightColor;
+  if (style?.behindPerson !== undefined) merged.behindPerson = style.behindPerson;
   return merged;
 }
 
@@ -2001,28 +2018,47 @@ function styleMatchesPreset(style, presetStyle) {
 function applyTextBoxVisuals(element, style) {
   if (!element) return;
   const merged = normalizeStyle(style);
-  const [r, g, b] = hexToRgb(merged.bgColor);
-  const op = clamp(Number(merged.bgOpacity) || 0, 100) / 100;
 
+  // Clear previous inline visual overrides
   element.style.removeProperty("filter");
   element.style.removeProperty("transform");
   element.style.removeProperty("box-shadow");
+  element.style.removeProperty("backdrop-filter");
+  element.style.removeProperty("-webkit-backdrop-filter");
+  element.style.removeProperty("-webkit-text-stroke");
+  element.style.removeProperty("paint-order");
+  element.style.removeProperty("stroke-linejoin");
+
+  // Core Typography & Antialiasing
+  element.style.webkitFontSmoothing = "antialiased";
+  element.style.textRendering = "optimizeLegibility";
   element.style.fontStyle = "normal";
   element.style.fontFamily = merged.fontFamily;
   element.style.fontSize = `${merged.fontSize}px`;
   element.style.color = merged.textColor;
-  element.style.background = `rgba(${r},${g},${b},${op})`;
-  element.style.textShadow = getShadowCss(merged);
   element.style.fontWeight = String(merged.fontWeight || 800);
   element.style.textTransform = getTextTransformCss(merged);
   element.style.letterSpacing = `${Number(merged.letterSpacing) || 0}px`;
-  element.style.borderRadius = `${Number(merged.borderRadius) || 14}px`;
+
+  // Background Pill & Opacity
+  if (merged.bgColor && merged.bgColor !== "transparent" && Number(merged.bgOpacity) > 0) {
+    const [r, g, b] = hexToRgb(merged.bgColor);
+    const op = clamp(Number(merged.bgOpacity) || 0, 100) / 100;
+    element.style.background = `rgba(${r},${g},${b},${op})`;
+  } else {
+    element.style.background = "transparent";
+  }
+
+  // Padding & Border Radius
+  element.style.borderRadius = `${Number(merged.borderRadius) || 10}px`;
   element.style.padding = `${Number(merged.paddingY) || 8}px ${Number(merged.paddingX) || 14}px`;
   
+  // Line Height
   const lineSpacing = Number(merged.lineSpacing || 1.35);
   element.style.lineHeight = String(lineSpacing);
   element.style.setProperty("--caption-line-height", String(lineSpacing));
 
+  // Layout sizing
   element.style.width = "max-content";
   element.style.maxWidth = "92%";
   element.style.boxSizing = "border-box";
@@ -2033,30 +2069,50 @@ function applyTextBoxVisuals(element, style) {
   // Dynamic animation cadence / speed from preset duration
   element.style.setProperty("--preset-duration", `${Number(merged.presetDuration || 0.6)}s`);
 
-  // Stroke / Outline
+  // Stroke / Outline: ZERO-STROKE DEFAULT, NO DESTRUCTIVE INNER STROKE
   const strokeW = Number(merged.strokeWidth) || 0;
   const strokeC = merged.strokeColor || "#000000";
   if (strokeW > 0) {
     element.style.webkitTextStroke = `${strokeW}px ${strokeC}`;
-  } else {
-    element.style.webkitTextStroke = "0px transparent";
+    element.style.paintOrder = "stroke fill markers";
+    element.style.strokeLinejoin = "round";
   }
 
-  // Neon Glow filter
-  const glow = Number(merged.glowIntensity) || 0;
-  if (glow > 0) {
-    const glowColor = merged.shadowColor || merged.textColor || "#00e5ff";
-    element.style.filter = `drop-shadow(0 0 ${glow}px ${glowColor})`;
+  // Text Shadow
+  if (merged.textShadow && typeof merged.textShadow === "string" && merged.textShadow !== "none" && merged.textShadow !== "true") {
+    element.style.textShadow = merged.textShadow;
+  } else if (merged.textShadow === true || Number(merged.shadowBlur) > 0) {
+    element.style.textShadow = getShadowCss(merged);
   } else {
-    element.style.removeProperty("filter");
+    element.style.textShadow = "none";
+  }
+
+  // Box Shadow (e.g. for badges or neon presets)
+  if (merged.boxShadow && merged.boxShadow !== "none") {
+    element.style.boxShadow = merged.boxShadow;
+  }
+
+  // Backdrop Filter (e.g. for Editorial styles)
+  if (merged.backdropFilter && merged.backdropFilter !== "none") {
+    element.style.backdropFilter = merged.backdropFilter;
+    element.style.webkitBackdropFilter = merged.backdropFilter;
+  }
+
+  // Filter / Diffuse Drop Shadow / Glow
+  if (merged.filter && merged.filter !== "none") {
+    element.style.filter = merged.filter;
+  } else {
+    const glow = Number(merged.glowIntensity) || 0;
+    if (glow > 0) {
+      const glowColor = merged.shadowColor || merged.textColor || "#00e5ff";
+      element.style.filter = `drop-shadow(0 0 ${glow}px ${glowColor})`;
+    }
   }
 
   // Tilt / Rotation
   const rot = Number(merged.rotateAngle) || 0;
   if (rot !== 0) {
     element.style.transform = `rotate(${rot}deg)`;
-  } else {
-    element.style.removeProperty("transform");
   }
 }
 
@@ -2162,15 +2218,18 @@ function renderHighlightImpactCaption(text, container) {
     .join(" ");
 }
 
-function renderWordSpan(w, idx, anim, delay) {
+let _lastRenderedWordIdx = null;
+
+function renderWordSpan(w, idx, anim, delay, activeWordIdx) {
   const wDelay = (idx * delay).toFixed(3);
   const escaped = escapeHtml(w);
-  if (anim === "none" || anim === "static") {
-    return `<span class="cap-word cap-word--static">${escaped}</span>`;
-  }
-  if (anim === "classic") {
-    return `<span class="cap-word cap-word--classic" style="--word-delay:${wDelay}s">${escaped}</span>`;
-  }
+  const s = editorState.style || {};
+  const highlightCol = s.highlightColor || "#22c55e";
+
+  const isCurrentlyActive = (activeWordIdx !== undefined && activeWordIdx !== null)
+    ? (idx === activeWordIdx)
+    : (idx === 0);
+
   if (anim === "wordcolor") {
     const colors = [
       "#ffffff",
@@ -2184,21 +2243,34 @@ function renderWordSpan(w, idx, anim, delay) {
     return `<span class="cap-word cap-word--wordcolor" style="color:${colors[idx % colors.length]};--word-delay:${wDelay}s">${escaped}</span>`;
   }
   if (anim === "highlightimpact") {
-    const isHighlight = w.length >= 5 || idx % 3 === 1;
+    const isHighlight = isCurrentlyActive || w.length >= 5 || idx % 3 === 1;
     const style = isHighlight
-      ? `color:#00e5ff;font-weight:900;--word-delay:${wDelay}s`
+      ? `color:${highlightCol};font-weight:900;--word-delay:${wDelay}s`
       : `--word-delay:${wDelay}s`;
     return `<span class="cap-word cap-word--highlightimpact${isHighlight ? " cap-highlight-impact" : ""}" style="${style}">${escaped}</span>`;
   }
+
+  // Authentic Viral & Social active word highlight (Moonshot / Submagic style)
+  if (isCurrentlyActive && highlightCol && (anim === "viral" || anim === "social" || anim === "karaoke" || anim === "pop" || anim === "highlight" || anim === "bounce")) {
+    return `<span class="cap-word cap-word--${anim} cap-active-highlight" style="color:${highlightCol};font-weight:900;--word-delay:${wDelay}s;">${escaped}</span>`;
+  }
+
+  if (anim === "none" || anim === "static") {
+    return `<span class="cap-word cap-word--static">${escaped}</span>`;
+  }
+  if (anim === "classic") {
+    return `<span class="cap-word cap-word--classic" style="--word-delay:${wDelay}s">${escaped}</span>`;
+  }
+
   return `<span class="cap-word cap-word--${anim}" style="--word-delay:${wDelay}s">${escaped}</span>`;
 }
 
 /**
  * Core caption renderer. Formats words into rows when wordsPerRow > 0 or line breaks exist,
  * and maintains sequential animation delays. Only re-renders DOM when text, segment ID,
- * wordsPerRow, or animation style changes.
+ * wordsPerRow, animation style, or active word changes.
  */
-function renderAnimatedCaption(text, segId) {
+function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
 
   if (!text) {
@@ -2208,6 +2280,7 @@ function renderAnimatedCaption(text, segId) {
     _lastRenderedText = "";
     _lastRenderedAnim = null;
     _lastRenderedWordsPerRow = null;
+    _lastRenderedWordIdx = null;
     return;
   }
 
@@ -2218,7 +2291,8 @@ function renderAnimatedCaption(text, segId) {
     segId === _lastRenderedSegId &&
     text === _lastRenderedText &&
     anim === _lastRenderedAnim &&
-    wordsPerRow === _lastRenderedWordsPerRow
+    wordsPerRow === _lastRenderedWordsPerRow &&
+    activeWordIdx === _lastRenderedWordIdx
   ) {
     return;
   }
@@ -2227,6 +2301,7 @@ function renderAnimatedCaption(text, segId) {
   _lastRenderedText = text;
   _lastRenderedAnim = anim;
   _lastRenderedWordsPerRow = wordsPerRow;
+  _lastRenderedWordIdx = activeWordIdx;
 
   const delay = ANIM_WORD_DELAY[anim] ?? 0.07;
   const allWords = text.trim().split(/\s+/).filter(Boolean);
@@ -2267,7 +2342,7 @@ function renderAnimatedCaption(text, segId) {
     captionOverlayText.innerHTML = rowsOfWords
       .map((rowWords) => {
         const rowContent = rowWords
-          .map((w) => renderWordSpan(w, globalIdx++, anim, delay))
+          .map((w) => renderWordSpan(w, globalIdx++, anim, delay, activeWordIdx))
           .join(" ");
         return `<div class="cap-row">${rowContent}</div>`;
       })
@@ -2277,7 +2352,7 @@ function renderAnimatedCaption(text, segId) {
 
   // Single line / auto wrapping
   captionOverlayText.innerHTML = allWords
-    .map((w, i) => renderWordSpan(w, i, anim, delay))
+    .map((w, i) => renderWordSpan(w, i, anim, delay, activeWordIdx))
     .join(" ");
 }
 
@@ -2550,7 +2625,17 @@ function syncCaptionOverlay() {
   captionOverlay.style.visibility = hasText ? "visible" : "hidden";
   captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
-  renderAnimatedCaption(hasText ? displayText : "", nextSegId);
+  let activeWordIndex = 0;
+  if (activeSegment && activeSegment.end > activeSegment.start) {
+    const dur = activeSegment.end - activeSegment.start;
+    const elapsed = Math.max(0, currentTime - activeSegment.start);
+    const words = (displayText || "").trim().split(/\s+/).filter(Boolean);
+    if (words.length > 0) {
+      activeWordIndex = Math.min(words.length - 1, Math.floor((elapsed / dur) * words.length));
+    }
+  }
+
+  renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
 
   if (activeSegment && activeSegment.id !== editorState.activeSegmentId) {
     editorState.activeSegmentId = activeSegment.id;
@@ -3043,11 +3128,14 @@ function renderPresetsGalleryGrid() {
   presetsModalGrid.innerHTML = filtered.map((preset) => {
     const s = preset.style || {};
     const isActive = activeId === preset.id;
-    const badgeHtml = preset.badge ? `
-      <span class="preset-card-badge ${preset.badge === "TRENDING" ? "preset-card-badge--trending" : "preset-card-badge--new"}">
-        ${preset.badge}
-      </span>
-    ` : "";
+    const isBehind = Boolean(preset.behindPerson || s.behindPerson || preset.category === "Behind the Person");
+
+    let badgeHtml = "";
+    if (preset.badge) {
+      badgeHtml = `<span class="preset-card-badge ${preset.badge === "TRENDING" ? "preset-card-badge--trending" : "preset-card-badge--new"}">${preset.badge}</span>`;
+    } else if (isBehind) {
+      badgeHtml = `<span class="preset-card-badge preset-card-badge--behind">👤 BEHIND</span>`;
+    }
 
     const checkHtml = isActive ? `
       <div class="preset-card-check" title="Active Preset">✓</div>
@@ -3064,9 +3152,19 @@ function renderPresetsGalleryGrid() {
       ? `${s.strokeWidth}px ${s.strokeColor || "#000000"}`
       : "none";
 
-    const textShadow = (s.shadowBlur && Number(s.shadowBlur) > 0)
-      ? `0 2px ${s.shadowBlur}px ${s.shadowColor || "rgba(0,0,0,0.8)"}`
-      : "none";
+    let textShadow = "none";
+    if (s.textShadow && typeof s.textShadow === "string" && s.textShadow !== "none" && s.textShadow !== "true") {
+      textShadow = s.textShadow;
+    } else if (s.shadowBlur && Number(s.shadowBlur) > 0) {
+      textShadow = `0 2px ${s.shadowBlur}px ${s.shadowColor || "rgba(0,0,0,0.8)"}`;
+    }
+
+    let bgStyle = "transparent";
+    if (s.bgColor && s.bgColor !== "transparent") {
+      const [r, g, b] = hexToRgb(s.bgColor);
+      const op = clamp(Number(s.bgOpacity !== undefined ? s.bgOpacity : 100), 0, 100) / 100;
+      bgStyle = `rgba(${r},${g},${b},${op})`;
+    }
 
     return `
       <div
@@ -3088,11 +3186,18 @@ function renderPresetsGalleryGrid() {
               font-weight: ${s.fontWeight || 800};
               text-transform: ${s.textTransform || "uppercase"};
               letter-spacing: ${Number(s.letterSpacing) || 0}px;
-              background-color: ${s.bgColor || "transparent"};
+              background-color: ${bgStyle};
               padding: ${Math.max(4, Math.round(Number(s.bgPadding || 8) * 0.6))}px ${Math.max(8, Math.round(Number(s.bgPadding || 12) * 0.8))}px;
               border-radius: ${Math.max(3, Math.round(Number(s.borderRadius || 6) * 0.7))}px;
               -webkit-text-stroke: ${textStroke};
+              paint-order: stroke fill markers;
+              stroke-linejoin: round;
+              -webkit-font-smoothing: antialiased;
+              text-rendering: optimizeLegibility;
               text-shadow: ${textShadow};
+              ${s.boxShadow && s.boxShadow !== "none" ? `box-shadow: ${s.boxShadow};` : ""}
+              ${s.backdropFilter && s.backdropFilter !== "none" ? `backdrop-filter: ${s.backdropFilter}; -webkit-backdrop-filter: ${s.backdropFilter};` : ""}
+              ${s.filter && s.filter !== "none" ? `filter: ${s.filter};` : ""}
             "
           >
             ${renderedWordsHtml}
@@ -3145,6 +3250,7 @@ function applyPresetFromGallery(id) {
   }
 
   const anim = s.wordAnimation || s.animationStyle || "pop";
+  const isBehind = Boolean(preset.behindPerson || s.behindPerson || preset.category === "Behind the Person");
 
   const newStyle = {
     ...DEFAULT_STYLE,
@@ -3157,14 +3263,18 @@ function applyPresetFromGallery(id) {
     highlightColor: s.highlightColor || "#22c55e",
     strokeColor: s.strokeColor || "#000000",
     strokeWidth: Number(s.strokeWidth) || 0,
-    bgColor: s.bgColor ? s.bgColor : "#000000",
-    bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : 70,
-    bgPadding: Number(s.bgPadding) || 14,
+    bgColor: s.bgColor !== undefined ? s.bgColor : "transparent",
+    bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
+    bgPadding: Number(s.bgPadding) || 12,
     paddingX: Number(s.bgPadding) || 14,
-    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.75) : 10,
-    borderRadius: Number(s.borderRadius) || 14,
+    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.75) : 8,
+    borderRadius: Number(s.borderRadius) || 10,
+    boxShadow: s.boxShadow || "none",
+    backdropFilter: s.backdropFilter || "none",
+    textShadow: s.textShadow || "none",
     shadowColor: s.shadowColor || "#000000",
-    shadowBlur: Number(s.shadowBlur) || 8,
+    shadowBlur: Number(s.shadowBlur) || 0,
+    filter: s.filter || "none",
     wordAnimation: anim,
     animationStyle: anim,
     wordsPerRow: wordsPerRowVal,
@@ -3172,11 +3282,39 @@ function applyPresetFromGallery(id) {
     letterSpacing: Number(s.letterSpacing) || 0,
     lineSpacing: Number(s.lineSpacing) || 1.35,
     glowIntensity: Number(s.glowIntensity) || 0,
+    behindPerson: isBehind,
     activePresetId: preset.id,
+    activePresetStyle: { ...s, behindPerson: isBehind },
     assConfig: preset.assConfig || null,
   };
 
   editorState.style = normalizeStyle(newStyle);
+
+  // Behind the Person subject segmentation management
+  if (captionVideoWrap) {
+    captionVideoWrap.classList.toggle("is-behind-person", isBehind);
+  }
+  if (captionOverlay) {
+    captionOverlay.style.zIndex = isBehind ? "2" : "30";
+  }
+  if (captionSubjectCanvas) {
+    captionSubjectCanvas.style.zIndex = "3";
+  }
+  if (isBehind) {
+    if (!subjectSegmentationInstance && window.SubjectSegmentation && captionVideo && captionSubjectCanvas) {
+      subjectSegmentationInstance = window.SubjectSegmentation.createSubjectSegmentation({
+        video: captionVideo,
+        canvas: captionSubjectCanvas,
+      });
+    }
+    if (subjectSegmentationInstance && !subjectSegmentationInstance.isActive()) {
+      subjectSegmentationInstance.start();
+    }
+  } else {
+    if (subjectSegmentationInstance && subjectSegmentationInstance.isActive()) {
+      subjectSegmentationInstance.stop();
+    }
+  }
 
   resetCaptionRenderCache();
   populateStyleControls();
@@ -3935,6 +4073,21 @@ async function init() {
         captionVideo.currentTime = 0;
       } catch {}
       updatePlaybackUI();
+
+      // Initialize subject segmentation if available
+      if (window.SubjectSegmentation && captionVideo && captionSubjectCanvas && !subjectSegmentationInstance) {
+        subjectSegmentationInstance = window.SubjectSegmentation.createSubjectSegmentation({
+          video: captionVideo,
+          canvas: captionSubjectCanvas,
+        });
+      }
+
+      if (editorState.style?.behindPerson) {
+        captionVideoWrap?.classList.add("is-behind-person");
+        if (captionOverlay) captionOverlay.style.zIndex = "2";
+        if (captionSubjectCanvas) captionSubjectCanvas.style.zIndex = "3";
+        subjectSegmentationInstance?.start();
+      }
     } else {
       console.warn("No video source found for clip:", session.clip);
     }

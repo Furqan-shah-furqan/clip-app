@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@500;600&family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@600;700;800;900&family=Poppins:wght@600;700;800;900&family=Oswald:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Cinzel:wght@700;900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@600;700;800;900&family=Oswald:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Poppins:wght@600;700;800;900&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="captions.css" />
@@ -176,6 +176,9 @@
 
                         <span class="caption-video-text" id="captionOverlayText"></span>
                       </div>
+
+                      <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
+                      <canvas id="captionSubjectCanvas" class="caption-subject-canvas"></canvas>
                     </div>
                   </div>
                   <div class="ce-phone-home-bar"></div>
@@ -207,6 +210,11 @@
                       <select id="capFontFamily" class="ce-select">
                         <option value="'Montserrat', sans-serif">Montserrat</option>
                         <option value="Inter, sans-serif">Inter</option>
+                        <option value="'Bebas Neue', sans-serif">Bebas Neue</option>
+                        <option value="'Archivo Black', sans-serif">Archivo Black</option>
+                        <option value="'Playfair Display', serif">Playfair Display</option>
+                        <option value="'Cinzel', serif">Cinzel</option>
+                        <option value="'Syne', sans-serif">Syne</option>
                         <option value="'Poppins', sans-serif">Poppins</option>
                         <option value="'Oswald', sans-serif">Oswald</option>
                         <option value="Impact, sans-serif">Impact</option>
@@ -718,7 +726,10 @@
       </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
     <script src="captionPresets.js"></script>
+    <script src="subjectSegmentation.js"></script>
     <script src="captions.js"></script>
   </body>
 </html>
