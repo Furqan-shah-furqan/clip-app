@@ -45,6 +45,19 @@ if (process.env.PYTHON_PATH && !fs.existsSync(process.env.PYTHON_PATH) && !isWin
   process.env.PYTHON_PATH = "python3";
 }
 
+// RapidAPI Host normalization: Strip any accidental header labels or URL prefixes,
+// and default to ytstream which reliably responds with HTTP 200 on cloud deployments
+if (process.env.RAPIDAPI_HOST) {
+  process.env.RAPIDAPI_HOST = process.env.RAPIDAPI_HOST
+    .replace(/^(?:x-)?rapidapi-host:\s*/i, "")
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/.*$/, "")
+    .trim();
+}
+if (!process.env.RAPIDAPI_HOST || process.env.RAPIDAPI_HOST.includes("fast-downloader")) {
+  process.env.RAPIDAPI_HOST = "ytstream-download-youtube-videos.p.rapidapi.com";
+}
+
 try {
   const v = execSync("yt-dlp --version").toString().trim();
   console.log("yt-dlp version:", v);
