@@ -762,10 +762,13 @@ router.post("/smart-generate", async (req, res) => {
         }
       } catch (err) {
         console.error("[SmartClip] YouTube clip generation failed:", err.message || err);
-        return res.status(500).json({
+        const cleanMsg = cleanSmartClipError(err);
+        return res.json({
           success: false,
+          needsUpload: true,
           error: "YouTube clip generation failed",
-          details: err.message || "Failed to download and process YouTube video",
+          details: cleanMsg,
+          message: cleanMsg,
           suggestions,
           clips: [],
         });
