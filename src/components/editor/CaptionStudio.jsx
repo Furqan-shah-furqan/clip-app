@@ -30,7 +30,7 @@ export default function CaptionStudio({
       link.id = fontLinkId;
       link.rel = "stylesheet";
       link.href =
-        "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&family=Montserrat:wght@600;700;800;900&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Poppins:wght@600;700;800;900&family=Syne:wght@700;800&display=swap";
+        "https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Cinzel:wght@700;900&family=Inter:wght@400;600;700;800;900&family=Montserrat:ital,wght@0,600;0,700;0,800;0,900;1,800;1,900&family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&family=Poppins:wght@600;700;800;900&family=Syne:wght@700;800&display=swap";
       document.head.appendChild(link);
     }
   }, []);
@@ -125,13 +125,13 @@ export default function CaptionStudio({
 
     const s = preset.style;
 
-    // Synchronize all individual control variables
-    setFontFamily(s.fontFamily);
-    setFontSize(s.fontSize);
-    setFontWeight(s.fontWeight || "800");
+    // Synchronize all individual control variables immediately
+    setFontFamily(s.fontFamily || "Montserrat");
+    setFontSize(s.fontSize || 29);
+    setFontWeight(s.fontWeight || "900");
     setTextColor(s.textColor || "#FFFFFF");
     setHighlightColor(s.highlightColor || "#22C55E");
-    setOutlineStroke(s.strokeWidth || 0); // Always default stroke to 0px
+    setOutlineStroke(0); // Zero outline stroke to eliminate glyph hollowing
     setOutlineColor(s.strokeColor || "#000000");
     setBgColor(s.bgColor || "transparent");
     setBgOpacity(s.bgOpacity !== undefined ? s.bgOpacity : 70);
@@ -144,7 +144,11 @@ export default function CaptionStudio({
 
     // Override active preset state
     setActivePreset(preset.id);
-    setActivePresetStyle({ ...s, behindPerson: Boolean(preset.behindPerson || s.behindPerson) });
+    setActivePresetStyle({
+      ...s,
+      strokeWidth: 0,
+      behindPerson: Boolean(preset.behindPerson || s.behindPerson),
+    });
     setActivePresetAssConfig(preset.assConfig);
 
     // Close drawer smoothly
@@ -155,36 +159,41 @@ export default function CaptionStudio({
   const liveCaptionStyle = useMemo(() => {
     const s = activePresetStyle || {};
 
-    const computedFontFamily = s.fontFamily || fontFamily || "'Montserrat', sans-serif";
-    const computedFontWeight = s.fontWeight || fontWeight || "800";
-    const computedTextTransform = s.textTransform || textTransform || "uppercase";
-    const computedLetterSpacing = s.letterSpacing !== undefined ? s.letterSpacing : letterSpacing;
-    const computedLineHeight = s.lineSpacing || lineSpacing || 1.3;
+    const computedFontFamily = fontFamily || s.fontFamily || "'Montserrat', sans-serif";
+    const computedFontSize = fontSize || s.fontSize || 29;
+    const computedFontWeight = fontWeight || s.fontWeight || "900";
+    const computedFontStyle = s.fontStyle || "normal";
+    const computedTextTransform = textTransform || s.textTransform || "uppercase";
+    const computedLetterSpacing = letterSpacing !== undefined ? letterSpacing : (s.letterSpacing !== undefined ? s.letterSpacing : 0);
+    const computedLineHeight = lineSpacing || s.lineSpacing || 1.3;
+    const computedTextColor = textColor || s.textColor || "#FFFFFF";
+    const computedBgColor = bgColor !== undefined && bgColor !== null ? bgColor : (s.bgColor || "transparent");
 
-    // Stroke: strictly only applied if user has explicitly increased stroke > 0
-    const hasStroke = outlineStroke > 0;
-    const strokeCss = hasStroke ? `${outlineStroke}px ${outlineColor || "#000000"}` : "none";
-
-    // Text Shadow & Glow
-    const computedTextShadow = s.textShadow
-      ? s.textShadow
-      : neonGlow
-      ? `0 0 ${neonGlow}px ${s.shadowColor || highlightColor}`
-      : "none";
-
-    // Background styling
-    const computedBgColor = s.bgColor || bgColor || "transparent";
+    // Background styling & pill padding
     const computedPadding = s.bgPadding
       ? `${Math.min(s.bgPadding, 16)}px ${Math.min(s.bgPadding + 6, 22)}px`
-      : "0px";
-    const computedBorderRadius = `${s.borderRadius || 0}px`;
+      : (computedBgColor && computedBgColor !== "transparent" ? "8px 16px" : "0px");
+    const computedBorderRadius = `${s.borderRadius !== undefined ? s.borderRadius : (computedBgColor && computedBgColor !== "transparent" ? 8 : 0)}px`;
+
+    // Drop shadow: Clean diffuse drop shadow (replaces destructive text strokes)
+    const computedFilter = (s.filter && s.filter !== "none")
+      ? s.filter
+      : "drop-shadow(0 4px 10px rgba(0,0,0,0.8))";
+
+    // Text Shadow & Glow
+    const computedTextShadow = s.textShadow && s.textShadow !== "none"
+      ? s.textShadow
+      : neonGlow
+      ? `0 0 ${neonGlow}px ${s.shadowColor || highlightColor || "#00FFCC"}`
+      : "none";
 
     return {
       fontFamily: computedFontFamily,
-      fontSize: `${fontSize}px`,
+      fontSize: `${computedFontSize}px`,
       fontWeight: computedFontWeight,
+      fontStyle: computedFontStyle,
       textTransform: computedTextTransform,
-      color: textColor || s.textColor || "#FFFFFF",
+      color: computedTextColor,
       backgroundColor: computedBgColor,
       padding: computedPadding,
       borderRadius: computedBorderRadius,
@@ -193,13 +202,12 @@ export default function CaptionStudio({
       WebkitFontSmoothing: "antialiased",
       MozOsxFontSmoothing: "grayscale",
       textRendering: "optimizeLegibility",
-      paintOrder: "stroke fill markers",
-      strokeLinejoin: "round",
-      WebkitTextStroke: strokeCss,
+      // ZERO -webkit-text-stroke: Completely eliminated to prevent hollowing of letters A, M, D
+      WebkitTextStroke: "none",
       textShadow: computedTextShadow,
       boxShadow: s.boxShadow || "none",
       backdropFilter: s.backdropFilter || "none",
-      filter: s.filter || "none",
+      filter: computedFilter,
       transform: `translate(-50%, -50%) rotate(${rotateAngle}deg)`,
       left: `${posX}%`,
       top: `${posY}%`,
@@ -219,8 +227,6 @@ export default function CaptionStudio({
     textTransform,
     textColor,
     bgColor,
-    outlineStroke,
-    outlineColor,
     neonGlow,
     letterSpacing,
     lineSpacing,
