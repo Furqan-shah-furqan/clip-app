@@ -358,11 +358,43 @@ function sanitizeRapidApiHost(rawHost) {
 async function fetchFromFastDownloader(videoId, rapidApiKey) {
   const host = sanitizeRapidApiHost(process.env.RAPIDAPI_HOST);
 
+  // Step 1: Discover available quality ID
+  let selectedQualityId = null;
+  try {
+    const qUrl = `https://${host}/get_available_quality/${videoId}`;
+    console.log(`[RapidAPI][FAST] Discovering qualities at: ${qUrl}`);
+    const qRes = await axios.get(qUrl, {
+      headers: {
+        "x-rapidapi-host": host,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 12000,
+    });
+    const qualities = Array.isArray(qRes.data) ? qRes.data : [];
+    if (qualities.length > 0) {
+      const videoQualities = qualities.filter((q) => q.type === "video" || String(q.mime || "").includes("video"));
+      const best =
+        videoQualities.find((q) => q.quality === "720p" && String(q.mime || "").includes("mp4")) ||
+        videoQualities.find((q) => q.quality === "720p") ||
+        videoQualities.find((q) => q.quality === "1080p" && String(q.mime || "").includes("mp4")) ||
+        videoQualities.find((q) => q.quality === "480p") ||
+        videoQualities.find((q) => q.quality === "360p") ||
+        videoQualities[0];
+      if (best?.id) {
+        selectedQualityId = best.id;
+        console.log(`[RapidAPI][FAST] Discovered best quality ID: ${selectedQualityId} (${best.quality || "auto"})`);
+      }
+    }
+  } catch (qErr) {
+    console.log(`[RapidAPI][FAST] Quality discovery note: ${qErr.message}`);
+  }
+
+  // Step 2: Request download URL
   const candidateEndpoints = [
-    `https://${host}/dl/video/${videoId}`,
+    ...(selectedQualityId ? [`https://${host}/download_video/${videoId}?quality=${selectedQualityId}`] : []),
     `https://${host}/download_video/${videoId}`,
-    `https://${host}/video/${videoId}`,
-    `https://${host}/dl?id=${videoId}`,
+    `https://${host}/dl/video/${videoId}`,
   ];
 
   let rawUrl = null;
@@ -377,7 +409,7 @@ async function fetchFromFastDownloader(videoId, rapidApiKey) {
           "x-rapidapi-key": rapidApiKey,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
-        timeout: 15000,
+        timeout: 45000,
       });
 
       rawUrl = parseStreamUrlFromResponse(response.data);
