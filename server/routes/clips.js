@@ -316,11 +316,11 @@ function generateFallbackSegments() {
 
 // ── YouTube Downloader Bridges ───────────────────────────────────────────────
 async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
-  return await downloadYouTubeSourceVideo({ sourceUrl });
+  return await downloadYouTubeSource(sourceUrl);
 }
 
 async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
-  return await downloadYouTubeSection({ sourceUrl, startSec, endSec, index });
+  return await downloadYouTubeSource(sourceUrl);
 }
 
 function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
@@ -535,8 +535,8 @@ router.get("/diag", async (req, res) => {
 
 router.post("/smart-generate", async (req, res) => {
   const startedAt = Date.now();
-  // Safe ceiling to finalize and return clips before Render's hard 100s proxy timeout
-  const maxSmartGenerateMs = 65 * 1000;
+  // Set time budget to 55 seconds to guarantee response before Render's 100s reverse-proxy cutoff
+  const maxSmartGenerateMs = 55 * 1000;
 
   try {
     const {
@@ -715,10 +715,7 @@ router.post("/smart-generate", async (req, res) => {
     } else {
       // ── Local upload → FFmpeg ──
       for (let i = 0; i < suggestions.length; i++) {
-        if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
-          console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
-          break;
-        }
+        if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
 
         const suggestion = suggestions[i];
         const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
@@ -783,21 +780,15 @@ router.post("/generate", async (req, res) => {
 
     try {
       if (normalizedSourceType === "youtube") {
-        const startSec = timeToSeconds(startTime);
-        const endSec = timeToSeconds(endTime);
-        const durationSec = Math.max(1, endSec - startSec);
-
         tempSectionPath = await downloadYouTubeSectionForSmartClipping({
           sourceUrl,
-          startSec,
-          endSec,
           index: Date.now(),
         });
 
         result = await smartGenerateClip({
           inputPath: tempSectionPath,
-          startTime: "00:00:00",
-          endTime: secondsToTime(durationSec),
+          startTime,
+          endTime,
           aspectRatio: aspectRatio || "9:16",
         });
       } else {

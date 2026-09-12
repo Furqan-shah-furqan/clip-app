@@ -2836,7 +2836,7 @@ function showUploadRequiredForSmartClips(data) {
 
 async function generateSmartClipsFromSource() {
   const body = buildSmartSuggestBody(3);
-  body.maxClips = getAutoSmartClipCount();
+  body.maxClips = Math.min(3, getAutoSmartClipCount());
   body.minScore = 30;
 
   const controller = new AbortController();
@@ -2912,10 +2912,18 @@ smartClipBtn?.addEventListener("click", async () => {
     updateProgress(0, "Finding viral moments...", 300);
     stopCrawl = startProgressCrawl(88, "Finding and generating smart clips...");
 
-    const newClips = await generateSmartClipsFromSource();
+    let newClips = [];
+    try {
+      newClips = await generateSmartClipsFromSource();
+    } catch (batchError) {
+      console.warn("Batch smart-generate was interrupted or timed out, falling back to incremental clipping:", batchError.message || batchError);
+      newClips = [];
+    }
 
-    stopCrawl();
-    stopCrawl = null;
+    if (stopCrawl) {
+      stopCrawl();
+      stopCrawl = null;
+    }
 
     let finalClips = newClips;
 
@@ -2923,7 +2931,7 @@ smartClipBtn?.addEventListener("click", async () => {
       if (state.uploadRequiredActive) {
         return;
       }
-      const fallbackCount = getAutoSmartClipCount();
+      const fallbackCount = Math.min(3, getAutoSmartClipCount());
   // Use video duration, or a safe default of 300s if unknown
   const duration = Math.max(
     Number(state.selectedDuration || 30) * 2,

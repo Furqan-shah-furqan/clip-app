@@ -38,8 +38,16 @@ function secondsToTime(sec) {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, timeoutMs = 25000 }) {
+function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) {
   return new Promise((resolve, reject) => {
+    // Cloud / Render guard:
+    // Render free-tier containers provide 0.1 vCPU and 512MB RAM.
+    // Frame-by-frame OpenCV face detection takes 60-90s per clip, exceeding Render's 100s proxy timeout.
+    // In cloud environments, skip OpenCV reframe to run ultrafast FFmpeg center-crop (1-2s).
+    if (process.env.RENDER || process.env.IS_RENDER || process.env.DISABLE_OPENCV_REFRAME === "true") {
+      return reject(new Error("Cloud environment detected: using high-speed FFmpeg smart crop"));
+    }
+
     const pythonBin = getPythonPath();
     const scriptPath = path.resolve(rootDir, "python", "smart_reframe.py");
 
@@ -61,25 +69,26 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ti
       ratio,
     ], { windowsHide: true });
 
-    let isDone = false;
-    const timer = setTimeout(() => {
-      if (!isDone) {
-        isDone = true;
-        try { proc.kill(); } catch (_) {}
-        reject(new Error("Face tracking reframe exceeded 25s limit, falling back to ultra-fast FFmpeg"));
-      }
-    }, timeoutMs);
-
     let stdout = "";
     let stderr = "";
+    let settled = false;
+
+    // Safety timeout: 10 seconds max for Python face-tracking reframe
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { proc.kill("SIGKILL"); } catch {}
+        reject(new Error("Face tracking reframe timed out (10s limit)"));
+      }
+    }, 10000);
+
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
 
     proc.on("close", (code) => {
-      if (isDone) return;
-      isDone = true;
-      clearTimeout(timer);
-
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       if (code === 0) {
         try {
           const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
@@ -99,9 +108,9 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ti
     });
 
     proc.on("error", (err) => {
-      if (isDone) return;
-      isDone = true;
-      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       reject(err);
     });
   });
@@ -110,22 +119,15 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ti
 async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio }) {
   fs.mkdirSync(exportsDir, { recursive: true });
 
-  // In cloud environments (like Render), CPU is constrained (0.1 - 0.5 CPU) so frame-by-frame OpenCV
-  // takes >65s per clip, causing Render's reverse proxy to hit its hard 100s timeout.
-  // When process.env.RENDER is set or fast clipping is enabled, we use ultra-fast FFmpeg directly (takes 2-4s).
-  const isCloudEnvironment = Boolean(process.env.RENDER || process.env.NODE_ENV === "production");
-
-  if (!isCloudEnvironment) {
-    // 1. Try AI face-tracking reframe first on local development
-    try {
-      const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, timeoutMs: 25000 });
-      return faceTracked;
-    } catch (err) {
-      console.warn("[SmartClip] Face tracking reframe fallback to fast FFmpeg center crop:", err.message);
-    }
+  // 1. Try AI face-tracking reframe first
+  try {
+    const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio });
+    return faceTracked;
+  } catch (err) {
+    console.warn("Face tracking reframe failed, using fallback center crop:", err.message);
   }
 
-  // 2. Fallback: Ultra-fast FFmpeg center crop (2-5 seconds per clip)
+  // 2. Fallback: Fast FFmpeg center crop
   return new Promise((resolve, reject) => {
     const ratio = aspectRatio || "9:16";
     const [rW, rH] = ratio.split(":").map(Number);
