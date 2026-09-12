@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import PresetsGallery from "./PresetsGallery";
 import { DEFAULT_PRESET } from "../../constants/captionPresets";
-import { createSubjectSegmentation } from "../../services/subjectSegmentation";
 
 /**
  * CaptionStudio Component
@@ -81,41 +80,174 @@ export default function CaptionStudio({
     );
   }, [activePresetStyle, activePreset]);
 
-  // Initialize and synchronize Subject Segmentation when "Behind the Person" is active
+  // Initialize and synchronize MediaPipe Selfie Segmentation when "Behind the Person" is active
   useEffect(() => {
     const video = videoRef.current;
     const canvas = segmentationCanvasRef.current;
 
+    // Performance & Fallback: Pause loop and hide Layer 3 canvas when NOT "Behind the Person"
     if (!isBehindPerson || !video || !canvas) {
       if (segmentationPipelineRef.current) {
         segmentationPipelineRef.current.stop();
+        segmentationPipelineRef.current = null;
+      }
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
       return;
     }
 
-    const pipeline = createSubjectSegmentation({
-      video,
-      canvas,
-      onReady: (ready) => setIsSegmentationReady(ready),
-      onError: (err) => console.warn("Subject segmentation fallback active:", err),
-    });
+    let isActive = true;
+    let animFrameId = null;
+    let isProcessing = false;
+    let segmenter = null;
 
-    segmentationPipelineRef.current = pipeline;
-    pipeline.start();
+    const initSegmentation = async () => {
+      try {
+        // 1. Dynamically load @mediapipe/selfie_segmentation via CDN script if not yet loaded
+        if (!window.SelfieSegmentation) {
+          await new Promise((resolve, reject) => {
+            const scriptId = "mediapipe-selfie-segmentation-script";
+            const existing = document.getElementById(scriptId);
+            if (existing) {
+              if (window.SelfieSegmentation) return resolve();
+              existing.addEventListener("load", resolve);
+              existing.addEventListener("error", reject);
+              return;
+            }
+            const script = document.createElement("script");
+            script.id = scriptId;
+            script.src =
+              "https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js";
+            script.crossOrigin = "anonymous";
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = (err) => reject(err);
+            document.head.appendChild(script);
+          });
+        }
 
-    const handlePlay = () => pipeline.start();
-    const handlePause = () => pipeline.processSingleFrame();
-    const handleSeeked = () => pipeline.processSingleFrame();
+        if (!isActive || !window.SelfieSegmentation) return;
 
-    video.addEventListener("play", handlePlay);
-    video.addEventListener("pause", handlePause);
-    video.addEventListener("seeked", handleSeeked);
+        // 2. Initialize the MediaPipe SelfieSegmentation model
+        segmenter = new window.SelfieSegmentation({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
+        });
+
+        // 1 = landscape/full-body model
+        segmenter.setOptions({ modelSelection: 1 });
+
+        // 3. Segmentation onResults Callback: Composite Layer 3 Speaker Cutout
+        segmenter.onResults((results) => {
+          isProcessing = false;
+          if (!isActive || !canvas || !video) return;
+
+          const ctx = canvas.getContext("2d", { willReadFrequently: false });
+          if (!ctx) return;
+
+          const width = video.videoWidth || canvas.width || 360;
+          const height = video.videoHeight || canvas.height || 640;
+
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+          }
+
+          // Step A: Clear Layer 3 canvas
+          ctx.clearRect(0, 0, width, height);
+
+          // Step B: Draw the segmentation mask
+          ctx.drawImage(results.segmentationMask, 0, 0, width, height);
+
+          // Step C: Set composite operation to source-in (keeps only pixels inside mask)
+          ctx.globalCompositeOperation = "source-in";
+
+          // Step D: Draw the video frame over the mask
+          ctx.drawImage(results.image, 0, 0, width, height);
+
+          // Step E: Reset composite operation to source-over
+          ctx.globalCompositeOperation = "source-over";
+        });
+
+        setIsSegmentationReady(true);
+
+        // Frame sender helper for seeked/loaded/paused updates
+        const sendCurrentFrame = async () => {
+          if (!isActive || !video || !segmenter || isProcessing) return;
+          if (video.readyState < 2) return;
+          isProcessing = true;
+          try {
+            await segmenter.send({ image: video });
+          } catch (err) {
+            isProcessing = false;
+          }
+        };
+
+        // Step 3: Segmentation Render Loop with requestAnimationFrame
+        const renderLoop = async () => {
+          if (!isActive) return;
+
+          if (
+            video &&
+            !video.paused &&
+            !video.ended &&
+            video.readyState >= 2 &&
+            !isProcessing
+          ) {
+            isProcessing = true;
+            try {
+              await segmenter.send({ image: video });
+            } catch (err) {
+              isProcessing = false;
+            }
+          }
+
+          animFrameId = requestAnimationFrame(renderLoop);
+        };
+
+        renderLoop();
+
+        video.addEventListener("seeked", sendCurrentFrame);
+        video.addEventListener("loadeddata", sendCurrentFrame);
+        video.addEventListener("play", sendCurrentFrame);
+        video.addEventListener("pause", sendCurrentFrame);
+
+        segmentationPipelineRef.current = {
+          stop: () => {
+            isActive = false;
+            if (animFrameId) cancelAnimationFrame(animFrameId);
+            video.removeEventListener("seeked", sendCurrentFrame);
+            video.removeEventListener("loadeddata", sendCurrentFrame);
+            video.removeEventListener("play", sendCurrentFrame);
+            video.removeEventListener("pause", sendCurrentFrame);
+            try {
+              segmenter?.close?.();
+            } catch (_) {}
+          },
+        };
+      } catch (err) {
+        console.warn(
+          "[BehindThePerson] MediaPipe Segmentation fallback active:",
+          err
+        );
+      }
+    };
+
+    initSegmentation();
 
     return () => {
-      video.removeEventListener("play", handlePlay);
-      video.removeEventListener("pause", handlePause);
-      video.removeEventListener("seeked", handleSeeked);
-      pipeline.destroy();
+      isActive = false;
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+      if (segmentationPipelineRef.current) {
+        segmentationPipelineRef.current.stop();
+        segmentationPipelineRef.current = null;
+      }
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
     };
   }, [isBehindPerson, clip.videoUrl]);
 
@@ -124,11 +256,17 @@ export default function CaptionStudio({
     if (!preset?.style) return;
 
     const s = preset.style;
+    const isBtp = Boolean(
+      preset.behindPerson ||
+      s.behindPerson ||
+      preset.category === "Behind the Person" ||
+      preset.id?.startsWith("btp-")
+    );
 
     // Synchronize all individual control variables immediately
     setFontFamily(s.fontFamily || "Montserrat");
-    setFontSize(s.fontSize || 29);
-    setFontWeight(s.fontWeight || "900");
+    setFontSize(isBtp ? Math.max(s.fontSize || 54, 52) : (s.fontSize || 29));
+    setFontWeight("900");
     setTextColor(s.textColor || "#FFFFFF");
     setHighlightColor(s.highlightColor || "#22C55E");
     setOutlineStroke(0); // Zero outline stroke to eliminate glyph hollowing
@@ -140,14 +278,19 @@ export default function CaptionStudio({
     setWordsInRow(s.wordsInRow || "Auto");
     setLetterSpacing(s.letterSpacing !== undefined ? s.letterSpacing : 0);
     setLineSpacing(s.lineSpacing || 1.3);
-    setTextTransform(s.textTransform || "uppercase");
+    setTextTransform("uppercase");
+
+    // Position Behind the Person text around vertical 35-50%
+    if (isBtp) {
+      setPosY(42);
+    }
 
     // Override active preset state
     setActivePreset(preset.id);
     setActivePresetStyle({
       ...s,
       strokeWidth: 0,
-      behindPerson: Boolean(preset.behindPerson || s.behindPerson),
+      behindPerson: isBtp,
     });
     setActivePresetAssConfig(preset.assConfig);
 
@@ -160,14 +303,22 @@ export default function CaptionStudio({
     const s = activePresetStyle || {};
 
     const computedFontFamily = fontFamily || s.fontFamily || "'Montserrat', sans-serif";
-    const computedFontSize = fontSize || s.fontSize || 29;
-    const computedFontWeight = fontWeight || s.fontWeight || "900";
+    // For "Behind the Person" presets: font-size: 52px+, font-weight: 900, uppercase, centered around 35-50%
+    const computedFontSize = isBehindPerson
+      ? Math.max(fontSize || s.fontSize || 54, 52)
+      : (fontSize || s.fontSize || 29);
+    const computedFontWeight = isBehindPerson ? "900" : (fontWeight || s.fontWeight || "900");
     const computedFontStyle = s.fontStyle || "normal";
-    const computedTextTransform = textTransform || s.textTransform || "uppercase";
+    const computedTextTransform = isBehindPerson ? "uppercase" : (textTransform || s.textTransform || "uppercase");
     const computedLetterSpacing = letterSpacing !== undefined ? letterSpacing : (s.letterSpacing !== undefined ? s.letterSpacing : 0);
     const computedLineHeight = lineSpacing || s.lineSpacing || 1.3;
     const computedTextColor = textColor || s.textColor || "#FFFFFF";
     const computedBgColor = bgColor !== undefined && bgColor !== null ? bgColor : (s.bgColor || "transparent");
+
+    // Position Behind the Person centered around vertical 35-50%
+    const computedPosY = isBehindPerson
+      ? (posY >= 35 && posY <= 50 ? posY : 42)
+      : posY;
 
     // Background styling & pill padding
     const computedPadding = s.bgPadding
@@ -210,14 +361,14 @@ export default function CaptionStudio({
       filter: computedFilter,
       transform: `translate(-50%, -50%) rotate(${rotateAngle}deg)`,
       left: `${posX}%`,
-      top: `${posY}%`,
+      top: `${computedPosY}%`,
       position: "absolute",
       textAlign: "center",
       userSelect: "none",
       pointerEvents: "none",
       maxWidth: "90%",
       wordBreak: "break-word",
-      zIndex: isBehindPerson ? 2 : 10,
+      zIndex: 2, // Layer 2: z-index 2 (Between Layer 1 video at z-index 1 and Layer 3 canvas at z-index 3)
       transition: "font-size 0.1s ease, color 0.1s ease, background-color 0.1s ease, transform 0.1s ease",
     };
   }, [
