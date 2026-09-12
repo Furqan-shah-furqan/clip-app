@@ -398,8 +398,9 @@ async function fetchFromFastDownloader(videoId, rapidApiKey) {
     console.log(`[RapidAPI][FAST] Quality discovery note: ${qErr.message}`);
   }
 
-  // Step 2: Request download URL
+  // Step 2: Request download URL using verified contract (?quality=720)
   const candidateEndpoints = [
+    `https://${host}/download_video/${videoId}?quality=720`,
     ...(selectedQualityId ? [`https://${host}/download_video/${videoId}?quality=${selectedQualityId}`] : []),
     `https://${host}/download_video/${videoId}`,
     `https://${host}/dl/video/${videoId}`,

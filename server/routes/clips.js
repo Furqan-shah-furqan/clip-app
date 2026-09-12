@@ -333,63 +333,36 @@ async function downloadVideoViaRapidApi(sourceUrl) {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   };
 
-  // 1. Call RapidAPI once to get the JSON payload targeting 'Get Video Download URL'
-  const candidateEndpoints = [
-    `https://${host}/download_video/${videoId}`,
-    `https://${host}/dl/video/${videoId}`,
-    `https://${host}/download/${videoId}`,
-  ];
+  // 1. Call RapidAPI endpoint ONCE to fetch the metadata JSON with verified API contract
+  const cleanId = videoId.trim();
+  const apiUrl = `https://youtube-video-fast-downloader-24-7.p.rapidapi.com/download_video/${cleanId}?quality=720`;
 
-  let rawPayload = null;
-  let lastErr = null;
+  console.log(`[RapidAPI][FAST] Requesting download payload from verified contract: ${apiUrl}`);
 
-  for (const endpoint of candidateEndpoints) {
-    try {
-      console.log(`[RapidAPI][FAST] Requesting video download payload from: ${endpoint}`);
-      const res = await axios.get(endpoint, {
-        headers,
-        timeout: 30000,
-      });
-      if (res.data) {
-        rawPayload = res.data;
-        console.log(`[RapidAPI][FAST] Successfully received payload from: ${endpoint}`);
-        break;
-      }
-    } catch (err) {
-      lastErr = err;
-      const status = err.response?.status;
-      const msg = err.response?.data?.message || err.response?.data?.error || err.message;
-      console.warn(`[RapidAPI][FAST] Endpoint ${endpoint} returned HTTP ${status || "ERR"}: ${msg}`);
-    }
+  let response;
+  try {
+    response = await axios.get(apiUrl, {
+      headers: {
+        "x-rapidapi-host": "youtube-video-fast-downloader-24-7.p.rapidapi.com",
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 35000,
+    });
+  } catch (err) {
+    const status = err.response?.status;
+    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
+    throw new Error(`RapidAPI request failed (HTTP ${status || "ERR"}): ${msg}`);
   }
 
-  if (!rawPayload) {
-    throw new Error(`RapidAPI FAST Downloader returned no payload: ${lastErr?.message || "Request failed"}`);
+  const data = response.data;
+  // Extract the direct CDN download link from payload (e.g., data.file, data.link, or data.downloadUrl)
+  const cdnUrl = data.file || data.link || data.download_url || data.downloadUrl || data.url || data.video?.file || data.video?.url;
+  if (!cdnUrl) {
+    throw new Error("No CDN URL found in RapidAPI payload: " + JSON.stringify(data));
   }
 
-  // 2. Extract the direct CDN 'file' URL
-  let cdnFileUrl = null;
-  if (typeof rawPayload.file === "string" && rawPayload.file.startsWith("http")) {
-    cdnFileUrl = rawPayload.file;
-  } else if (rawPayload.video && typeof rawPayload.video.file === "string" && rawPayload.video.file.startsWith("http")) {
-    cdnFileUrl = rawPayload.video.file;
-  } else if (typeof rawPayload.downloadUrl === "string" && rawPayload.downloadUrl.startsWith("http")) {
-    cdnFileUrl = rawPayload.downloadUrl;
-  } else if (typeof rawPayload.url === "string" && rawPayload.url.startsWith("http")) {
-    cdnFileUrl = rawPayload.url;
-  } else if (typeof rawPayload.link === "string" && rawPayload.link.startsWith("http")) {
-    cdnFileUrl = rawPayload.link;
-  } else if (Array.isArray(rawPayload.formats) && rawPayload.formats.length > 0) {
-    const progressive = rawPayload.formats.find(
-      (f) => f.url && (String(f.mimeType || "").includes("mp4") || f.ext === "mp4" || f.itag === 22 || f.itag === 18)
-    );
-    cdnFileUrl = progressive?.url || rawPayload.formats[0]?.url;
-  }
-
-  if (!cdnFileUrl) {
-    throw new Error(`RapidAPI response did not contain a direct CDN file URL.`);
-  }
-
+  const cdnFileUrl = cdnUrl;
   console.log(`[RapidAPI][FAST] Extracted direct CDN file URL: ${cdnFileUrl.slice(0, 80)}...`);
 
   // 2. Implement safe polling function for CDN file URL:
