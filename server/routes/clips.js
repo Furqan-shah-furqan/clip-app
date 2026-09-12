@@ -432,27 +432,38 @@ router.get("/diag", async (req, res) => {
     return res.json(results);
   }
 
-  // Test 1: FAST Downloader primary endpoint (/dl/video/:id)
-  try {
-    const dlUrl = `https://${rapidApiHost}/dl/video/${videoId}`;
-    const dlRes = await axios.get(dlUrl, {
-      headers: {
-        "x-rapidapi-host": rapidApiHost,
-        "x-rapidapi-key": rapidApiKey,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      timeout: 10000,
-    });
-    results.fastDownloaderDlVideoTest = {
-      status: dlRes.status,
-      data: dlRes.data,
-    };
-  } catch (err) {
-    results.fastDownloaderDlVideoTest = {
-      error: err.message,
-      status: err.response?.status,
-      data: err.response?.data,
-    };
+  // Test 1: Probe candidate endpoints on rapidApiHost
+  const probePaths = [
+    "/",
+    `/video/${videoId}`,
+    `/download/${videoId}`,
+    `/download_video/${videoId}`,
+    `/dl?id=${videoId}`,
+    `/api/video/${videoId}`,
+    `/info/${videoId}`,
+  ];
+
+  results.hostProbe = {};
+  for (const p of probePaths) {
+    try {
+      const probeRes = await axios.get(`https://${rapidApiHost}${p}`, {
+        headers: {
+          "x-rapidapi-host": rapidApiHost,
+          "x-rapidapi-key": rapidApiKey,
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+        timeout: 8000,
+      });
+      results.hostProbe[p] = {
+        status: probeRes.status,
+        data: probeRes.data,
+      };
+    } catch (pErr) {
+      results.hostProbe[p] = {
+        status: pErr.response?.status || "ERR",
+        message: pErr.response?.data?.message || pErr.response?.data || pErr.message,
+      };
+    }
   }
 
   // Test 2: FAST Downloader quality endpoint
@@ -506,7 +517,7 @@ router.get("/diag", async (req, res) => {
   try {
     const { getYtDlpPath, runCommand } = require("../services/youtubeDownloader");
     const ytDlpPath = getYtDlpPath();
-    const ver = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 5000 });
+    const ver = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 25000 });
     results.ytdlpTest = {
       path: ytDlpPath,
       version: ver.stdout.trim(),
