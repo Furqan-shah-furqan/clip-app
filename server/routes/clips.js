@@ -432,7 +432,30 @@ router.get("/diag", async (req, res) => {
     return res.json(results);
   }
 
-  // Test FAST Downloader quality endpoint
+  // Test 1: FAST Downloader primary endpoint (/dl/video/:id)
+  try {
+    const dlUrl = `https://${rapidApiHost}/dl/video/${videoId}`;
+    const dlRes = await axios.get(dlUrl, {
+      headers: {
+        "x-rapidapi-host": rapidApiHost,
+        "x-rapidapi-key": rapidApiKey,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      timeout: 10000,
+    });
+    results.fastDownloaderDlVideoTest = {
+      status: dlRes.status,
+      data: dlRes.data,
+    };
+  } catch (err) {
+    results.fastDownloaderDlVideoTest = {
+      error: err.message,
+      status: err.response?.status,
+      data: err.response?.data,
+    };
+  }
+
+  // Test 2: FAST Downloader quality endpoint
   try {
     const qUrl = `https://${rapidApiHost}/get_available_quality/${videoId}`;
     const qRes = await axios.get(qUrl, {
@@ -456,7 +479,7 @@ router.get("/diag", async (req, res) => {
     };
   }
 
-  // Test ytstream endpoint
+  // Test 3: ytstream endpoint
   try {
     const ytUrl = `https://ytstream-download-youtube-videos.p.rapidapi.com/dl?id=${videoId}`;
     const ytRes = await axios.get(ytUrl, {
@@ -469,13 +492,30 @@ router.get("/diag", async (req, res) => {
     });
     results.ytstreamTest = {
       status: ytRes.status,
-      data: ytRes.data,
+      formatCount: ytRes.data?.formats?.length || 0,
     };
   } catch (err) {
     results.ytstreamTest = {
       error: err.message,
       status: err.response?.status,
       data: err.response?.data,
+    };
+  }
+
+  // Test 4: Local yt-dlp availability on server
+  try {
+    const { getYtDlpPath, runCommand } = require("../services/youtubeDownloader");
+    const ytDlpPath = getYtDlpPath();
+    const ver = await runCommand(ytDlpPath, ["--version"], { timeoutMs: 5000 });
+    results.ytdlpTest = {
+      path: ytDlpPath,
+      version: ver.stdout.trim(),
+      available: true,
+    };
+  } catch (err) {
+    results.ytdlpTest = {
+      error: err.message,
+      available: false,
     };
   }
 
