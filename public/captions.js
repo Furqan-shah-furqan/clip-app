@@ -283,6 +283,12 @@ let capBoxPadding, capBoxPaddingVal, capBoxSizeLabel, capBoxFrame;
 let syncAudioCaptionsBtn;
 let colorSwatchButtons = [];
 
+let openPresetsGalleryBtn, closePresetsGalleryBtn, presetsGalleryDrawer;
+let presetSearchInput, clearPresetSearchBtn, presetCategoryStrip;
+let presetsModalGrid, presetsGalleryEmpty, presetsCountBadge;
+let activePresetsCategory = "All";
+let presetsSearchQuery = "";
+
 function cacheDom() {
   themeSwitchBtn = document.getElementById("themeSwitchBtn");
   themeToggle = document.getElementById("themeToggle");
@@ -364,6 +370,16 @@ function cacheDom() {
   capRotateAngle = document.getElementById("capRotateAngle");
   capRotateAngleVal = document.getElementById("capRotateAngleVal");
   syncAudioCaptionsBtn = document.getElementById("syncAudioCaptionsBtn");
+
+  openPresetsGalleryBtn = document.getElementById("openPresetsGalleryBtn");
+  closePresetsGalleryBtn = document.getElementById("closePresetsGalleryBtn");
+  presetsGalleryDrawer = document.getElementById("presetsGalleryDrawer");
+  presetSearchInput = document.getElementById("presetSearchInput");
+  clearPresetSearchBtn = document.getElementById("clearPresetSearchBtn");
+  presetCategoryStrip = document.getElementById("presetCategoryStrip");
+  presetsModalGrid = document.getElementById("presetsModalGrid");
+  presetsGalleryEmpty = document.getElementById("presetsGalleryEmpty");
+  presetsCountBadge = document.getElementById("presetsCountBadge");
 
   colorSwatchButtons = Array.from(
     document.querySelectorAll(".color-swatch-btn"),
@@ -2854,33 +2870,42 @@ function syncStyleFromControls(options = {}) {
   persistCaptions();
 }
 
+function getActivePresetsList() {
+  if (typeof window !== "undefined" && Array.isArray(window.CAPTION_PRESETS) && window.CAPTION_PRESETS.length > 0) {
+    return window.CAPTION_PRESETS;
+  }
+  return STYLE_PRESETS;
+}
+
 function renderPresetsUI() {
   if (!presetsGrid) return;
+  const allPresets = getActivePresetsList();
+  // Display top 6 popular / trending presets as quick 1-click picks in Card 4
+  const quickPicks = allPresets
+    .filter((p) => p.category === "Popular" || p.badge === "TRENDING")
+    .slice(0, 6);
 
-  presetsGrid.innerHTML = STYLE_PRESETS.map((preset) => {
-    const s = normalizeStyle(preset.style);
-    const [r, g, b] = hexToRgb(s.bgColor);
-    const bg =
-      s.bgOpacity > 5 ? `rgba(${r},${g},${b},${s.bgOpacity / 100})` : "#111111";
-    const active = styleMatchesPreset(editorState.style, preset);
+  const activeId = editorState.style?.activePresetId;
 
+  presetsGrid.innerHTML = quickPicks.map((preset) => {
+    const s = preset.style || {};
+    const active = activeId === preset.id;
     return `
       <button
         class="preset-card${active ? " preset-card--active" : ""}"
         data-preset-id="${preset.id}"
         type="button"
-        title="${preset.name} — ${preset.label}"
+        title="${preset.name} (${preset.category || "Popular"})"
       >
         <div
           class="preset-swatch"
           style="
-            background:${bg};
-            color:${s.textColor};
-            font-family:${s.fontFamily};
-            font-size:${Math.max(11, Math.round(Number(s.fontSize || 26) * 0.44))}px;
+            background:${s.bgColor || "#111111"};
+            color:${s.highlightColor || s.textColor || "#ffffff"};
+            font-family:${s.fontFamily || "Montserrat"}, sans-serif;
+            font-size: 12px;
             font-weight:${s.fontWeight || 800};
             text-transform:${s.textTransform || "none"};
-            letter-spacing:${Number(s.letterSpacing) || 0}px;
           "
         >Aa</div>
         <span class="preset-name">${preset.name}</span>
@@ -2889,48 +2914,269 @@ function renderPresetsUI() {
   }).join("");
 
   presetsGrid.querySelectorAll(".preset-card").forEach((card) => {
-    card.addEventListener("click", () => applyPreset(card.dataset.presetId));
+    card.addEventListener("click", () => applyPresetFromGallery(card.dataset.presetId));
   });
 }
 
-/**
- * Apply preset while strictly preserving user customizations:
- * font size, font family, words in a row, text color, bg, opacity, position X/Y,
- * preset duration, stroke, glow, tilt, and transform.
- */
-function applyPreset(id) {
-  const preset = STYLE_PRESETS.find((item) => item.id === id);
+function initPresetsGallery() {
+  if (openPresetsGalleryBtn) {
+    openPresetsGalleryBtn.addEventListener("click", openPresetsGallery);
+  }
+  if (closePresetsGalleryBtn) {
+    closePresetsGalleryBtn.addEventListener("click", closePresetsGallery);
+  }
+  if (presetsGalleryDrawer) {
+    presetsGalleryDrawer.addEventListener("click", (e) => {
+      if (e.target === presetsGalleryDrawer) {
+        closePresetsGallery();
+      }
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && presetsGalleryDrawer && presetsGalleryDrawer.style.display !== "none") {
+      closePresetsGallery();
+    }
+  });
+
+  if (presetSearchInput) {
+    presetSearchInput.addEventListener("input", (e) => {
+      presetsSearchQuery = e.target.value.trim().toLowerCase();
+      if (clearPresetSearchBtn) {
+        clearPresetSearchBtn.style.display = presetsSearchQuery ? "block" : "none";
+      }
+      renderPresetsGalleryGrid();
+    });
+  }
+
+  if (clearPresetSearchBtn) {
+    clearPresetSearchBtn.addEventListener("click", () => {
+      if (presetSearchInput) presetSearchInput.value = "";
+      presetsSearchQuery = "";
+      clearPresetSearchBtn.style.display = "none";
+      renderPresetsGalleryGrid();
+    });
+  }
+
+  renderPresetsGalleryCategories();
+}
+
+function openPresetsGallery() {
+  if (!presetsGalleryDrawer) return;
+  presetsGalleryDrawer.style.display = "flex";
+  renderPresetsGalleryGrid();
+  if (presetSearchInput) {
+    setTimeout(() => presetSearchInput.focus(), 80);
+  }
+}
+
+function closePresetsGallery() {
+  if (!presetsGalleryDrawer) return;
+  presetsGalleryDrawer.style.display = "none";
+}
+
+function renderPresetsGalleryCategories() {
+  if (!presetCategoryStrip) return;
+  const categories = ["All", ...(typeof window !== "undefined" && Array.isArray(window.CATEGORIES) ? window.CATEGORIES : [
+    "Popular", "Real Estate", "Behind the Person", "Playful", "Multiline", "Dynamic", "Editorial", "Social", "Neon & FX", "Retro"
+  ])];
+
+  presetCategoryStrip.innerHTML = categories.map((cat) => {
+    const isActive = activePresetsCategory === cat;
+    return `
+      <button
+        class="preset-category-pill${isActive ? " is-active" : ""}"
+        type="button"
+        data-category="${cat}"
+      >
+        ${cat}
+      </button>
+    `;
+  }).join("");
+
+  presetCategoryStrip.querySelectorAll(".preset-category-pill").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activePresetsCategory = btn.dataset.category;
+      presetCategoryStrip.querySelectorAll(".preset-category-pill").forEach((b) => {
+        b.classList.toggle("is-active", b.dataset.category === activePresetsCategory);
+      });
+      renderPresetsGalleryGrid();
+    });
+  });
+}
+
+function renderPresetsGalleryGrid() {
+  if (!presetsModalGrid) return;
+  const allPresets = getActivePresetsList();
+
+  let filtered = allPresets;
+  if (activePresetsCategory && activePresetsCategory !== "All") {
+    filtered = filtered.filter((p) => p.category === activePresetsCategory);
+  }
+
+  if (presetsSearchQuery) {
+    filtered = filtered.filter((p) => {
+      const name = (p.name || "").toLowerCase();
+      const cat = (p.category || "").toLowerCase();
+      const anim = (p.style?.wordAnimation || p.style?.animationStyle || "").toLowerCase();
+      const font = (p.style?.fontFamily || "").toLowerCase();
+      return name.includes(presetsSearchQuery) ||
+             cat.includes(presetsSearchQuery) ||
+             anim.includes(presetsSearchQuery) ||
+             font.includes(presetsSearchQuery);
+    });
+  }
+
+  if (presetsCountBadge) {
+    presetsCountBadge.textContent = `${filtered.length} Styles Available`;
+  }
+
+  if (filtered.length === 0) {
+    presetsModalGrid.innerHTML = "";
+    if (presetsGalleryEmpty) presetsGalleryEmpty.style.display = "block";
+    return;
+  }
+
+  if (presetsGalleryEmpty) presetsGalleryEmpty.style.display = "none";
+
+  const activeId = editorState.style?.activePresetId;
+
+  presetsModalGrid.innerHTML = filtered.map((preset) => {
+    const s = preset.style || {};
+    const isActive = activeId === preset.id;
+    const badgeHtml = preset.badge ? `
+      <span class="preset-card-badge ${preset.badge === "TRENDING" ? "preset-card-badge--trending" : "preset-card-badge--new"}">
+        ${preset.badge}
+      </span>
+    ` : "";
+
+    const checkHtml = isActive ? `
+      <div class="preset-card-check" title="Active Preset">✓</div>
+    ` : "";
+
+    const previewWords = (preset.previewText || "MAKE MONEY").split(" ");
+    const renderedWordsHtml = previewWords.map((word, idx) => {
+      const isHl = idx === 0 && s.highlightColor;
+      const wordColor = isHl ? s.highlightColor : (s.textColor || "#ffffff");
+      return `<span class="preset-hl-word" style="color: ${wordColor};">${word}</span>`;
+    }).join(" ");
+
+    const textStroke = (s.strokeWidth && Number(s.strokeWidth) > 0)
+      ? `${s.strokeWidth}px ${s.strokeColor || "#000000"}`
+      : "none";
+
+    const textShadow = (s.shadowBlur && Number(s.shadowBlur) > 0)
+      ? `0 2px ${s.shadowBlur}px ${s.shadowColor || "rgba(0,0,0,0.8)"}`
+      : "none";
+
+    return `
+      <div
+        class="preset-gallery-card${isActive ? " is-active" : ""}"
+        data-preset-id="${preset.id}"
+        role="button"
+        tabindex="0"
+        title="Apply ${preset.name}"
+      >
+        ${badgeHtml}
+        ${checkHtml}
+
+        <div class="preset-card-stage">
+          <div
+            class="preset-card-rendered-text"
+            style="
+              font-family: ${s.fontFamily || "Montserrat"}, sans-serif;
+              font-size: ${Math.max(13, Math.round(Number(s.fontSize || 28) * 0.58))}px;
+              font-weight: ${s.fontWeight || 800};
+              text-transform: ${s.textTransform || "uppercase"};
+              letter-spacing: ${Number(s.letterSpacing) || 0}px;
+              background-color: ${s.bgColor || "transparent"};
+              padding: ${Math.max(4, Math.round(Number(s.bgPadding || 8) * 0.6))}px ${Math.max(8, Math.round(Number(s.bgPadding || 12) * 0.8))}px;
+              border-radius: ${Math.max(3, Math.round(Number(s.borderRadius || 6) * 0.7))}px;
+              -webkit-text-stroke: ${textStroke};
+              text-shadow: ${textShadow};
+            "
+          >
+            ${renderedWordsHtml}
+          </div>
+        </div>
+
+        <div class="preset-card-info">
+          <div class="preset-card-meta">
+            <h5 class="preset-card-name">${preset.name}</h5>
+            <span class="preset-card-cat">${preset.category || "General"}</span>
+          </div>
+          <div class="preset-card-tags">
+            <span class="preset-card-tag">${s.wordAnimation || s.animationStyle || "Pop"}</span>
+            <span class="preset-card-tag">${s.wordsInRow || "Auto"}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  presetsModalGrid.querySelectorAll(".preset-gallery-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const pid = card.dataset.presetId;
+      applyPresetFromGallery(pid);
+    });
+  });
+}
+
+function applyPresetFromGallery(id) {
+  const allPresets = getActivePresetsList();
+  const preset = allPresets.find((p) => p.id === id);
   if (!preset) return;
 
   const cur = editorState.style || {};
+  const preservedPosition = {
+    position: cur.position || "bottom",
+    positionX: cur.positionX !== undefined ? cur.positionX : 50,
+    positionY: cur.positionY !== undefined ? cur.positionY : 82,
+    rotateAngle: cur.rotateAngle !== undefined ? cur.rotateAngle : 0,
+  };
 
-  const preserved = {};
-  if (cur.fontSize !== undefined) preserved.fontSize = cur.fontSize;
-  if (cur.fontFamily !== undefined) preserved.fontFamily = cur.fontFamily;
-  if (cur.wordsPerRow !== undefined) preserved.wordsPerRow = cur.wordsPerRow;
-  if (cur.textColor !== undefined) preserved.textColor = cur.textColor;
-  if (cur.bgColor !== undefined) preserved.bgColor = cur.bgColor;
-  if (cur.bgOpacity !== undefined) preserved.bgOpacity = cur.bgOpacity;
-  if (cur.position !== undefined) preserved.position = cur.position;
-  if (cur.positionX !== undefined) preserved.positionX = cur.positionX;
-  if (cur.positionY !== undefined) preserved.positionY = cur.positionY;
-  if (cur.presetDuration !== undefined) preserved.presetDuration = cur.presetDuration;
-  if (cur.letterSpacing !== undefined) preserved.letterSpacing = cur.letterSpacing;
-  if (cur.textTransform !== undefined) preserved.textTransform = cur.textTransform;
-  if (cur.strokeWidth !== undefined) preserved.strokeWidth = cur.strokeWidth;
-  if (cur.strokeColor !== undefined) preserved.strokeColor = cur.strokeColor;
-  if (cur.glowIntensity !== undefined) preserved.glowIntensity = cur.glowIntensity;
-  if (cur.rotateAngle !== undefined) preserved.rotateAngle = cur.rotateAngle;
-  if (cur.lineSpacing !== undefined) preserved.lineSpacing = cur.lineSpacing;
-  if (cur.paddingX !== undefined) preserved.paddingX = cur.paddingX;
-  if (cur.paddingY !== undefined) preserved.paddingY = cur.paddingY;
+  const s = preset.style || {};
 
-  editorState.style = normalizeStyle({
+  let wordsPerRowVal = 0;
+  if (typeof s.wordsInRow === "string") {
+    const match = s.wordsInRow.match(/\d+/);
+    if (match) wordsPerRowVal = parseInt(match[0], 10);
+  } else if (typeof s.wordsPerRow === "number") {
+    wordsPerRowVal = s.wordsPerRow;
+  }
+
+  const anim = s.wordAnimation || s.animationStyle || "pop";
+
+  const newStyle = {
     ...DEFAULT_STYLE,
-    ...preset.style,
-    ...preserved,
+    ...preservedPosition,
+    fontFamily: s.fontFamily ? (s.fontFamily.includes(",") ? s.fontFamily : `'${s.fontFamily}', sans-serif`) : DEFAULT_STYLE.fontFamily,
+    fontSize: Number(s.fontSize) || 28,
+    fontWeight: s.fontWeight || 800,
+    textTransform: s.textTransform || "none",
+    textColor: s.textColor || "#ffffff",
+    highlightColor: s.highlightColor || "#22c55e",
+    strokeColor: s.strokeColor || "#000000",
+    strokeWidth: Number(s.strokeWidth) || 0,
+    bgColor: s.bgColor ? s.bgColor : "#000000",
+    bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : 70,
+    bgPadding: Number(s.bgPadding) || 14,
+    paddingX: Number(s.bgPadding) || 14,
+    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.75) : 10,
+    borderRadius: Number(s.borderRadius) || 14,
+    shadowColor: s.shadowColor || "#000000",
+    shadowBlur: Number(s.shadowBlur) || 8,
+    wordAnimation: anim,
+    animationStyle: anim,
+    wordsPerRow: wordsPerRowVal,
+    wordsInRow: s.wordsInRow || (wordsPerRowVal ? `${wordsPerRowVal} Words` : "Auto"),
+    letterSpacing: Number(s.letterSpacing) || 0,
+    lineSpacing: Number(s.lineSpacing) || 1.35,
+    glowIntensity: Number(s.glowIntensity) || 0,
     activePresetId: preset.id,
-  });
+    assConfig: preset.assConfig || null,
+  };
+
+  editorState.style = normalizeStyle(newStyle);
 
   resetCaptionRenderCache();
   populateStyleControls();
@@ -2941,6 +3187,12 @@ function applyPreset(id) {
   syncCaptionOverlay();
   updateLivePreview();
   persistCaptions();
+
+  renderPresetsGalleryGrid();
+}
+
+function applyPreset(id) {
+  applyPresetFromGallery(id);
 }
 
 // Segment actions
@@ -3585,6 +3837,7 @@ async function init() {
   bindTheme();
   bindControls();
   initCaptionDragging();
+  initPresetsGallery();
 
   let session = loadSession();
 

@@ -630,6 +630,17 @@
                   <span class="ce-hint">1-click styles</span>
                 </div>
 
+                <!-- 160+ Presets Library Modal Trigger Button -->
+                <button
+                  id="openPresetsGalleryBtn"
+                  class="ce-btn ce-btn--browse-presets"
+                  type="button"
+                >
+                  <span class="preset-sparkle">✦</span>
+                  <span class="preset-browse-text">Browse Presets Library (160+ Styles)</span>
+                  <span class="preset-browse-badge">160 STYLES</span>
+                </button>
+
                 <div class="presets-grid" id="presetsGrid"></div>
 
                 <div class="ce-export-actions-area">
@@ -653,6 +664,61 @@
       </main>
     </div>
 
+    <!-- ─── PRESETS GALLERY MODAL DRAWER (160+ STYLES) ──────── -->
+    <div class="presets-drawer-backdrop" id="presetsGalleryDrawer" style="display: none;">
+      <div class="presets-drawer-panel" role="dialog" aria-modal="true" aria-label="Caption Presets Library">
+        <!-- Header -->
+        <div class="presets-drawer-header">
+          <div class="presets-drawer-title-wrap">
+            <div class="presets-drawer-icon">✦</div>
+            <div>
+              <h3 class="presets-drawer-title">Caption Presets Library</h3>
+              <p class="presets-drawer-subtitle">
+                Modeled after Moonshot, Submagic &amp; Captions.ai
+                <span class="presets-count-pill" id="presetsCountBadge">160 Styles Available</span>
+              </p>
+            </div>
+          </div>
+          <button class="presets-drawer-close" id="closePresetsGalleryBtn" type="button" aria-label="Close Presets Gallery">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="presets-drawer-search-bar">
+          <div class="presets-search-input-wrap">
+            <svg class="presets-search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input
+              type="text"
+              id="presetSearchInput"
+              class="presets-search-input"
+              placeholder="Search 160+ presets by name, category, font, or animation..."
+              autocomplete="off"
+            />
+            <button class="presets-search-clear" id="clearPresetSearchBtn" type="button" style="display: none;" title="Clear search">✕</button>
+          </div>
+        </div>
+
+        <!-- Categories Horizontal Snap Strip -->
+        <div class="presets-drawer-categories" id="presetCategoryStrip">
+          <!-- Populated dynamically: All + 10 Categories -->
+        </div>
+
+        <!-- Presets Grid Container -->
+        <div class="presets-drawer-body">
+          <div class="presets-gallery-grid" id="presetsModalGrid">
+            <!-- 160 cards populated dynamically -->
+          </div>
+          <div class="presets-gallery-empty" id="presetsGalleryEmpty" style="display: none;">
+            <span class="empty-icon">🔍</span>
+            <h4>No matching presets</h4>
+            <p>Try searching for a different keyword or choose another category.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="captionPresets.js"></script>
     <script src="captions.js"></script>
   </body>
 </html>
