@@ -535,7 +535,8 @@ router.get("/diag", async (req, res) => {
 
 router.post("/smart-generate", async (req, res) => {
   const startedAt = Date.now();
-  const maxSmartGenerateMs = 240 * 1000;
+  // Safe ceiling to finalize and return clips before Render's hard 100s proxy timeout
+  const maxSmartGenerateMs = 65 * 1000;
 
   try {
     const {
@@ -714,7 +715,10 @@ router.post("/smart-generate", async (req, res) => {
     } else {
       // ── Local upload → FFmpeg ──
       for (let i = 0; i < suggestions.length; i++) {
-        if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
+        if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
+          console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
+          break;
+        }
 
         const suggestion = suggestions[i];
         const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));

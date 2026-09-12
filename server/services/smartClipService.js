@@ -38,7 +38,7 @@ function secondsToTime(sec) {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) {
+function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, timeoutMs = 25000 }) {
   return new Promise((resolve, reject) => {
     const pythonBin = getPythonPath();
     const scriptPath = path.resolve(rootDir, "python", "smart_reframe.py");
@@ -61,12 +61,25 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
       ratio,
     ], { windowsHide: true });
 
+    let isDone = false;
+    const timer = setTimeout(() => {
+      if (!isDone) {
+        isDone = true;
+        try { proc.kill(); } catch (_) {}
+        reject(new Error("Face tracking reframe exceeded 25s limit, falling back to ultra-fast FFmpeg"));
+      }
+    }, timeoutMs);
+
     let stdout = "";
     let stderr = "";
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
 
     proc.on("close", (code) => {
+      if (isDone) return;
+      isDone = true;
+      clearTimeout(timer);
+
       if (code === 0) {
         try {
           const lines = stdout.trim().split(/\r?\n/).filter(Boolean);
@@ -85,22 +98,34 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
       reject(new Error(`smart_reframe exited with code ${code}: ${stderr || stdout}`));
     });
 
-    proc.on("error", reject);
+    proc.on("error", (err) => {
+      if (isDone) return;
+      isDone = true;
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 }
 
 async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio }) {
   fs.mkdirSync(exportsDir, { recursive: true });
 
-  // 1. Try AI face-tracking reframe first
-  try {
-    const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio });
-    return faceTracked;
-  } catch (err) {
-    console.warn("Face tracking reframe failed, using fallback center crop:", err.message);
+  // In cloud environments (like Render), CPU is constrained (0.1 - 0.5 CPU) so frame-by-frame OpenCV
+  // takes >65s per clip, causing Render's reverse proxy to hit its hard 100s timeout.
+  // When process.env.RENDER is set or fast clipping is enabled, we use ultra-fast FFmpeg directly (takes 2-4s).
+  const isCloudEnvironment = Boolean(process.env.RENDER || process.env.NODE_ENV === "production");
+
+  if (!isCloudEnvironment) {
+    // 1. Try AI face-tracking reframe first on local development
+    try {
+      const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, timeoutMs: 25000 });
+      return faceTracked;
+    } catch (err) {
+      console.warn("[SmartClip] Face tracking reframe fallback to fast FFmpeg center crop:", err.message);
+    }
   }
 
-  // 2. Fallback: Fast FFmpeg center crop
+  // 2. Fallback: Ultra-fast FFmpeg center crop (2-5 seconds per clip)
   return new Promise((resolve, reject) => {
     const ratio = aspectRatio || "9:16";
     const [rW, rH] = ratio.split(":").map(Number);
