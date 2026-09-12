@@ -170,41 +170,49 @@ function resolveActiveCookieFile() {
 // ── Polling & Streaming ─────────────────────────────────────────────────────
 
 /**
- * Polls an async file URL until HTTP 200 or 206 (max 3 minutes).
+ * Polls an async file URL until HTTP 200 (max 3 minutes).
  */
-async function pollForReadyFileUrl(fileUrl, { intervalMs = 4000, maxWaitMs = 180000 } = {}) {
+async function pollForReadyFileUrl(fileUrl, { intervalMs = 6000, maxAttempts = 30 } = {}) {
   const startTime = Date.now();
-  let attempt = 0;
 
   console.log(`[RapidAPI-Poll] Polling file readiness: ${fileUrl.slice(0, 80)}...`);
 
-  while (Date.now() - startTime < maxWaitMs) {
-    attempt++;
-    const elapsedSec = Math.round((Date.now() - startTime) / 1000);
-
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const probe = await axios.get(fileUrl, {
         timeout: 15000,
-        validateStatus: (s) => s < 500,
         maxRedirects: 5,
+        responseType: "stream",
+        validateStatus: (status) => status === 200 || status === 404,
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-          Range: "bytes=0-10",
         },
       });
 
-      if (probe.status === 200 || probe.status === 206) {
-        console.log(`[RapidAPI-Poll] ✅ File ready after ${elapsedSec}s (HTTP ${probe.status})`);
+      if (probe.status === 200) {
+        try { probe.data.destroy(); } catch {}
+        const elapsedSec = Math.round((Date.now() - startTime) / 1000);
+        console.log(`[RapidAPI-Poll] ✅ File ready after ${elapsedSec}s (HTTP 200) on attempt ${attempt}/${maxAttempts}`);
         return fileUrl;
       }
+
+      if (probe.status === 404) {
+        try { probe.data.destroy(); } catch {}
+        console.log("File still preparing, retrying in 6s...");
+      } else {
+        try { probe.data.destroy(); } catch {}
+        console.log(`[RapidAPI-Poll] Received HTTP ${probe.status}, retrying in 6s...`);
+      }
     } catch (probeErr) {
-      // Continue polling while file is being prepared by provider
+      console.log("File still preparing, retrying in 6s...");
     }
 
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
   }
 
-  throw new Error(`RapidAPI file preparation timed out after ${Math.round(maxWaitMs / 1000)} seconds.`);
+  throw new Error(`RapidAPI CDN file preparation timed out after 3 minutes (${maxAttempts} attempts).`);
 }
 
 /**

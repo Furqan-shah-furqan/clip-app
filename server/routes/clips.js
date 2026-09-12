@@ -392,82 +392,81 @@ async function downloadVideoViaRapidApi(sourceUrl) {
 
   console.log(`[RapidAPI][FAST] Extracted direct CDN file URL: ${cdnFileUrl.slice(0, 80)}...`);
 
-  // 3. Maintain polling loop: poll ONLY direct CDN file URL until it returns 200 OK (resolves 404 delay)
-  const pollStart = Date.now();
-  const maxPollMs = 90000;
-  const pollIntervalMs = 2500;
+  // 2. Implement safe polling function for CDN file URL:
+  // Poll raw file URL every 6 seconds (up to 30 attempts / 3 minutes max)
+  const maxAttempts = 30;
+  const pollIntervalMs = 6000;
   let fileReady = false;
+  const targetPath = path.join(uploadsDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
 
-  console.log(`[RapidAPI-Poll] Polling CDN file readiness until 200 OK...`);
-  while (Date.now() - pollStart < maxPollMs) {
+  console.log(`[RapidAPI-Poll] Starting safe polling for CDN file: ${cdnFileUrl.slice(0, 80)}...`);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const probe = await axios.get(cdnFileUrl, {
-        timeout: 10000,
+      const probe = await axios({
+        method: "GET",
+        url: cdnFileUrl,
+        responseType: "stream",
+        timeout: 15000,
         maxRedirects: 5,
-        validateStatus: (s) => s < 500,
+        validateStatus: (status) => status === 200 || status === 404,
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          Range: "bytes=0-10",
         },
       });
 
-      if (probe.status === 200 || probe.status === 206) {
-        const elapsed = Math.round((Date.now() - pollStart) / 1000);
-        console.log(`[RapidAPI-Poll] ✅ CDN file ready after ${elapsed}s (HTTP ${probe.status})`);
+      if (probe.status === 200) {
+        console.log(`[RapidAPI-Poll] ✅ CDN file ready on attempt ${attempt} (HTTP 200)`);
+        console.log(`[RapidAPI-Stream] Streaming completed CDN file to disk: ${targetPath}`);
+
+        const writer = fs.createWriteStream(targetPath);
+        await new Promise((resolve, reject) => {
+          probe.data.pipe(writer);
+          writer.on("finish", () => {
+            writer.close(() => {
+              if (!fs.existsSync(targetPath)) return reject(new Error("File stream failed to write to disk."));
+              const stat = fs.statSync(targetPath);
+              if (stat.size < 5000) {
+                cleanupFile(targetPath);
+                return reject(new Error(`Downloaded file is too small or incomplete (${stat.size} bytes).`));
+              }
+              console.log(`[RapidAPI-Stream] ✅ Saved ${(stat.size / 1024 / 1024).toFixed(2)} MB to ${targetPath}`);
+              resolve();
+            });
+          });
+          writer.on("error", (err) => {
+            cleanupFile(targetPath);
+            reject(err);
+          });
+          probe.data.on("error", (err) => {
+            cleanupFile(targetPath);
+            reject(err);
+          });
+        });
+
         fileReady = true;
         break;
       }
-      console.log(`[RapidAPI-Poll] CDN returned HTTP ${probe.status}, waiting for file preparation...`);
-    } catch (probeErr) {
-      console.log(`[RapidAPI-Poll] Probe waiting (${probeErr.message})...`);
+
+      if (probe.status === 404) {
+        try { probe.data.destroy(); } catch {}
+        console.log("File still preparing, retrying in 6s...");
+      } else {
+        try { probe.data.destroy(); } catch {}
+        console.log(`[RapidAPI-Poll] Received HTTP ${probe.status}, retrying in 6s...`);
+      }
+    } catch (err) {
+      console.log("File still preparing, retrying in 6s...");
     }
 
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
   }
 
   if (!fileReady) {
-    throw new Error(`Timed out waiting for RapidAPI CDN file to complete preparation after ${Math.round(maxPollMs / 1000)}s.`);
+    throw new Error("RapidAPI CDN file preparation timed out after 3 minutes (30 attempts).");
   }
-
-  // 4. Save the stream to disk and pass the local path to ffmpegService
-  const targetPath = path.join(uploadsDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
-  console.log(`[RapidAPI-Stream] Streaming CDN file to disk: ${targetPath}`);
-
-  const writer = fs.createWriteStream(targetPath);
-  const streamRes = await axios({
-    method: "GET",
-    url: cdnFileUrl,
-    responseType: "stream",
-    timeout: 120000,
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      Accept: "*/*",
-    },
-  });
-
-  await new Promise((resolve, reject) => {
-    streamRes.data.pipe(writer);
-    writer.on("finish", () => {
-      writer.close(() => {
-        if (!fs.existsSync(targetPath)) return reject(new Error("File stream failed to write to disk."));
-        const stat = fs.statSync(targetPath);
-        if (stat.size < 5000) {
-          cleanupFile(targetPath);
-          return reject(new Error(`Downloaded file is too small or incomplete (${stat.size} bytes).`));
-        }
-        console.log(`[RapidAPI-Stream] ✅ Saved ${(stat.size / 1024 / 1024).toFixed(2)} MB to ${targetPath}`);
-        resolve();
-      });
-    });
-    writer.on("error", (err) => {
-      cleanupFile(targetPath);
-      reject(err);
-    });
-    streamRes.data.on("error", (err) => {
-      cleanupFile(targetPath);
-      reject(err);
-    });
-  });
 
   return targetPath;
 }
