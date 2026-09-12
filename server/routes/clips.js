@@ -18,6 +18,7 @@ const {
   isValidYouTubeUrl,
   extractYouTubeId,
   downloadYouTubeSource,
+  downloadViaYtDlp,
   cleanupFile,
 } = require("../services/youtubeDownloader");
 
@@ -314,13 +315,40 @@ function generateFallbackSegments() {
   return segments;
 }
 
-// ── YouTube Downloader Bridges ───────────────────────────────────────────────
+// ── YouTube Downloader Bridges & Fast-Fallback Wrapper ───────────────────────
+async function downloadYouTubeSourceWithFastFallback(sourceUrl, timeoutMs = 20000) {
+  let timer;
+  const downloadPromise = downloadYouTubeSource(sourceUrl);
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("RAPIDAPI_TIMEOUT_FALLBACK")), timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([downloadPromise, timeoutPromise]);
+    clearTimeout(timer);
+    return result;
+  } catch (raceErr) {
+    clearTimeout(timer);
+    if (raceErr.message === "RAPIDAPI_TIMEOUT_FALLBACK") {
+      console.warn(`[SmartClip] RapidAPI did not respond within ${Math.round(timeoutMs / 1000)}s. Activating high-speed server yt-dlp engine...`);
+      const videoId = extractYouTubeId(sourceUrl);
+      const targetPath = path.join(uploadsDir, `yt_source_${videoId}_${Date.now()}.mp4`);
+      return await downloadViaYtDlp({
+        targetUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        videoId,
+        targetPath,
+      });
+    }
+    throw raceErr;
+  }
+}
+
 async function downloadYouTubeSourceVideoForSmartClipping({ sourceUrl }) {
-  return await downloadYouTubeSource(sourceUrl);
+  return await downloadYouTubeSourceWithFastFallback(sourceUrl, 20000);
 }
 
 async function downloadYouTubeSectionForSmartClipping({ sourceUrl, startSec, endSec, index = 0 }) {
-  return await downloadYouTubeSource(sourceUrl);
+  return await downloadYouTubeSourceWithFastFallback(sourceUrl, 20000);
 }
 
 function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
@@ -672,7 +700,7 @@ router.post("/smart-generate", async (req, res) => {
       let sourceVideoPath = null;
       try {
         console.log(`[SmartClip] Downloading YouTube source via RapidAPI module: ${sourceUrl}`);
-        sourceVideoPath = await downloadYouTubeSource(sourceUrl);
+        sourceVideoPath = await downloadYouTubeSourceWithFastFallback(sourceUrl, 20000);
 
         for (let i = 0; i < suggestions.length; i++) {
           if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
