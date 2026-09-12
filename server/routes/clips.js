@@ -531,6 +531,26 @@ router.get("/diag", async (req, res) => {
     };
   }
 
+  // Test 5: Full download test
+  if (req.query.testDownload === "1") {
+    try {
+      const t0 = Date.now();
+      const downloadedPath = await downloadYouTubeSource(`https://www.youtube.com/watch?v=${videoId}`);
+      results.downloadTest = {
+        success: true,
+        timeSec: ((Date.now() - t0) / 1000).toFixed(1),
+        path: downloadedPath,
+        size: fs.existsSync(downloadedPath) ? fs.statSync(downloadedPath).size : 0,
+      };
+      cleanupFile(downloadedPath);
+    } catch (err) {
+      results.downloadTest = {
+        success: false,
+        error: err.message,
+      };
+    }
+  }
+
   return res.json(results);
 });
 
