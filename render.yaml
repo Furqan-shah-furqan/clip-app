@@ -34,7 +34,7 @@ services:
 
   # Service B: Independent BullMQ Clip-Generation Background Worker
   - type: worker
-    name: clipflow-worker
+    name: clipflow-generation-worker
     env: docker
     dockerfilePath: Dockerfile
     dockerCommand: npm run worker:generation

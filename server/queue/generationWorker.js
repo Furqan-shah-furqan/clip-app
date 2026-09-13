@@ -53,15 +53,21 @@ async function initWorker() {
     await prisma.$queryRaw`SELECT 1`;
     console.log("[GenerationWorker] Database ready");
 
-    // 2. Start worker heartbeat in Redis
-    await startHeartbeat();
-    console.log("[GenerationWorker] Redis connected & heartbeat active");
+    // 2. Verify Redis connectivity
+    await defaultRedis.ping();
+    console.log("[GenerationWorker] Redis ready");
 
     console.log(`[GenerationWorker] Queue: ${GENERATION_QUEUE_NAME}`);
     console.log(`[GenerationWorker] Concurrency: ${concurrency}`);
+
+    // 3. Start worker heartbeat in Redis
+    await startHeartbeat();
+    console.log("[GenerationWorker] Heartbeat started");
+
     console.log("[GenerationWorker] Ready and waiting for jobs");
   } catch (err) {
-    console.error("[GenerationWorker] Startup check failed:", err.message);
+    console.error(`[GenerationWorker] Startup check failed: ${err.message}`);
+    process.exit(1);
   }
 }
 
@@ -91,7 +97,14 @@ const generationWorker = new Worker(
       return { skipped: true, reason: "Record not found in database" };
     }
 
-    // Check if cancellation was already requested
+    // Check if job is already completed or cancelled before processing
+    if (dbJob.status === "COMPLETED") {
+      console.log(
+        `[GenerationWorker] Job ${generationJobId} is already COMPLETED. Skipping duplicate execution.`
+      );
+      return { skipped: true, reason: "Already completed" };
+    }
+
     if (dbJob.cancelRequestedAt || dbJob.status === "CANCELLED") {
       console.log(`[GenerationWorker] Job ${generationJobId} was cancelled before starting`);
       await prisma.generationJob.update({

@@ -23,4 +23,11 @@ elif [ -f "/app/cookies.txt" ]; then
   chmod 666 /app/uploads/cookies.txt || true
 fi
 
-exec "$@"
+# If passed as a single string (e.g. Render dockerCommand: "npm run worker:generation"), execute with sh -c
+if [ $# -eq 0 ]; then
+  exec npm start
+elif [ $# -eq 1 ]; then
+  exec sh -c "$1"
+else
+  exec "$@"
+fi
