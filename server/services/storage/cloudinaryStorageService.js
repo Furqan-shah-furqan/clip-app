@@ -110,7 +110,7 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
     overwrite: true,
     unique_filename: false,
     type: "upload",
-    timeout: 300000,
+    timeout: options.timeoutMs || 60000,
   };
 
   let result;
@@ -125,7 +125,7 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
 
     result = await withTimeout(
       uploadVideoStream(filePath, uploadOptions),
-      300000,
+      options.timeoutMs || 60000,
       "Cloudinary upload"
     );
 

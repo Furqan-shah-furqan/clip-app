@@ -62,4 +62,4 @@ RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 EXPOSE 3000 7860
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["npm", "start"]
+CMD ["npm", "run", "start:render"]

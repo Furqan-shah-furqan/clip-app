@@ -25,7 +25,7 @@ fi
 
 # If passed as a single string (e.g. Render dockerCommand: "npm run worker:generation"), execute with sh -c
 if [ $# -eq 0 ]; then
-  exec npm start
+  exec npm run start:render
 elif [ $# -eq 1 ]; then
   exec sh -c "$1"
 else

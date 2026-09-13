@@ -3084,6 +3084,9 @@ function buildSmartSuggestBody() {
       state.uploadedProject.inputPath ||
       state.uploadedProject.localPath ||
       "";
+    body.storageUrl =
+      state.uploadedProject.storageUrl ||
+      "";
   }
 
   return body;

@@ -412,6 +412,18 @@ async function runSmartGeneration({
   isCancelled = () => false,
 }) {
   const workspace = getJobWorkspace(generationJobId);
+  // Idempotent retry cleanup: clean job-scoped clips and temp directory
+  try {
+    if (fs.existsSync(workspace.clipsDir)) {
+      fs.rmSync(workspace.clipsDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(workspace.clipsDir, { recursive: true });
+    if (fs.existsSync(workspace.tempDir)) {
+      fs.rmSync(workspace.tempDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(workspace.tempDir, { recursive: true });
+  } catch {}
+
   const {
     sourceType,
     inputPath,
@@ -602,7 +614,9 @@ async function runSmartGeneration({
             onProgress(progressPercent, `Saving clip ${i + 1} to cloud storage...`);
             const { uploadVideoToCloudinary } = require("./storage/cloudinaryStorageService");
             const cloudRes = await uploadVideoToCloudinary(result.outputPath, {
-              folder: `clipflow/jobs/${generationJobId}`,
+              folder: `clipflow/jobs/${generationJobId}/clips`,
+              publicId: `clip-${i}`,
+              timeoutMs: 15000,
             });
             storageUrl = cloudRes.secureUrl;
             console.log(`[SmartGenerationService][Job ${generationJobId}] Uploaded clip ${i + 1} to Cloudinary: ${storageUrl}`);
@@ -693,7 +707,9 @@ async function runSmartGeneration({
             onProgress(progressPercent, `Saving clip ${i + 1} to cloud storage...`);
             const { uploadVideoToCloudinary } = require("./storage/cloudinaryStorageService");
             const cloudRes = await uploadVideoToCloudinary(result.outputPath, {
-              folder: `clipflow/jobs/${generationJobId}`,
+              folder: `clipflow/jobs/${generationJobId}/clips`,
+              publicId: `clip-${i}`,
+              timeoutMs: 15000,
             });
             storageUrl = cloudRes.secureUrl;
             console.log(`[SmartGenerationService][Job ${generationJobId}] Uploaded clip ${i + 1} to Cloudinary: ${storageUrl}`);

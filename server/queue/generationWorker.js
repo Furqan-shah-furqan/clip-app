@@ -14,6 +14,7 @@ const {
   cleanSmartClipError,
 } = require("../services/smartGenerationService");
 const { terminateJobProcess } = require("../services/smartClipService");
+const { reconcileInterruptedJobs } = require("../services/generationRecoveryService");
 
 const concurrency = Math.max(
   1,
@@ -24,6 +25,9 @@ console.log("[GenerationWorker] Starting...");
 
 // Dedicated connection for the BullMQ Worker (handles blocking BRPOP/BLPOP commands)
 const workerConnection = createRedisClient("GenerationWorker");
+
+// Track currently active GenerationJob ID for clean shutdown & recovery
+let currentActiveJobId = null;
 
 // ── Heartbeat Mechanism ───────────────────────────────────────────────────────
 let heartbeatInterval = null;
@@ -60,7 +64,10 @@ async function initWorker() {
     console.log(`[GenerationWorker] Queue: ${GENERATION_QUEUE_NAME}`);
     console.log(`[GenerationWorker] Concurrency: ${concurrency}`);
 
-    // 3. Start worker heartbeat in Redis
+    // 3. Scan & reconcile interrupted jobs from previous server restarts
+    await reconcileInterruptedJobs();
+
+    // 4. Start worker heartbeat in Redis
     await startHeartbeat();
     console.log("[GenerationWorker] Heartbeat started");
 
@@ -118,19 +125,21 @@ const generationWorker = new Worker(
       return { cancelled: true };
     }
 
+    currentActiveJobId = generationJobId;
+
     // 2. Claim job immediately in database (Proves queue consumption)
     const attemptCount = (dbJob.attemptCount || 0) + 1;
-    await prisma.generationJob.update({
-      where: { id: generationJobId },
-      data: {
-        attemptCount,
-        startedAt: dbJob.startedAt || new Date(),
-        status: "TRANSCRIBING",
-        stage: "Starting generation...",
-        progress: 5,
-        bullJobId: job.id,
-      },
-    });
+      await prisma.generationJob.update({
+        where: { id: generationJobId },
+        data: {
+          attemptCount,
+          startedAt: dbJob.startedAt || new Date(),
+          status: "TRANSCRIBING",
+          stage: "Starting generation...",
+          progress: 5,
+          bullJobId: job.id,
+        },
+      });
 
     console.log(`[GenerationWorker] Job ${job.id} started (claimed in database as TRANSCRIBING)`);
 
@@ -269,6 +278,8 @@ const generationWorker = new Worker(
       }
 
       throw err;
+    } finally {
+      currentActiveJobId = null;
     }
   },
   {
@@ -300,6 +311,24 @@ const gracefulShutdown = async (signal) => {
 
   if (heartbeatInterval) {
     clearInterval(heartbeatInterval);
+  }
+
+  // If a job is actively processing, terminate its child process and record safe interrupted stage
+  if (currentActiveJobId) {
+    const interruptedJobId = currentActiveJobId;
+    console.log(`[GenerationWorker] Interrupted active job: ${interruptedJobId}. Terminating FFmpeg/Python subprocesses...`);
+    try {
+      terminateJobProcess(interruptedJobId);
+      await prisma.generationJob.update({
+        where: { id: interruptedJobId },
+        data: {
+          stage: "Generation interrupted; will recover automatically.",
+        },
+      });
+      console.log(`[GenerationWorker] Job ${interruptedJobId} saved with recovery stage.`);
+    } catch (saveErr) {
+      console.warn(`[GenerationWorker] Could not save interrupted stage for job ${interruptedJobId}:`, saveErr.message);
+    }
   }
 
   try {

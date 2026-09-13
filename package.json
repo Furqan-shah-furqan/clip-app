@@ -7,6 +7,7 @@
     "start": "node server/server.js",
     "dev": "node server/server.js",
     "worker:generation": "node server/queue/generationWorker.js",
+    "start:render": "node server/renderSupervisor.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

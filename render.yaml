@@ -1,10 +1,11 @@
 services:
-  # Service A: Express Web API & UI Service
+  # Single Free Web Service running both Express API and Generation Worker via supervisor
   - type: web
     name: clipflow-studio
     env: docker
     dockerfilePath: Dockerfile
-    plan: starter
+    dockerCommand: npm run start:render
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: PORT
@@ -19,40 +20,6 @@ services:
         sync: false
       - key: TOKEN_ENCRYPTION_KEY
         generateValue: true
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
-        sync: false
-      - key: RAPIDAPI_KEY
-        sync: false
-      - key: RAPIDAPI_HOST
-        value: youtube-video-fast-downloader-24-7.p.rapidapi.com
-      - key: YOUTUBE_API_KEY
-        sync: false
-
-  # Service B: Independent BullMQ Clip-Generation Background Worker
-  - type: worker
-    name: clipflow-generation-worker
-    env: docker
-    dockerfilePath: Dockerfile
-    dockerCommand: npm run worker:generation
-    plan: starter
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: WHISPER_MODEL
-        value: base
-      - key: DATABASE_URL
-        sync: false
-      - key: REDIS_URL
-        sync: false
-      - key: TOKEN_ENCRYPTION_KEY
-        fromService:
-          type: web
-          name: clipflow-studio
-          envVarKey: TOKEN_ENCRYPTION_KEY
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
