@@ -8,6 +8,7 @@
     "dev": "node server/server.js",
     "worker:generation": "node server/queue/generationWorker.js",
     "start:render": "node server/renderSupervisor.js",
+    "diagnose:youtube": "node server/scripts/diagnoseYouTube.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

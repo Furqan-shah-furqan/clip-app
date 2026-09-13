@@ -3405,7 +3405,8 @@ async function handleUploadForSmartClips(input, suggestions) {
       sourceType: "upload",
       inputPath: result.project.filePath,
       segments: suggestions,
-      maxClips: 3,
+      isContinuation: true,
+      maxClips: Array.isArray(suggestions) && suggestions.length ? suggestions.length : 3,
       minScore: 0,
       clipLengthSec: state.selectedDuration || 30,
     };
@@ -3452,40 +3453,57 @@ function showUploadRequiredForSmartClips(data) {
     return;
   }
 
-  const message = data?.message || "YouTube transcript analyzed. Upload source video to clip moments:";
-  updateProgress(0, message);
+  // Sanitize user-facing message - never show raw yt-dlp stderr walls or stack traces to normal users
+  let cleanMessage = data?.message || "YouTube blocked automatic source download. Upload the source video to generate these clips.";
+  if (
+    cleanMessage.includes("ERROR:") ||
+    cleanMessage.includes("All download strategies exhausted") ||
+    cleanMessage.includes("yt-dlp") ||
+    cleanMessage.includes("github.com") ||
+    cleanMessage.includes("Sign in to confirm") ||
+    cleanMessage.includes("bot") ||
+    cleanMessage.includes("Sign in") ||
+    cleanMessage.includes("failed")
+  ) {
+    cleanMessage = "YouTube blocked automatic source download. Upload the source video to generate these clips.";
+  }
+
+  updateProgress(0, cleanMessage);
 
   const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
   if (suggestions.length && generatedClipsGrid) {
     generatedClipsGrid.innerHTML = `
       <div style="
-        padding: 20px;
+        padding: 24px;
         background: #111;
         border-radius: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 20px;
         border: 1px solid #333;
+        grid-column: 1 / -1;
       ">
-        <p style="color:#facc15;font-weight:600;margin:0 0 8px;">
+        <p style="color:#facc15;font-weight:700;margin:0 0 8px;font-size:16px;">
           Found ${suggestions.length} viral moments from transcript
         </p>
-        <p style="color:#aaa;margin:0 0 16px;font-size:14px;">
-          ${message}
+        <p style="color:#ccc;margin:0 0 16px;font-size:14px;line-height:1.5;">
+          ${escapeHtml(cleanMessage)}
         </p>
         <label style="
           display:inline-block;
-          padding:10px 20px;
+          padding:12px 24px;
           background:#fff;
           color:#000;
           border-radius:8px;
           cursor:pointer;
-          font-weight:600;
+          font-weight:700;
+          font-size:14px;
         ">
           Upload Source Video
           <input type="file" accept=".mp4,.mov,.mkv,.webm" style="display:none"
             onchange="handleUploadForSmartClips(this, ${JSON.stringify(suggestions).replace(/"/g, "&quot;")})">
         </label>
       </div>
+      <div style="grid-column: 1 / -1; display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
       ${suggestions
         .slice(0, 5)
         .map((item, index) => {
@@ -3508,6 +3526,7 @@ function showUploadRequiredForSmartClips(data) {
         `;
         })
         .join("")}
+      </div>
     `;
   }
 }

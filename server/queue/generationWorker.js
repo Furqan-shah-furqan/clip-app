@@ -203,9 +203,9 @@ const generationWorker = new Worker(
             status: "AWAITING_UPLOAD",
             stage:
               result.message ||
-              "YouTube video download unavailable. Please upload source video directly.",
+              "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.",
             suggestionsJson: result.suggestions || [],
-            errorMessage: result.message || null,
+            errorMessage: null,
           },
         });
         return result;

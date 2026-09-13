@@ -147,24 +147,216 @@ function getFfmpegPath() {
   return "ffmpeg";
 }
 
-function resolveActiveCookieFile() {
+// ── Cookie Validation & Resolution ──────────────────────────────────────────
+
+/**
+ * Validates a cookie file safely without printing or leaking authentication data.
+ * Checks file existence, non-emptiness, readability, and Netscape HTTP cookie format.
+ */
+function validateCookieFile(filePath) {
+  if (!filePath || typeof filePath !== "string") {
+    return { valid: false, reason: "PATH_NOT_PROVIDED" };
+  }
+
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { valid: false, reason: "FILE_NOT_FOUND" };
+    }
+
+    const stat = fs.statSync(filePath);
+    if (stat.size < 50) {
+      return { valid: false, reason: "FILE_TOO_SMALL" };
+    }
+
+    // Read only the first 1024 bytes to safely check the magic header without loading all tokens
+    const fd = fs.openSync(filePath, "r");
+    const buffer = Buffer.alloc(1024);
+    const bytesRead = fs.readSync(fd, buffer, 0, 1024, 0);
+    fs.closeSync(fd);
+
+    const sample = buffer.toString("utf8", 0, bytesRead);
+    const lines = sample.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) {
+      return { valid: false, reason: "FILE_EMPTY" };
+    }
+
+    const firstLine = lines[0];
+    const isNetscape =
+      firstLine.startsWith("# Netscape HTTP Cookie File") ||
+      firstLine.startsWith("# HTTP Cookie File");
+
+    if (!isNetscape) {
+      return { valid: false, reason: "NOT_NETSCAPE_FORMAT" };
+    }
+
+    return { valid: true, path: filePath, size: stat.size };
+  } catch (err) {
+    return { valid: false, reason: err.message };
+  }
+}
+
+/**
+ * Safely resolves the YouTube cookie file across standard deployment locations.
+ * Prioritizes explicit YOUTUBE_COOKIES_PATH, then Render secrets, then synchronized uploads.
+ * Never logs cookie tokens or private credentials.
+ */
+function resolveYouTubeCookieFile() {
   const candidates = [
-    "/app/uploads/cookies.txt",
+    process.env.YOUTUBE_COOKIES_PATH,
     "/etc/secrets/cookies.txt",
     "/etc/secrets/youtube_cookies.txt",
+    "/app/uploads/cookies.txt",
     "/app/cookies.txt",
     path.join(rootDir, "uploads", "cookies.txt"),
     path.join(rootDir, "cookies.txt"),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const check = validateCookieFile(candidate);
+    if (check.valid) {
+      return check;
+    }
+  }
+
+  // If a file was physically present but failed validation, return the details for diagnostics
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      const check = validateCookieFile(candidate);
+      return { valid: false, path: candidate, reason: check.reason };
+    }
+  }
+
+  return { valid: false, path: null, reason: "NO_COOKIE_FILE_FOUND" };
+}
+
+// ── Centralized yt-dlp Argument Builder ─────────────────────────────────────
+
+/**
+ * Builds base arguments for all yt-dlp invocations across downloading and diagnostics.
+ * Centralizes cookie injection, JS runtime detection (Deno/Node), timeouts, and formats.
+ */
+function buildYtDlpBaseArgs(options = {}) {
+  const {
+    targetUrl,
+    targetPath,
+    playerClient = null,
+    cookiePath = null,
+    format = "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
+    simulate = false,
+    extraArgs = [],
+  } = options;
+
+  const args = [
+    "--no-playlist",
+    "--no-warnings",
+    "--no-check-certificates",
+    "--socket-timeout", "30",
+    "--retries", "3",
   ];
 
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p) && fs.statSync(p).size > 10) {
-        return p;
-      }
-    } catch {}
+  // JavaScript runtimes for YouTube challenge solving (Deno in Docker, Node fallback)
+  args.push("--js-runtimes", "deno,node");
+
+  // YouTube Extractor player client
+  if (playerClient) {
+    args.push("--extractor-args", `youtube:player_client=${playerClient}`);
   }
-  return null;
+
+  // Windows ffmpeg directory if running locally
+  const ffmpegDir = path.join(rootDir, "bin");
+  if (process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"))) {
+    args.push("--ffmpeg-location", ffmpegDir);
+  }
+
+  // Inject verified cookies file
+  if (cookiePath) {
+    args.push("--cookies", cookiePath);
+  }
+
+  // Output format & merging
+  if (!simulate) {
+    if (format) {
+      args.push("-f", format);
+    }
+    args.push("--merge-output-format", "mp4");
+    if (targetPath) {
+      args.push("-o", targetPath);
+    }
+  } else {
+    args.push("--simulate", "--dump-json");
+  }
+
+  if (Array.isArray(extraArgs) && extraArgs.length) {
+    args.push(...extraArgs);
+  }
+
+  if (targetUrl) {
+    args.push(targetUrl);
+  }
+
+  return args;
+}
+
+// ── Error Classification ───────────────────────────────────────────────────
+
+/**
+ * Classifies yt-dlp and network errors into structured codes.
+ * Prevents exposing raw 5-page stderr stacks to users.
+ */
+function classifyYtDlpError(rawError) {
+  const text = String(rawError?.message || rawError || "");
+
+  if (
+    text.includes("Sign in to confirm you're not a bot") ||
+    text.includes("Please sign in") ||
+    text.includes("LOGIN_REQUIRED") ||
+    text.includes("confirm you're not a bot")
+  ) {
+    return {
+      code: "BOT_CHECK",
+      authRequired: true,
+      message: "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.",
+      technicalSummary: "YouTube returned bot verification check (Sign in to confirm you're not a bot).",
+    };
+  }
+
+  if (text.includes("PO Token") || text.includes("pot") || text.includes("Proof of Origin")) {
+    return {
+      code: "PO_TOKEN_REQUIRED",
+      authRequired: true,
+      message: "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.",
+      technicalSummary: "YouTube requires a valid Proof of Origin (PO) token for this client request.",
+    };
+  }
+
+  if (text.includes("HTTP Error 403") || text.includes("403: Forbidden") || text.includes("HTTP_403")) {
+    return {
+      code: "HTTP_403",
+      authRequired: true,
+      message: "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.",
+      technicalSummary: "Google Video CDN rejected stream due to IP mismatch or expired token (HTTP 403 Forbidden).",
+    };
+  }
+
+  if (
+    text.includes("Video unavailable") ||
+    text.includes("Private video") ||
+    text.includes("This video has been removed")
+  ) {
+    return {
+      code: "VIDEO_UNAVAILABLE",
+      authRequired: false,
+      message: "This video is unavailable, private, or has been removed on YouTube. Please check the URL.",
+      technicalSummary: "YouTube reported video unavailable or private.",
+    };
+  }
+
+  return {
+    code: "YOUTUBE_DOWNLOAD_FAILED",
+    authRequired: true,
+    message: "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.",
+    technicalSummary: text.slice(0, 300),
+  };
 }
 
 // ── Polling & Streaming ─────────────────────────────────────────────────────
@@ -487,45 +679,43 @@ async function fetchFromYtStream(videoId, rapidApiKey) {
  */
 async function downloadViaYtDlp({ targetUrl, videoId, targetPath }) {
   const ytDlpPath = getYtDlpPath();
-  const ffmpegDir = path.join(rootDir, "bin");
-  const hasWinFfmpeg = process.platform === "win32" && fs.existsSync(path.join(ffmpegDir, "ffmpeg.exe"));
-  const activeCookies = resolveActiveCookieFile();
+  const cookieInfo = resolveYouTubeCookieFile();
+
+  if (cookieInfo.valid) {
+    console.log(`[YouTubeDownloader] Cookie file detected: yes (valid Netscape format)`);
+  } else {
+    console.log(`[YouTubeDownloader] Cookie file missing or invalid: ${cookieInfo.reason}`);
+  }
 
   console.log(`[YouTube-Downloader] [Local yt-dlp] Starting direct download for: ${videoId || targetUrl}`);
   console.log(`[YouTube-Downloader] [Local yt-dlp] Target path: ${targetPath}`);
-  console.log(`[YouTube-Downloader] [Local yt-dlp] Using binary: ${ytDlpPath} | Cookies: ${activeCookies ? "yes" : "none"}`);
+  console.log(`[YouTube-Downloader] [Local yt-dlp] Using binary: ${ytDlpPath} | Cookies: ${cookieInfo.valid ? "yes" : "none"}`);
 
-  const clientStrategies = [
-    // 1. Android client (high compatibility, bypasses bot challenges on cloud IPs)
-    { client: "youtube:player_client=android", withCookies: false, label: "Android client direct" },
-    // 2. Web client
-    { client: "youtube:player_client=web", withCookies: false, label: "Web client direct" },
-    // 3. VisionOS / Android VR
-    { client: "youtube:player_client=visionos,android_vr", withCookies: false, label: "VisionOS/VR direct" },
-    // 4. Android client with cookies (if available)
-    ...(activeCookies ? [{ client: "youtube:player_client=android", withCookies: true, label: "Android client + cookies" }] : []),
-    // 5. Web client with cookies (if available)
-    ...(activeCookies ? [{ client: "youtube:player_client=web", withCookies: true, label: "Web client + cookies" }] : []),
-  ];
+  // Small, maintained strategy order based on modern yt-dlp behavior
+  const clientStrategies = cookieInfo.valid
+    ? [
+        { client: null, cookiePath: cookieInfo.path, label: "Authenticated default client with cookies" },
+        { client: "android", cookiePath: cookieInfo.path, label: "Authenticated Android client" },
+        { client: "visionos,android_vr", cookiePath: cookieInfo.path, label: "Authenticated VisionOS client" },
+      ]
+    : [
+        { client: null, cookiePath: null, label: "Standard unauthenticated client" },
+        { client: "android", cookiePath: null, label: "Android client direct" },
+        { client: "visionos,android_vr", cookiePath: null, label: "VisionOS client direct" },
+      ];
 
   const strategyErrors = [];
+  let lastErr = null;
+  let botCheckCount = 0;
 
   for (const strat of clientStrategies) {
-    const useCookies = strat.withCookies && activeCookies;
-    const args = [
-      "--no-playlist",
-      "--no-check-certificates",
-      "--no-warnings",
-      "--extractor-args", strat.client,
-      ...(useCookies ? ["--cookies", activeCookies] : []),
-      "-f", "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
-      ...(hasWinFfmpeg ? ["--ffmpeg-location", ffmpegDir] : []),
-      "--merge-output-format", "mp4",
-      "--socket-timeout", "30",
-      "--retries", "3",
-      "-o", targetPath,
+    const args = buildYtDlpBaseArgs({
       targetUrl,
-    ];
+      targetPath,
+      playerClient: strat.client,
+      cookiePath: strat.cookiePath,
+      format: "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/b/best",
+    });
 
     console.log(`[YouTube-Downloader] Trying yt-dlp strategy: ${strat.label}...`);
 
@@ -537,21 +727,42 @@ async function downloadViaYtDlp({ targetUrl, videoId, targetPath }) {
         return targetPath;
       }
     } catch (err) {
-      console.warn(`[YouTube-Downloader] yt-dlp ${strat.label} failed:`, err.message?.slice(0, 140));
-      strategyErrors.push(`[${strat.label}]: ${err.message}`);
+      lastErr = err;
+      const classified = classifyYtDlpError(err);
+      console.warn(
+        `[YouTube-Downloader] yt-dlp ${strat.label} failed (${classified.code}): ${classified.technicalSummary}`
+      );
+      strategyErrors.push(`[${strat.label}]: ${classified.technicalSummary}`);
+
+      // Bounded bot-check retry: if bot verification is actively enforced on multiple clients,
+      // stop immediately and do not loop through redundant strategies
+      if (classified.code === "BOT_CHECK" || classified.code === "PO_TOKEN_REQUIRED") {
+        botCheckCount++;
+        if (botCheckCount >= 2) {
+          console.warn("[YouTube-Downloader] Bot challenge actively enforced on server IP. Terminating further yt-dlp attempts.");
+          break;
+        }
+      }
     }
   }
 
-  throw new Error(`All download strategies exhausted:\n${strategyErrors.join("\n")}`);
+  const finalClassified = classifyYtDlpError(lastErr || strategyErrors.join("\n"));
+  const structuredError = new Error(finalClassified.message);
+  structuredError.code = finalClassified.code;
+  structuredError.authRequired = finalClassified.authRequired;
+  structuredError.classified = finalClassified;
+  structuredError.technicalSummary = finalClassified.technicalSummary;
+  structuredError.strategyErrors = strategyErrors;
+
+  throw structuredError;
 }
 
 // ── Master Export: downloadYouTubeSource ────────────────────────────────────
 
 /**
- * Downloads a YouTube video via RapidAPI and saves it to local disk storage.
- * Automatically falls back to server-side yt-dlp if RapidAPI is unavailable,
- * times out, or returns a 403 Forbidden stream URL.
- * 
+ * Downloads a YouTube video via RapidAPI (if configured) and falls back to server-side yt-dlp.
+ * Throws structured errors with classified codes for bot checks / auth requirements.
+ *
  * @param {string|object} input - YouTube URL, video ID, or options object { sourceUrl }.
  * @returns {Promise<string>} - Absolute path to the downloaded MP4 file.
  */
@@ -633,4 +844,8 @@ module.exports = {
   streamRemoteVideoToFile,
   downloadViaYtDlp,
   runCommand,
+  validateCookieFile,
+  resolveYouTubeCookieFile,
+  buildYtDlpBaseArgs,
+  classifyYtDlpError,
 };

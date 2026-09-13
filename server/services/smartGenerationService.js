@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 const { spawn } = require("child_process");
+const ffmpeg = require("fluent-ffmpeg");
 const {
   rootDir,
   uploadsDir,
@@ -16,6 +17,29 @@ const {
   extractYouTubeId,
   cleanupFile,
 } = require("./youtubeDownloader");
+
+// Configure ffprobe binary path for local Windows or Linux container
+if (process.platform === "win32") {
+  const localWinFfprobe = path.resolve(rootDir, "bin", "ffprobe.exe");
+  if (fs.existsSync(localWinFfprobe)) {
+    ffmpeg.setFfprobePath(localWinFfprobe);
+  }
+} else if (fs.existsSync("/usr/bin/ffprobe")) {
+  ffmpeg.setFfprobePath("/usr/bin/ffprobe");
+}
+
+function probeVideoDuration(filePath) {
+  return new Promise((resolve, reject) => {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return resolve(0);
+    }
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      const duration = Number(metadata?.format?.duration) || 0;
+      resolve(duration);
+    });
+  });
+}
 
 function timeToSeconds(timeStr) {
   if (!timeStr) return 0;
@@ -44,6 +68,37 @@ function ensureValidClipWindow(startTime, endTime) {
 
 function cleanSmartClipError(error) {
   const raw = String(error?.message || error || "");
+
+  // Detect YouTube authentication / bot / download blocks
+  if (
+    raw.includes("Sign in to confirm you're not a bot") ||
+    raw.includes("confirm you're not a bot") ||
+    raw.includes("Please sign in") ||
+    raw.includes("LOGIN_REQUIRED") ||
+    raw.includes("PO Token") ||
+    raw.includes("Proof of Origin") ||
+    raw.includes("All download strategies exhausted") ||
+    raw.includes("YOUTUBE_AUTH_REQUIRED") ||
+    raw.includes("BOT_CHECK") ||
+    raw.includes("PO_TOKEN_REQUIRED") ||
+    raw.includes("yt-dlp") ||
+    raw.includes("github.com/yt-dlp") ||
+    error?.code === "BOT_CHECK" ||
+    error?.code === "PO_TOKEN_REQUIRED" ||
+    error?.code === "YOUTUBE_AUTH_REQUIRED" ||
+    error?.authRequired
+  ) {
+    return "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.";
+  }
+
+  if (raw.includes("The uploaded video does not match the selected clip timestamps")) {
+    return raw;
+  }
+
+  if (raw.includes("Video unavailable") || raw.includes("Private video") || raw.includes("removed on YouTube")) {
+    return "This video is unavailable, private, or has been removed on YouTube. Please check the URL.";
+  }
+
   if (raw.includes("RAPIDAPI_KEY is not configured")) {
     return "RAPIDAPI_KEY is not configured on the server. Please add your key in Render environment settings.";
   }
@@ -51,10 +106,11 @@ function cleanSmartClipError(error) {
     return "RapidAPI CDN video preparation timed out. Try another video or upload directly.";
   }
   if (raw.includes("HTTP 403") || raw.includes("Forbidden")) {
-    return "RapidAPI authentication failed. Please verify your RAPIDAPI_KEY.";
+    return "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.";
   }
   if (raw.includes("transcript")) return raw;
-  return raw || "Smart clipping failed. Try uploading the source video directly.";
+
+  return "ClipFlow found the viral moments, but YouTube blocked automatic video download. Upload the source video to continue.";
 }
 
 function vttTimeToSeconds(value = "") {
@@ -451,38 +507,76 @@ async function runSmartGeneration({
 
   if (await isCancelled()) throw new Error("Job cancelled by user");
 
-  // Step 1: Transcript extraction
-  onProgress(10, "Extracting transcript...");
+  // Step 1: Detect continuation mode (user uploading source video for pre-selected viral moments)
+  const isContinuation =
+    Boolean(payload.isContinuation) ||
+    (Array.isArray(segments) &&
+      segments.length > 0 &&
+      (segments[0].startSec !== undefined ||
+        segments[0].score !== undefined ||
+        segments[0].hook !== undefined));
+
+  let suggestions = [];
   let transcriptSegments = [];
-  if (Array.isArray(segments) && segments.length) {
-    transcriptSegments = segments;
-  } else if (normalizedSourceType === "youtube") {
-    transcriptSegments = await getYouTubeSmartTranscript(sourceUrl);
+
+  if (isContinuation) {
+    console.log(
+      `[SmartGenerationService][Job ${generationJobId}] Continuation job detected: Reusing ${segments.length} saved viral moments. Skipping transcript extraction & AI scoring.`
+    );
+    onProgress(35, `Reusing ${segments.length} saved viral moments from transcript...`);
+    suggestions = segments.map((s, idx) => ({
+      ...s,
+      startSec: Number(s.startSec != null ? s.startSec : timeToSeconds(s.start || 0)),
+      endSec: Number(s.endSec != null ? s.endSec : timeToSeconds(s.end || 30)),
+      start: s.start || secondsToTime(s.startSec || 0),
+      end: s.end || secondsToTime(s.endSec || 30),
+      durationSec:
+        Number(s.durationSec) ||
+        Math.max(
+          5,
+          Number(s.endSec != null ? s.endSec : timeToSeconds(s.end || 30)) -
+            Number(s.startSec != null ? s.startSec : timeToSeconds(s.start || 0))
+        ),
+      title: s.title || s.hook || `Smart Clip #${idx + 1}`,
+      score: Number(s.score || 80),
+      reason: s.reason || s.smartReason || "Pre-selected viral moment",
+      signals: Array.isArray(s.signals) ? s.signals : ["saved moment"],
+      previewText: s.previewText || s.text || "",
+    }));
   } else {
-    transcriptSegments = await getLocalSmartTranscript(inputPath);
-  }
+    // Standard pipeline: Transcript extraction
+    onProgress(10, "Extracting transcript...");
+    if (Array.isArray(segments) && segments.length) {
+      transcriptSegments = segments;
+    } else if (normalizedSourceType === "youtube") {
+      transcriptSegments = await getYouTubeSmartTranscript(sourceUrl);
+    } else {
+      transcriptSegments = await getLocalSmartTranscript(inputPath);
+    }
 
-  if (await isCancelled()) throw new Error("Job cancelled by user");
+    if (await isCancelled()) throw new Error("Job cancelled by user");
 
-  // Step 2: Viral moment selection & ranking
-  onProgress(30, "Analyzing content & finding viral moments...");
-  const allSuggestions = findSmartClipMoments(transcriptSegments, {
-    maxClips: Math.max(safeMaxClips * 3, 10),
-    preferredDurationSec: Number(clipLengthSec) || 45,
-    minDurationSec: Number(minDurationSec) || 25,
-    maxDurationSec: Number(maxDurationSec) || 90,
-    videoDurationSec: Number(videoDurationSec) || 0,
-  });
+    // Viral moment selection & ranking
+    onProgress(30, "Analyzing content & finding viral moments...");
+    const allSuggestions = findSmartClipMoments(transcriptSegments, {
+      maxClips: Math.max(safeMaxClips * 3, 10),
+      preferredDurationSec: Number(clipLengthSec) || 45,
+      minDurationSec: Number(minDurationSec) || 25,
+      maxDurationSec: Number(maxDurationSec) || 90,
+      videoDurationSec: Number(videoDurationSec) || 0,
+    });
 
-  let suggestions = allSuggestions
-    .filter((item) => Number(item.score || 0) >= safeMinScore)
-    .slice(0, safeMaxClips);
+    suggestions = allSuggestions
+      .filter((item) => Number(item.score || 0) >= safeMinScore)
+      .slice(0, safeMaxClips);
 
-  // Fallback 1: if no clips pass minScore, take best available
-  if (!suggestions.length && allSuggestions.length > 0) {
-    console.log(`[SmartClip][Job ${generationJobId}] No clips scored ${safeMinScore}+. Falling back to top ${safeMaxClips} best clips.`);
-    suggestions = allSuggestions.slice(0, safeMaxClips);
-  }
+    // Fallback 1: if no clips pass minScore, take best available
+    if (!suggestions.length && allSuggestions.length > 0) {
+      console.log(
+        `[SmartClip][Job ${generationJobId}] No clips scored ${safeMinScore}+. Falling back to top ${safeMaxClips} best clips.`
+      );
+      suggestions = allSuggestions.slice(0, safeMaxClips);
+    }
 
   // Fallback 2: transcript grouping or time windows
   if (!suggestions.length) {
@@ -550,6 +644,7 @@ async function runSmartGeneration({
         });
       }
     }
+  }
   }
 
   if (!suggestions.length) {
@@ -634,12 +729,12 @@ async function runSmartGeneration({
     } catch (err) {
       if (err.message === "Job cancelled by user") throw err;
 
-      console.error(`[SmartGenerationService][Job ${generationJobId}] YouTube clip generation failed:`, err.message || err);
+      console.error(`[SmartGenerationService][Job ${generationJobId}] YouTube source acquisition failed:`, err.message || err);
       const cleanMsg = cleanSmartClipError(err);
       return {
         success: false,
         needsUpload: true,
-        error: "YouTube clip generation failed",
+        error: "YOUTUBE_AUTH_REQUIRED",
         details: cleanMsg,
         message: cleanMsg,
         suggestions,
@@ -669,6 +764,26 @@ async function runSmartGeneration({
 
       if (!effectiveInputPath) {
         throw new Error("Input video file could not be found or retrieved for processing.");
+      }
+
+      // Requirement 29: Verify uploaded video duration matches maximum required timestamp
+      try {
+        const uploadedDuration = await probeVideoDuration(effectiveInputPath);
+        if (uploadedDuration > 0) {
+          const maxRequiredSec = Math.max(
+            ...suggestions.map((s) => Number(s.endSec || timeToSeconds(s.end || 0)))
+          );
+          if (maxRequiredSec > uploadedDuration + 5) {
+            throw new Error(
+              `The uploaded video does not match the selected clip timestamps (video duration is ${Math.round(uploadedDuration)}s, but clips require up to ${Math.round(maxRequiredSec)}s). Please upload the complete source video.`
+            );
+          }
+        }
+      } catch (probeErr) {
+        if (probeErr.message.includes("does not match the selected clip timestamps")) {
+          throw probeErr;
+        }
+        console.warn(`[SmartGenerationService][Job ${generationJobId}] Video duration probe warning:`, probeErr.message);
       }
 
       for (let i = 0; i < suggestions.length; i++) {
@@ -755,5 +870,6 @@ module.exports = {
   getLocalSmartTranscript,
   downloadVideoViaRapidApi,
   buildSmartGeneratedClipPayload,
+  probeVideoDuration,
   runSmartGeneration,
 };

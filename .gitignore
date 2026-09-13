@@ -20,8 +20,9 @@ captions/
 *.wav
 *.log
 __pycache__/
-# cookies.txt enabled for cloud bot bypass
-!cookies.txt
+# Secret cookies files must never be committed
+cookies.txt
+*cookies.txt
 /etc/secrets/
 scratch/
 

@@ -10,17 +10,25 @@ fi
 # Ensure uploads directory exists and copy read-only secret cookies to writable uploads/cookies.txt
 mkdir -p /app/uploads
 if [ -f "/etc/secrets/cookies.txt" ]; then
+  echo "[clip-app] YouTube cookies secret present: yes"
   echo "[clip-app] Syncing /etc/secrets/cookies.txt to /app/uploads/cookies.txt..."
   cp /etc/secrets/cookies.txt /app/uploads/cookies.txt || true
   chmod 666 /app/uploads/cookies.txt || true
+  echo "[clip-app] Cookie file synchronized: yes"
 elif [ -f "/etc/secrets/youtube_cookies.txt" ]; then
+  echo "[clip-app] YouTube cookies secret present: yes"
   echo "[clip-app] Syncing /etc/secrets/youtube_cookies.txt to /app/uploads/cookies.txt..."
   cp /etc/secrets/youtube_cookies.txt /app/uploads/cookies.txt || true
   chmod 666 /app/uploads/cookies.txt || true
+  echo "[clip-app] Cookie file synchronized: yes"
 elif [ -f "/app/cookies.txt" ]; then
+  echo "[clip-app] YouTube cookies secret present: yes (bundled)"
   echo "[clip-app] Syncing bundled /app/cookies.txt to /app/uploads/cookies.txt..."
   cp /app/cookies.txt /app/uploads/cookies.txt || true
   chmod 666 /app/uploads/cookies.txt || true
+  echo "[clip-app] Cookie file synchronized: yes"
+else
+  echo "[clip-app] YouTube cookies secret present: no"
 fi
 
 # If passed as a single string (e.g. Render dockerCommand: "npm run worker:generation"), execute with sh -c
