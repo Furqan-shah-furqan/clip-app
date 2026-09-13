@@ -22,20 +22,80 @@ const state = {
     position: "bottom",
     textShadow: true,
   },
+  isGenerating: false,
   activeGenerationJobId: null,
 };
+try { window.state = state; } catch {}
 
 const STUDIO_SESSION_KEY = "clipflow-studio-session";
 const ACTIVE_GENERATION_JOB_KEY = "clipflow-active-generation-job";
 
+const ACTIVE_GENERATION_STATUSES = new Set([
+  "QUEUED",
+  "TRANSCRIBING",
+  "ANALYZING",
+  "SELECTING_MOMENTS",
+  "DOWNLOADING",
+  "RENDERING",
+  "FINALIZING",
+]);
+
+function isActiveGenerationStatus(status) {
+  return ACTIVE_GENERATION_STATUSES.has(String(status || "").toUpperCase());
+}
+
 function setActiveGenerationJob(jobId, meta = {}) {
-  state.activeGenerationJobId = jobId;
+  if (
+    !jobId ||
+    typeof jobId !== "string" ||
+    jobId === "null" ||
+    jobId === "undefined" ||
+    !jobId.trim()
+  ) {
+    clearActiveGenerationJob();
+    return;
+  }
+  const cleanId = jobId.trim();
+  state.activeGenerationJobId = cleanId;
+  state.isGenerating = true;
   try {
     localStorage.setItem(
       ACTIVE_GENERATION_JOB_KEY,
-      JSON.stringify({ jobId, ...meta, savedAt: Date.now() })
+      JSON.stringify({ jobId: cleanId, ...meta, savedAt: Date.now() })
     );
   } catch {}
+}
+
+function getActiveGenerationJobId() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_GENERATION_JOB_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const id = parsed?.jobId;
+      if (
+        id &&
+        typeof id === "string" &&
+        id !== "null" &&
+        id !== "undefined" &&
+        id.trim() !== ""
+      ) {
+        return id.trim();
+      }
+    }
+    const legacyDirectKey = localStorage.getItem("activeGenerationJobId");
+    if (
+      legacyDirectKey &&
+      typeof legacyDirectKey === "string" &&
+      legacyDirectKey !== "null" &&
+      legacyDirectKey !== "undefined" &&
+      legacyDirectKey.trim() !== ""
+    ) {
+      return legacyDirectKey.trim();
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function getActiveGenerationJob() {
@@ -43,7 +103,16 @@ function getActiveGenerationJob() {
     const raw = localStorage.getItem(ACTIVE_GENERATION_JOB_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.jobId ? parsed : null;
+    if (
+      parsed?.jobId &&
+      typeof parsed.jobId === "string" &&
+      parsed.jobId !== "null" &&
+      parsed.jobId !== "undefined" &&
+      parsed.jobId.trim() !== ""
+    ) {
+      return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -51,9 +120,87 @@ function getActiveGenerationJob() {
 
 function clearActiveGenerationJob() {
   state.activeGenerationJobId = null;
+  state.isGenerating = false;
   try {
     localStorage.removeItem(ACTIVE_GENERATION_JOB_KEY);
+    localStorage.removeItem("activeGenerationJobId");
   } catch {}
+}
+
+function migrateOldBrowserStorage() {
+  try {
+    const rawSession = localStorage.getItem(STUDIO_SESSION_KEY);
+    if (rawSession) {
+      const parsed = JSON.parse(rawSession);
+      let sessionDirty = false;
+      const staleKeys = [
+        "isGenerating",
+        "generationInProgress",
+        "generating",
+        "buttonDisabled",
+        "generationButtonText",
+        "activeGenerationJobId",
+      ];
+      for (const k of staleKeys) {
+        if (parsed[k] !== undefined) {
+          delete parsed[k];
+          sessionDirty = true;
+        }
+      }
+      if (sessionDirty) {
+        localStorage.setItem(STUDIO_SESSION_KEY, JSON.stringify(parsed));
+      }
+    }
+
+    const rawJob = localStorage.getItem(ACTIVE_GENERATION_JOB_KEY);
+    if (rawJob) {
+      try {
+        const parsedJob = JSON.parse(rawJob);
+        const jobId = parsedJob?.jobId;
+        if (
+          !jobId ||
+          typeof jobId !== "string" ||
+          jobId === "null" ||
+          jobId === "undefined" ||
+          jobId.trim() === ""
+        ) {
+          localStorage.removeItem(ACTIVE_GENERATION_JOB_KEY);
+        }
+      } catch {
+        localStorage.removeItem(ACTIVE_GENERATION_JOB_KEY);
+      }
+    }
+
+    const legacyId = localStorage.getItem("activeGenerationJobId");
+    if (
+      legacyId === "null" ||
+      legacyId === "undefined" ||
+      legacyId === "" ||
+      !legacyId
+    ) {
+      localStorage.removeItem("activeGenerationJobId");
+    }
+  } catch (err) {
+    console.warn("[GenerationUI] Storage migration warning:", err);
+  }
+}
+
+function checkGenerationStateInvariant() {
+  if (
+    state.isGenerating &&
+    (!state.activeGenerationJobId ||
+      typeof state.activeGenerationJobId !== "string" ||
+      state.activeGenerationJobId === "null" ||
+      state.activeGenerationJobId === "undefined" ||
+      state.activeGenerationJobId.trim() === "")
+  ) {
+    console.warn(
+      "[GenerationUI] Defensive invariant triggered: isGenerating true without valid activeGenerationJobId. Resetting UI."
+    );
+    resetGenerationUI();
+    return false;
+  }
+  return true;
 }
 
 function persistStudioSession() {
@@ -228,43 +375,132 @@ const smartClipBtn = document.getElementById("smartClipBtn");
 const cancelGenerationBtn = document.getElementById("cancelGenerationBtn");
 const generationActionRow = document.getElementById("generationActionRow");
 
+function hideGenerationProgressIfNoRealJob() {
+  const url = ytUrlInput?.value?.trim() || "";
+  const hasLoadedProject = !!state.uploadedProject;
+  if (!url && !hasLoadedProject) {
+    hideModernProgressCard();
+  } else {
+    // If no active generation job and not displaying fresh results, hide the animated progress track
+    if (!state.activeGenerationJobId) {
+      const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
+      if (mpTrackEl) {
+        if (
+          !progressLabel ||
+          progressLabel.textContent === "Ready" ||
+          progressLabel.textContent.includes("cancelled") ||
+          progressLabel.textContent.includes("failed")
+        ) {
+          mpTrackEl.style.display = "none";
+        }
+      }
+    }
+  }
+}
+
+function resetGenerationUIVisualsOnly() {
+  if (cancelGenerationBtn) {
+    cancelGenerationBtn.classList.add("is-hidden");
+    cancelGenerationBtn.disabled = false;
+    cancelGenerationBtn.textContent = "✕";
+    cancelGenerationBtn.title = "Cancel generation";
+    cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
+  }
+
+  if (smartClipBtn) {
+    smartClipBtn.disabled = false;
+    smartClipBtn.textContent = "Generate Clips";
+  }
+
+  hideGenerationProgressIfNoRealJob();
+}
+
+function resetGenerationUI() {
+  state.isGenerating = false;
+  state.activeGenerationJobId = null;
+
+  clearGenerationPolling();
+  clearActiveGenerationJob();
+  resetGenerationUIVisualsOnly();
+}
+
+function showActiveGenerationUI(job = {}) {
+  const jobId = job.id || job.jobId || state.activeGenerationJobId;
+  state.isGenerating = true;
+  state.activeGenerationJobId = jobId;
+
+  if (jobId) {
+    setActiveGenerationJob(jobId);
+  }
+
+  if (cancelGenerationBtn) {
+    cancelGenerationBtn.classList.remove("is-hidden");
+    cancelGenerationBtn.disabled = false;
+    cancelGenerationBtn.textContent = "✕";
+    cancelGenerationBtn.title = "Cancel generation";
+    cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
+  }
+
+  if (smartClipBtn) {
+    smartClipBtn.disabled = true;
+    smartClipBtn.textContent = "Generating clips...";
+  }
+
+  // Ensure progress card and progress track are displayed
+  const mpCard = document.getElementById("modernProgressCard");
+  if (mpCard) {
+    mpCard.classList.remove("is-hidden");
+    mpCard.classList.add("is-active");
+    mpCard.style.display = "flex";
+    const mpTrackEl = mpCard.querySelector(".mp-track");
+    if (mpTrackEl) mpTrackEl.style.display = "flex";
+  }
+
+  const queuedElapsed =
+    job.status === "QUEUED" && job.createdAt
+      ? Date.now() - new Date(job.createdAt).getTime()
+      : 0;
+  const stageMsg =
+    job.status === "QUEUED" && queuedElapsed > 60000
+      ? "Waiting for generation worker (worker may be spinning up)..."
+      : job.stage ||
+        job.message ||
+        (job.status === "QUEUED"
+          ? "Waiting for generation worker..."
+          : "Generating clips...");
+  const progressVal =
+    job.status === "QUEUED"
+      ? 5
+      : typeof job.progress === "number" && job.progress > 0
+      ? job.progress
+      : 10;
+
+  updateProgress(progressVal, stageMsg);
+}
+
+function setGenerationCancellingUI() {
+  if (cancelGenerationBtn) {
+    cancelGenerationBtn.classList.remove("is-hidden");
+    cancelGenerationBtn.disabled = true;
+    cancelGenerationBtn.textContent = "…";
+    cancelGenerationBtn.title = "Cancelling...";
+    cancelGenerationBtn.setAttribute("aria-label", "Cancelling clip generation");
+  }
+  if (smartClipBtn) {
+    smartClipBtn.disabled = true;
+    smartClipBtn.textContent = "Cancelling...";
+  }
+}
+
 function setGenerationUIState(uiState, label) {
   if (uiState === "generating") {
-    if (cancelGenerationBtn) {
-      cancelGenerationBtn.classList.remove("is-hidden");
-      cancelGenerationBtn.disabled = false;
-      cancelGenerationBtn.textContent = "✕";
-      cancelGenerationBtn.title = "Cancel generation";
-      cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
-    }
-    if (smartClipBtn) {
-      smartClipBtn.disabled = true;
-      smartClipBtn.textContent = label || "Generating clips...";
-    }
+    showActiveGenerationUI({ stage: label });
   } else if (uiState === "cancelling") {
-    if (cancelGenerationBtn) {
-      cancelGenerationBtn.classList.remove("is-hidden");
-      cancelGenerationBtn.disabled = true;
-      cancelGenerationBtn.textContent = "…";
-      cancelGenerationBtn.title = "Cancelling...";
-      cancelGenerationBtn.setAttribute("aria-label", "Cancelling clip generation");
-    }
-    if (smartClipBtn) {
-      smartClipBtn.disabled = true;
-      smartClipBtn.textContent = label || "Cancelling...";
-    }
+    setGenerationCancellingUI();
   } else {
-    // idle
-    if (cancelGenerationBtn) {
-      cancelGenerationBtn.classList.add("is-hidden");
-      cancelGenerationBtn.disabled = false;
-      cancelGenerationBtn.textContent = "✕";
-      cancelGenerationBtn.title = "Cancel generation";
-      cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
-    }
-    if (smartClipBtn) {
-      smartClipBtn.disabled = false;
-      smartClipBtn.textContent = label || "Get clips in 1 click";
+    resetGenerationUI();
+    if (label && smartClipBtn) {
+      smartClipBtn.textContent = label;
     }
   }
 }
@@ -426,7 +662,7 @@ themeToggle?.addEventListener("change", () => {
 // ─── Utilities ────────────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
   const response = await fetch(url, options);
-  const contentType = response.headers.get("content-type") || "";
+  const contentType = (response && response.headers && typeof response.headers.get === "function") ? (response.headers.get("content-type") || "") : "application/json";
   let data;
 
   if (contentType.includes("application/json")) {
@@ -2796,23 +3032,33 @@ async function createSmartGenerationJob(payload) {
   return res;
 }
 
-let activePollingToken = 0;
+let pollGenerationVersion = 0;
+let generationPollTimer = null;
+
+function clearGenerationPolling() {
+  pollGenerationVersion++;
+  if (generationPollTimer) {
+    clearTimeout(generationPollTimer);
+    generationPollTimer = null;
+  }
+}
 
 cancelGenerationBtn?.addEventListener("click", async (e) => {
   e.preventDefault();
   const currentJobId = state.activeGenerationJobId;
+
+  // 1. Immediately invalidate active status polling token so in-flight GET cannot resurrect UI
+  clearGenerationPolling();
+
   if (!currentJobId) {
-    setGenerationUIState("idle");
+    resetGenerationUI();
     return;
   }
 
-  // 1. Prevent duplicate clicks & temporarily disable X
-  setGenerationUIState("cancelling");
+  // 2. Prevent duplicate clicks & temporarily show cancelling UI
+  setGenerationCancellingUI();
 
-  // 2. Invalidate active status polling token immediately
-  activePollingToken++;
-
-  // 3. Clear activeGenerationJobId from frontend state & localStorage
+  // 3. Clear activeGenerationJobId from frontend state & localStorage immediately
   clearActiveGenerationJob();
 
   // 4. Request backend cancellation
@@ -2827,20 +3073,19 @@ cancelGenerationBtn?.addEventListener("click", async (e) => {
 
   // 5. Reset generation UI to idle immediately
   updateProgress(0, "Generation cancelled.");
-  setGenerationUIState("idle");
+  resetGenerationUI();
+  console.log("[GenerationUI] Job cancelled, resetting active state");
 });
 
-async function pollGenerationJob(jobId, onProgress, token = 0) {
+async function pollGenerationJob(jobId, onProgress, requestVersion) {
   const pollIntervalMs = 2000;
   let consecutiveNetworkErrors = 0;
   const maxConsecutiveNetworkErrors = 15;
 
   while (true) {
-    // Stop polling if cancelled or replaced
-    if (token && token !== activePollingToken) {
-      return { status: "CANCELLED" };
-    }
-    if (state.activeGenerationJobId !== jobId) {
+    // Stop polling if cancelled, invalidated, or replaced
+    if (requestVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+      console.log("[GenerationUI] Poll response ignored because job changed");
       return { status: "CANCELLED" };
     }
 
@@ -2849,10 +3094,8 @@ async function pollGenerationJob(jobId, onProgress, token = 0) {
       responseData = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(jobId)}`);
       consecutiveNetworkErrors = 0;
     } catch (fetchErr) {
-      if (token && token !== activePollingToken) {
-        return { status: "CANCELLED" };
-      }
-      if (state.activeGenerationJobId !== jobId) {
+      if (requestVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+        console.log("[GenerationUI] Poll response ignored because job changed");
         return { status: "CANCELLED" };
       }
 
@@ -2873,14 +3116,14 @@ async function pollGenerationJob(jobId, onProgress, token = 0) {
         );
       }
 
-      await new Promise((r) => setTimeout(r, Math.min(5000, 1000 * Math.pow(1.3, consecutiveNetworkErrors))));
+      await new Promise((r) => {
+        generationPollTimer = setTimeout(r, Math.min(5000, 1000 * Math.pow(1.3, consecutiveNetworkErrors)));
+      });
       continue;
     }
 
-    if (token && token !== activePollingToken) {
-      return { status: "CANCELLED" };
-    }
-    if (state.activeGenerationJobId !== jobId) {
+    if (requestVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+      console.log("[GenerationUI] Poll response ignored because job changed");
       return { status: "CANCELLED" };
     }
 
@@ -2934,8 +3177,59 @@ async function pollGenerationJob(jobId, onProgress, token = 0) {
     }
 
     // Still processing (QUEUED, TRANSCRIBING, SELECTING_MOMENTS, DOWNLOADING, RENDERING, FINALIZING)
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
+    await new Promise((r) => {
+      generationPollTimer = setTimeout(r, pollIntervalMs);
+    });
   }
+}
+
+function startGenerationPolling(jobId) {
+  clearGenerationPolling();
+  const currentVersion = pollGenerationVersion;
+
+  pollGenerationJob(
+    jobId,
+    (progress, stage) => {
+      if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+        console.log("[GenerationUI] Poll response ignored because job changed");
+        return;
+      }
+      updateProgress(progress, stage);
+    },
+    currentVersion
+  )
+    .then(async (result) => {
+      if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+        console.log("[GenerationUI] Poll response ignored because job changed");
+        return;
+      }
+
+      if (result?.status === "COMPLETED") {
+        console.log("[GenerationUI] Job completed, resetting active state");
+        await consumeCompletedClips(result.clips);
+        clearActiveGenerationJob();
+        resetGenerationUI();
+      } else if (result?.needsUpload || result?.status === "AWAITING_UPLOAD") {
+        clearActiveGenerationJob();
+        resetGenerationUI();
+        showUploadRequiredForSmartClips(result);
+      } else if (result?.status === "CANCELLED") {
+        console.log("[GenerationUI] Job cancelled, resetting active state");
+        clearActiveGenerationJob();
+        resetGenerationUI();
+        updateProgress(0, "Generation cancelled.");
+      }
+    })
+    .catch((err) => {
+      if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
+        console.log("[GenerationUI] Poll response ignored because job changed");
+        return;
+      }
+      console.error("[GenerationUI] Polling error:", err);
+      clearActiveGenerationJob();
+      resetGenerationUI();
+      updateProgress(0, err.message || "Generation failed");
+    });
 }
 
 async function consumeCompletedClips(rawClips = []) {
@@ -3020,33 +3314,24 @@ async function handleUploadForSmartClips(input, suggestions) {
       clipLengthSec: state.selectedDuration || 30,
     };
 
-    const { jobId } = await createSmartGenerationJob(body);
-    setGenerationUIState("generating");
-    const token = ++activePollingToken;
+    const createRes = await createSmartGenerationJob(body);
+    const jobId = createRes?.jobId;
+    if (!jobId) throw new Error("No job ID returned from generation creation");
 
-    const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
-      updateProgress(progress, stage);
-    }, token);
+    showActiveGenerationUI({
+      id: jobId,
+      status: "QUEUED",
+      stage: "Queuing clip generation from uploaded video...",
+      progress: 5,
+    });
 
-    if (jobResult?.status === "CANCELLED") {
-      updateProgress(0, "Generation cancelled.");
-      clearActiveGenerationJob();
-      setGenerationUIState("idle");
-      return;
-    }
-
-    if (jobResult?.status === "COMPLETED") {
-      await consumeCompletedClips(jobResult.clips);
-    } else if (jobResult?.needsUpload) {
-      showUploadRequiredForSmartClips(jobResult);
-      clearActiveGenerationJob();
-      setGenerationUIState("idle");
-    }
+    startGenerationPolling(jobId);
   } catch (error) {
-    clearActiveGenerationJob();
-    setGenerationUIState("idle");
+    resetGenerationUI();
     updateProgress(0, error.message || "Upload failed");
     alert(error.message || "Upload failed");
+  } finally {
+    checkGenerationStateInvariant();
   }
 }
 
@@ -3061,17 +3346,18 @@ function formatSmartReason(suggestion = {}) {
 
 function showUploadRequiredForSmartClips(data) {
   state.uploadRequiredActive = true;
+  clearActiveGenerationJob();
+  resetGenerationUI();
+
   if (data?.isUnavailable) {
     const unavailMsg = data.message || "This video is unavailable, private, or has been removed on YouTube. Please check the URL.";
     updateProgress(0, unavailMsg);
-    setGenerationUIState("idle");
     alert(unavailMsg);
     return;
   }
 
   const message = data?.message || "YouTube transcript analyzed. Upload source video to clip moments:";
   updateProgress(0, message);
-  setGenerationUIState("idle");
 
   const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
@@ -3130,26 +3416,6 @@ function showUploadRequiredForSmartClips(data) {
   }
 }
 
-async function generateSmartClipsFromSource() {
-  const body = buildSmartSuggestBody(3);
-  body.maxClips = Math.min(3, getAutoSmartClipCount());
-  body.minScore = 30;
-
-  // 1. Asynchronously create the generation job in PostgreSQL/BullMQ
-  const createRes = await createSmartGenerationJob(body);
-  const jobId = createRes.jobId;
-
-  // New active polling token
-  const token = ++activePollingToken;
-
-  // 2. Poll the job status resiliently without blocking or request timeouts
-  const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
-    updateProgress(progress, stage);
-  }, token);
-
-  return jobResult;
-}
-
 smartClipBtn?.addEventListener("click", async () => {
   try {
     if (!state.uploadedProject) {
@@ -3162,48 +3428,44 @@ smartClipBtn?.addEventListener("click", async () => {
       return;
     }
 
-    setGenerationUIState("generating");
+    // 1. Temporarily show "Starting...", keep cancel button hidden
+    smartClipBtn.disabled = true;
+    smartClipBtn.textContent = "Starting...";
+    if (cancelGenerationBtn) cancelGenerationBtn.classList.add("is-hidden");
+
     state.smartSuggestions = [];
     state.uploadRequiredActive = false;
     _currentProgress = 0;
 
-    // Reveal progress bar at bottom of the card (pushes title up)
-    const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
-    if (mpTrackEl) mpTrackEl.style.display = "flex";
+    const body = buildSmartSuggestBody();
+    body.maxClips = Math.min(3, getAutoSmartClipCount());
+    body.minScore = 30;
 
-    updateProgress(5, "Queuing smart generation job...", 300);
-
-    const jobResult = await generateSmartClipsFromSource();
-
-    if (jobResult?.status === "CANCELLED") {
-      updateProgress(0, "Generation cancelled.");
-      clearActiveGenerationJob();
-      setGenerationUIState("idle");
-      return;
+    // 2. POST create job - only transition to active after receiving valid jobId
+    const createRes = await createSmartGenerationJob(body);
+    const jobId = createRes?.jobId;
+    if (!jobId) {
+      throw new Error("Failed to receive job ID from server");
     }
 
-    if (jobResult?.needsUpload || jobResult?.status === "AWAITING_UPLOAD") {
-      showUploadRequiredForSmartClips(jobResult);
-      clearActiveGenerationJob();
-      setGenerationUIState("idle");
-      return;
-    }
+    // 3. Transition to active state
+    showActiveGenerationUI({
+      id: jobId,
+      status: "QUEUED",
+      stage: "Queuing smart generation job...",
+      progress: 5,
+    });
 
-    if (jobResult?.status === "COMPLETED") {
-      await consumeCompletedClips(jobResult.clips);
-      return;
-    }
+    // 4. Start polling
+    startGenerationPolling(jobId);
   } catch (error) {
     console.error("[SmartClip] Generation error:", error);
-    clearActiveGenerationJob();
+    resetGenerationUI();
     const cleanMsg = getCleanSmartClipError(error);
     updateProgress(0, cleanMsg);
-    setGenerationUIState("idle");
     alert(cleanMsg);
   } finally {
-    if (!state.activeGenerationJobId) {
-      setGenerationUIState("idle");
-    }
+    checkGenerationStateInvariant();
   }
 });
 
@@ -3378,130 +3640,136 @@ async function downloadAllClips() {
   }
 }
 
-async function resumeActiveGenerationJobIfAny() {
-  const active = getActiveGenerationJob();
-  if (!active || !active.jobId) {
-    setGenerationUIState("idle");
+async function reconcileGenerationJob() {
+  const jobId = getActiveGenerationJobId();
+
+  if (!jobId) {
+    console.log("[GenerationUI] No active job, resetting UI");
+    resetGenerationUI();
     return;
   }
 
-  console.log("[Boot] Detected active generation job in localStorage:", active.jobId);
-  state.activeGenerationJobId = active.jobId;
+  console.log(`[GenerationUI] Restoring active job: ${jobId}`);
 
-  // Show [ X ] [ Generating clips... ] while active
-  setGenerationUIState("generating");
+  let job = null;
+  let attempts = 0;
+  const maxAttempts = 3;
 
-  const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
-  if (mpTrackEl) mpTrackEl.style.display = "flex";
-
-  try {
-    let res = null;
+  while (attempts < maxAttempts) {
+    attempts++;
     try {
-      res = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(active.jobId)}`);
+      const res = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(jobId)}`);
+      job = res?.job || null;
+      break;
     } catch (fetchErr) {
-      // 404 / nonexistent persisted job = stale local state!
-      if (
-        fetchErr.status === 404 ||
-        String(fetchErr.message || "").includes("404") ||
-        String(fetchErr.message || "").toLowerCase().includes("not found")
-      ) {
-        console.warn("[Boot] Persisted job not found on server (404). Clearing stale job reference.");
+      const status = fetchErr?.status;
+      const msg = String(fetchErr?.message || "").toLowerCase();
+
+      // 404 / Nonexistent job: stale local reference!
+      if (status === 404 || msg.includes("404") || msg.includes("not found")) {
+        console.warn(`[GenerationUI] Stale job reference (404), clearing`);
         clearActiveGenerationJob();
-        setGenerationUIState("idle");
+        resetGenerationUI();
         updateProgress(0, "Ready");
         return;
       }
-      // Temporary network error: DO NOT clear the job! Keep UI active and start polling loop to reconnect
-      console.warn("[Boot] Network error checking active job on startup, will attempt polling retry:", fetchErr.message);
-    }
 
-    const job = res?.job;
-
-    if (res && !job) {
-      console.warn("[Boot] Job payload missing in response. Clearing stale job reference.");
-      clearActiveGenerationJob();
-      setGenerationUIState("idle");
-      return;
-    }
-
-    if (job) {
-      if (job.status === "COMPLETED") {
-        console.log("[Boot] Generation job completed while page was closed/refreshed. Consuming clips.");
+      // 401 / 403 / Access forbidden: clear stale local identity
+      if (status === 401 || status === 403) {
+        console.warn(`[GenerationUI] Access denied to job (${status}), clearing`);
         clearActiveGenerationJob();
-        setGenerationUIState("idle");
-        await consumeCompletedClips(job.clips);
+        resetGenerationUI();
         return;
       }
 
-      if (job.status === "AWAITING_UPLOAD" || job.needsUpload) {
+      // 500 / Network Error: retry limited times
+      console.warn(
+        `[GenerationUI] Temporary network/server error fetching job (attempt ${attempts}/${maxAttempts}):`,
+        fetchErr.message
+      );
+      if (attempts < maxAttempts) {
+        updateProgress(5, "Reconnecting to generation...");
+        await new Promise((r) => setTimeout(r, 1500));
+      } else {
+        console.warn("[GenerationUI] Could not reconnect to job after retries. Resetting UI to idle.");
         clearActiveGenerationJob();
-        setGenerationUIState("idle");
-        showUploadRequiredForSmartClips(job);
-        return;
-      }
-
-      if (job.status === "FAILED") {
-        clearActiveGenerationJob();
-        setGenerationUIState("idle");
-        updateProgress(0, job.error || "Previous generation job failed.");
-        return;
-      }
-
-      if (job.status === "CANCELLED") {
-        clearActiveGenerationJob();
-        setGenerationUIState("idle");
-        updateProgress(0, "Previous generation was cancelled.");
+        resetGenerationUI();
+        updateProgress(0, "Could not reconnect to previous generation. Ready to generate.");
         return;
       }
     }
-
-    // Active status or temporary network issue: keep [ X ] [ Generating clips... ] and resume polling
-    if (!job || ["QUEUED", "TRANSCRIBING", "ANALYZING", "SELECTING_MOMENTS", "DOWNLOADING", "RENDERING", "FINALIZING"].includes(job.status)) {
-      setGenerationUIState("generating");
-      if (job) {
-        const queuedElapsed = job.status === "QUEUED" && job.createdAt ? (Date.now() - new Date(job.createdAt).getTime()) : 0;
-        const stageMsg = (job.status === "QUEUED" && queuedElapsed > 60000)
-          ? "Waiting for generation worker (worker may be spinning up)..."
-          : (job.stage || (job.status === "QUEUED" ? "Waiting for generation worker..." : "Resuming clip generation..."));
-        updateProgress(job.status === "QUEUED" ? 5 : (job.progress || 10), stageMsg);
-      }
-
-      const token = ++activePollingToken;
-
-      pollGenerationJob(active.jobId, (progress, stage) => {
-        updateProgress(progress, stage);
-      }, token).then(async (result) => {
-        if (token !== activePollingToken || state.activeGenerationJobId !== active.jobId) return;
-
-        if (result?.status === "COMPLETED") {
-          await consumeCompletedClips(result.clips);
-        } else if (result?.needsUpload || result?.status === "AWAITING_UPLOAD") {
-          clearActiveGenerationJob();
-          setGenerationUIState("idle");
-          showUploadRequiredForSmartClips(result);
-        } else if (result?.status === "CANCELLED") {
-          clearActiveGenerationJob();
-          setGenerationUIState("idle");
-          updateProgress(0, "Generation cancelled.");
-        }
-      }).catch((err) => {
-        if (token !== activePollingToken || state.activeGenerationJobId !== active.jobId) return;
-        console.error("[Boot] Resumed generation job error:", err);
-        clearActiveGenerationJob();
-        setGenerationUIState("idle");
-        updateProgress(0, err.message || "Generation failed");
-      });
-    }
-  } catch (err) {
-    console.warn("[Boot] Could not verify active generation job on startup:", err.message);
   }
+
+  if (!job) {
+    console.warn(`[GenerationUI] No job object returned from server for ${jobId}. Resetting.`);
+    clearActiveGenerationJob();
+    resetGenerationUI();
+    return;
+  }
+
+  console.log(`[GenerationUI] Job status: ${job.status}`);
+
+  if (isActiveGenerationStatus(job.status)) {
+    showActiveGenerationUI(job);
+    startGenerationPolling(jobId);
+    return;
+  }
+
+  if (job.status === "COMPLETED") {
+    console.log("[GenerationUI] Job completed, resetting active state");
+    await consumeCompletedClips(job.clips);
+    clearActiveGenerationJob();
+    resetGenerationUI();
+    return;
+  }
+
+  if (job.status === "AWAITING_UPLOAD" || job.needsUpload) {
+    clearActiveGenerationJob();
+    resetGenerationUI();
+    showUploadRequiredForSmartClips(job);
+    return;
+  }
+
+  if (job.status === "FAILED") {
+    console.log("[GenerationUI] Job failed, resetting active state");
+    clearActiveGenerationJob();
+    resetGenerationUI();
+    updateProgress(0, job.error || "Previous generation job failed.");
+    return;
+  }
+
+  if (job.status === "CANCELLED") {
+    console.log("[GenerationUI] Job cancelled, resetting active state");
+    clearActiveGenerationJob();
+    resetGenerationUI();
+    updateProgress(0, "Previous generation was cancelled.");
+    return;
+  }
+
+  // Any other terminal or unexpected status: reset to idle
+  clearActiveGenerationJob();
+  resetGenerationUI();
 }
+
+async function resumeActiveGenerationJobIfAny() {
+  return reconcileGenerationJob();
+}
+try { window.reconcileGenerationJob = reconcileGenerationJob; } catch {}
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initTheme();
+// Step 1: ALWAYS initialize generation UI as IDLE first
+resetGenerationUIVisualsOnly();
+// Step 2: Clean and migrate old browser storage (remove any saved UI flags)
+migrateOldBrowserStorage();
+// Step 3: Restore saved studio/project state (ignoring UI-only generation flags)
 restoreStudioSession();
 mergeCaptionEditorSession();
-resumeActiveGenerationJobIfAny();
+// Step 4: Reconcile generation job strictly against server (awaits response before switching UI)
+reconcileGenerationJob();
+// Step 5: Defensive invariant check
+checkGenerationStateInvariant();
+
 setYoutubeFetchButtonHidden();
 updateProjectTabs();
 updateClipPlanner();
@@ -3509,8 +3777,9 @@ renderProjectHistory([]);
 renderGeneratedClips();
 loadProjectHistory();
 
-// GUARD: ensure progress card is hidden on initial boot unless a valid URL is present in the input
+// GUARD: ensure progress card is hidden on initial boot unless a valid URL is present or generation is active
 ;(function guardProgressCard() {
+  if (state.activeGenerationJobId && state.isGenerating) return;
   const url = ytUrlInput?.value?.trim() || "";
   if (!url || !isValidYouTubeUrl(url)) {
     hideModernProgressCard();
