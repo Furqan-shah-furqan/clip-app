@@ -22,9 +22,39 @@ const state = {
     position: "bottom",
     textShadow: true,
   },
+  activeGenerationJobId: null,
 };
 
 const STUDIO_SESSION_KEY = "clipflow-studio-session";
+const ACTIVE_GENERATION_JOB_KEY = "clipflow-active-generation-job";
+
+function setActiveGenerationJob(jobId, meta = {}) {
+  state.activeGenerationJobId = jobId;
+  try {
+    localStorage.setItem(
+      ACTIVE_GENERATION_JOB_KEY,
+      JSON.stringify({ jobId, ...meta, savedAt: Date.now() })
+    );
+  } catch {}
+}
+
+function getActiveGenerationJob() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_GENERATION_JOB_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.jobId ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearActiveGenerationJob() {
+  state.activeGenerationJobId = null;
+  try {
+    localStorage.removeItem(ACTIVE_GENERATION_JOB_KEY);
+  } catch {}
+}
 
 function persistStudioSession() {
   try {
@@ -2688,6 +2718,171 @@ function buildSmartSuggestBody() {
 
   return body;
 }
+function getCleanSmartClipError(error) {
+  const msg = String(error?.message || error || "");
+  if (msg.includes("RAPIDAPI_KEY is not configured")) {
+    return "RAPIDAPI_KEY is not configured on the server. Please add your key in Render environment settings.";
+  }
+  if (msg.includes("RapidAPI file preparation timed out") || msg.includes("Timed out waiting for RapidAPI")) {
+    return "RapidAPI CDN video preparation timed out. Try another video or upload directly.";
+  }
+  if (msg.includes("HTTP 403") || msg.includes("Forbidden")) {
+    return "RapidAPI authentication failed. Please verify your RAPIDAPI_KEY.";
+  }
+  return msg || "Smart clipping failed. Try uploading the source video directly.";
+}
+
+async function createSmartGenerationJob(payload) {
+  const res = await apiFetch(`${API_BASE}/clips/smart-generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res || !res.jobId) {
+    throw new Error(res?.error || "Failed to create generation job");
+  }
+
+  setActiveGenerationJob(res.jobId, {
+    sourceType: payload.sourceType,
+  });
+
+  return res;
+}
+
+async function pollGenerationJob(jobId, onProgress) {
+  const pollIntervalMs = 2000;
+  let consecutiveNetworkErrors = 0;
+  const maxConsecutiveNetworkErrors = 15;
+
+  while (true) {
+    let responseData = null;
+    try {
+      responseData = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(jobId)}`);
+      consecutiveNetworkErrors = 0;
+    } catch (fetchErr) {
+      consecutiveNetworkErrors++;
+      console.warn(
+        `[JobPolling] Temporary network issue fetching job ${jobId} (attempt ${consecutiveNetworkErrors}/${maxConsecutiveNetworkErrors}):`,
+        fetchErr.message
+      );
+
+      if (consecutiveNetworkErrors >= maxConsecutiveNetworkErrors) {
+        throw new Error(
+          "Network connection to server lost while checking clip generation. Generation is still running on the server. Please refresh the page to reconnect."
+        );
+      }
+
+      await new Promise((r) => setTimeout(r, Math.min(5000, 1000 * Math.pow(1.3, consecutiveNetworkErrors))));
+      continue;
+    }
+
+    const job = responseData?.job;
+    if (!job) {
+      throw new Error("Invalid response received from generation job status endpoint");
+    }
+
+    const { status, progress, stage, message, needsUpload, suggestions, clips, error } = job;
+
+    if (onProgress && typeof onProgress === "function") {
+      onProgress(progress || 0, stage || message || "Processing...");
+    }
+
+    if (status === "COMPLETED") {
+      return {
+        status: "COMPLETED",
+        clips: Array.isArray(clips) ? clips : [],
+        suggestions: Array.isArray(suggestions) ? suggestions : [],
+      };
+    }
+
+    if (status === "AWAITING_UPLOAD" || needsUpload) {
+      return {
+        status: "AWAITING_UPLOAD",
+        needsUpload: true,
+        message: message || stage || "YouTube transcript analyzed. Upload source video to clip moments:",
+        suggestions: Array.isArray(suggestions) ? suggestions : [],
+      };
+    }
+
+    if (status === "FAILED") {
+      throw new Error(error || message || "Smart clip generation failed");
+    }
+
+    if (status === "CANCELLED") {
+      return { status: "CANCELLED" };
+    }
+
+    // Still processing (QUEUED, TRANSCRIBING, SELECTING_MOMENTS, DOWNLOADING, RENDERING, FINALIZING)
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+}
+
+async function consumeCompletedClips(rawClips = []) {
+  const clips = (Array.isArray(rawClips) ? rawClips : []).filter(
+    (clip) => Number(clip.smartScore || clip.score || 0) >= 1
+  );
+
+  if (!clips.length) {
+    updateProgress(0, "No clips generated for this video.");
+    clearActiveGenerationJob();
+    if (smartClipBtn) {
+      smartClipBtn.disabled = false;
+      smartClipBtn.textContent = "Get clips in 1 click";
+    }
+    return;
+  }
+
+  const formattedClips = clips.map((clip, index) => ({
+    ...clip,
+    filePath: clip.filePath || clip.outputPath || "",
+    outputPath: clip.outputPath || clip.filePath || "",
+    startTime: clip.startTime || clip.start || secondsToTime(clip.startSec || 0),
+    endTime: clip.endTime || clip.end || secondsToTime(clip.endSec || 0),
+    duration:
+      clip.duration != null
+        ? Number(clip.duration)
+        : Math.max(0, Number(clip.durationSec || 0)),
+    hook: clip.hook || clip.title || `Smart Clip #${index + 1}`,
+    smartScore: Number(clip.smartScore || clip.score || 0),
+    smartReason: clip.smartReason || formatSmartReason(clip),
+    previewText: clip.previewText || clip.text || "",
+  }));
+
+  // Deduplicate against existing clips in state
+  const existingKeys = new Set(
+    state.generatedClips.map((c) => `${c.fileName || ""}_${c.startTime}_${c.endTime}`)
+  );
+  const newUniqueClips = formattedClips.filter(
+    (c) => !existingKeys.has(`${c.fileName || ""}_${c.startTime}_${c.endTime}`)
+  );
+
+  if (newUniqueClips.length > 0) {
+    state.generatedClips = [...newUniqueClips, ...state.generatedClips];
+    state.generatedClip = state.generatedClips[0] || null;
+  }
+
+  upsertCurrentProjectToAllProjects();
+
+  for (let i = 0; i < newUniqueClips.length; i++) {
+    await loadCaptionsForClip(newUniqueClips[i], i);
+  }
+
+  renderGeneratedClips();
+  persistStudioSession();
+  clearActiveGenerationJob();
+
+  if (smartClipBtn) {
+    smartClipBtn.disabled = false;
+    smartClipBtn.textContent = "Get clips in 1 click";
+  }
+
+  await animateProgressTo(
+    100,
+    `Generated ${newUniqueClips.length || clips.length} smart clip${(newUniqueClips.length || clips.length) > 1 ? "s" : ""} ✓`
+  );
+}
+
 async function handleUploadForSmartClips(input, suggestions) {
   const file = input.files?.[0];
   if (!file) return;
@@ -2701,7 +2896,7 @@ async function handleUploadForSmartClips(input, suggestions) {
 
     state.uploadedProject = result.project;
 
-    updateProgress(90, "Generating clips from your moments...");
+    updateProgress(5, "Queuing clip generation from uploaded video...");
 
     const body = {
       sourceType: "upload",
@@ -2712,36 +2907,20 @@ async function handleUploadForSmartClips(input, suggestions) {
       clipLengthSec: state.selectedDuration || 30,
     };
 
-    const data = await apiFetch(`${API_BASE}/clips/smart-generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    const { jobId } = await createSmartGenerationJob(body);
+
+    const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
+      updateProgress(progress, stage);
     });
 
-    const clips = Array.isArray(data.clips) ? data.clips : [];
-
-    if (!clips.length) {
-      updateProgress(0, "No clips generated. Try another video.");
-      return;
+    if (jobResult?.status === "COMPLETED") {
+      await consumeCompletedClips(jobResult.clips);
+    } else if (jobResult?.needsUpload) {
+      showUploadRequiredForSmartClips(jobResult);
+      clearActiveGenerationJob();
     }
-
-    state.generatedClips = [...clips, ...state.generatedClips];
-    state.generatedClip = state.generatedClips[0] || null;
-
-    upsertCurrentProjectToAllProjects();
-
-    for (let i = 0; i < clips.length; i++) {
-      await loadCaptionsForClip(clips[i], i);
-    }
-
-    renderGeneratedClips();
-    persistStudioSession();
-
-    await animateProgressTo(
-      100,
-      `Generated ${clips.length} smart clip${clips.length > 1 ? "s" : ""} ✓`,
-    );
   } catch (error) {
+    clearActiveGenerationJob();
     updateProgress(0, error.message || "Upload failed");
     alert(error.message || "Upload failed");
   }
@@ -2839,63 +3018,27 @@ async function generateSmartClipsFromSource() {
   body.maxClips = Math.min(3, getAutoSmartClipCount());
   body.minScore = 30;
 
-  const controller = new AbortController();
-  // 10-minute client timeout so cloud video clipping & AI reframing is not cut off prematurely
-  const timeoutMs = 10 * 60 * 1000;
+  // 1. Asynchronously create the generation job in PostgreSQL/BullMQ
+  const createRes = await createSmartGenerationJob(body);
+  const jobId = createRes.jobId;
 
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // 2. Poll the job status resiliently without blocking or request timeouts
+  const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
+    updateProgress(progress, stage);
+  });
 
-  try {
-    const data = await apiFetch(`${API_BASE}/clips/smart-generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    if (data?.needsUpload) {
-      showUploadRequiredForSmartClips(data);
-      return [];
-    }
-
-    const clips = (Array.isArray(data.clips) ? data.clips : []).filter(
-      (clip) => Number(clip.smartScore || clip.score || 0) >= 1,
-    );
-
-    return clips.map((clip, index) => ({
-      ...clip,
-      filePath: clip.filePath || clip.outputPath || "",
-      outputPath: clip.outputPath || clip.filePath || "",
-      startTime:
-        clip.startTime || clip.start || secondsToTime(clip.startSec || 0),
-      endTime: clip.endTime || clip.end || secondsToTime(clip.endSec || 0),
-      duration:
-        clip.duration != null
-          ? Number(clip.duration)
-          : Math.max(0, Number(clip.durationSec || 0)),
-      hook: clip.hook || clip.title || `Smart Clip #${index + 1}`,
-      smartScore: Number(clip.smartScore || clip.score || 0),
-      smartReason: clip.smartReason || formatSmartReason(clip),
-      previewText: clip.previewText || clip.text || "",
-    }));
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error(
-        "Smart clipping took longer than 10 minutes on cloud hosting. Try uploading the source video directly.",
-      );
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return jobResult;
 }
 
 smartClipBtn?.addEventListener("click", async () => {
-  let stopCrawl = null;
-
   try {
     if (!state.uploadedProject) {
       alert("Please fetch or upload a video first.");
+      return;
+    }
+
+    if (state.activeGenerationJobId) {
+      console.warn("Generation job already in progress:", state.activeGenerationJobId);
       return;
     }
 
@@ -2909,118 +3052,39 @@ smartClipBtn?.addEventListener("click", async () => {
     const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
     if (mpTrackEl) mpTrackEl.style.display = "flex";
 
-    updateProgress(0, "Finding viral moments...", 300);
-    stopCrawl = startProgressCrawl(88, "Finding and generating smart clips...");
+    updateProgress(5, "Queuing smart generation job...", 300);
 
-    let newClips = [];
-    try {
-      newClips = await generateSmartClipsFromSource();
-    } catch (batchError) {
-      console.warn("Batch smart-generate was interrupted or timed out, falling back to incremental clipping:", batchError.message || batchError);
-      newClips = [];
+    const jobResult = await generateSmartClipsFromSource();
+
+    if (jobResult?.status === "CANCELLED") {
+      updateProgress(0, "Generation cancelled.");
+      clearActiveGenerationJob();
+      smartClipBtn.disabled = false;
+      smartClipBtn.textContent = "Get clips in 1 click";
+      return;
     }
 
-    if (stopCrawl) {
-      stopCrawl();
-      stopCrawl = null;
+    if (jobResult?.needsUpload || jobResult?.status === "AWAITING_UPLOAD") {
+      showUploadRequiredForSmartClips(jobResult);
+      clearActiveGenerationJob();
+      return;
     }
 
-    let finalClips = newClips;
-
-    if (!finalClips.length) {
-      if (state.uploadRequiredActive) {
-        return;
-      }
-      const fallbackCount = Math.min(3, getAutoSmartClipCount());
-  // Use video duration, or a safe default of 300s if unknown
-  const duration = Math.max(
-    Number(state.selectedDuration || 30) * 2,
-    Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0)
-  );
-  const clipLength = Number(state.selectedDuration || 30);
-
-  updateProgress(10, "No scored clips found. Creating real fallback clips...");
-
-  finalClips = [];
-
-  for (let index = 0; index < fallbackCount; index++) {
-    const safeStart = Math.max(
-      0,
-      Math.floor((duration / (fallbackCount + 1)) * (index + 1))
-    );
-
-    const start = Math.max(0, safeStart - Math.floor(clipLength / 2));
-    const end = Math.min(duration, start + clipLength);
-
-    // Skip invalid windows
-    if (end <= start) continue;
-
-    const startTime = secondsToTime(start);
-    const endTime = secondsToTime(end);
-
-    updateProgress(
-      10 + ((index + 1) / fallbackCount) * 75,
-      `Generating fallback clip ${index + 1} of ${fallbackCount}...`
-    );
-
-    try {
-      const realClip = await generateSingleClip(startTime, endTime, index);
-      finalClips.push({
-        ...realClip,
-        start,
-        end,
-        startTime,
-        endTime,
-        duration: Math.max(0, end - start),
-        hook: autoHookForClip(index),
-        smartScore: 40,
-        smartReason: "Fallback real clip",
-        previewText:
-          "Real clip generated from fallback time range because no high-score moment was found.",
-      });
-    } catch (clipErr) {
-      console.error(`Fallback clip ${index + 1} failed:`, clipErr.message);
+    if (jobResult?.status === "COMPLETED") {
+      await consumeCompletedClips(jobResult.clips);
+      return;
     }
-  }
-}
-
-    if (!finalClips.length) {
-      throw new Error("Could not produce clips for this video. Please check the video link or upload a file directly.");
-    }
-
-    updateProgress(96, "Adding scores and captions...", 8);
-    state.generatedClips = [...finalClips, ...state.generatedClips];
-    state.generatedClip = state.generatedClips[0] || null;
-
-    upsertCurrentProjectToAllProjects();
-
-    for (let i = 0; i < finalClips.length; i++) {
-      await loadCaptionsForClip(finalClips[i], i);
-    }
-
-    renderGeneratedClips();
-    persistStudioSession();
-    await animateProgressTo(
-  100,
-  `Generated ${finalClips.length} smart clip${finalClips.length > 1 ? "s" : ""} ✓`
-);
-
   } catch (error) {
-    if (stopCrawl) {
-      stopCrawl();
-      stopCrawl = null;
-    }
-    const cleanMessage = getCleanSmartClipError(error);
-    updateProgress(0, cleanMessage || "Smart clipping failed");
-    if (cleanMessage !== "NEEDS_UPLOAD") {
-      alert(cleanMessage || "Smart clipping failed.");
-    }
+    console.error("[SmartClip] Generation error:", error);
+    clearActiveGenerationJob();
+    const cleanMsg = getCleanSmartClipError(error);
+    updateProgress(0, cleanMsg);
+    alert(cleanMsg);
   } finally {
-    if (stopCrawl) {
-      stopCrawl();
+    if (!state.activeGenerationJobId && smartClipBtn) {
+      smartClipBtn.disabled = false;
+      smartClipBtn.textContent = "Get clips in 1 click";
     }
-    smartClipBtn.disabled = false;
-    smartClipBtn.textContent = "Get clips in 1 click";
   }
 });
 
@@ -3195,10 +3259,88 @@ async function downloadAllClips() {
   }
 }
 
+async function resumeActiveGenerationJobIfAny() {
+  const active = getActiveGenerationJob();
+  if (!active || !active.jobId) return;
+
+  console.log("[Boot] Detected active generation job in localStorage:", active.jobId);
+  state.activeGenerationJobId = active.jobId;
+
+  if (smartClipBtn) {
+    smartClipBtn.disabled = true;
+    smartClipBtn.textContent = "Generating clips...";
+  }
+
+  const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
+  if (mpTrackEl) mpTrackEl.style.display = "flex";
+
+  try {
+    const res = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(active.jobId)}`);
+    const job = res?.job;
+
+    if (!job) {
+      clearActiveGenerationJob();
+      if (smartClipBtn) {
+        smartClipBtn.disabled = false;
+        smartClipBtn.textContent = "Get clips in 1 click";
+      }
+      return;
+    }
+
+    if (job.status === "COMPLETED") {
+      console.log("[Boot] Generation job completed while page was closed/refreshed. Consuming clips.");
+      await consumeCompletedClips(job.clips);
+      return;
+    }
+
+    if (job.status === "AWAITING_UPLOAD" || job.needsUpload) {
+      showUploadRequiredForSmartClips(job);
+      clearActiveGenerationJob();
+      return;
+    }
+
+    if (job.status === "FAILED") {
+      updateProgress(0, job.error || "Previous generation job failed.");
+      clearActiveGenerationJob();
+      if (smartClipBtn) {
+        smartClipBtn.disabled = false;
+        smartClipBtn.textContent = "Get clips in 1 click";
+      }
+      return;
+    }
+
+    if (["QUEUED", "TRANSCRIBING", "ANALYZING", "SELECTING_MOMENTS", "DOWNLOADING", "RENDERING", "FINALIZING"].includes(job.status)) {
+      updateProgress(job.progress || 10, job.stage || "Resuming clip generation...");
+
+      pollGenerationJob(active.jobId, (progress, stage) => {
+        updateProgress(progress, stage);
+      }).then(async (result) => {
+        if (result?.status === "COMPLETED") {
+          await consumeCompletedClips(result.clips);
+        } else if (result?.needsUpload || result?.status === "AWAITING_UPLOAD") {
+          showUploadRequiredForSmartClips(result);
+          clearActiveGenerationJob();
+        }
+      }).catch((err) => {
+        console.error("[Boot] Resumed generation job error:", err);
+        clearActiveGenerationJob();
+        updateProgress(0, err.message || "Generation failed");
+        if (smartClipBtn) {
+          smartClipBtn.disabled = false;
+          smartClipBtn.textContent = "Get clips in 1 click";
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("[Boot] Could not verify active generation job on startup:", err.message);
+  }
+}
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 initTheme();
 restoreStudioSession();
 mergeCaptionEditorSession();
+resumeActiveGenerationJobIfAny();
 setYoutubeFetchButtonHidden();
 updateProjectTabs();
 updateClipPlanner();

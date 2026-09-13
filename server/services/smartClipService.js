@@ -38,7 +38,7 @@ function secondsToTime(sec) {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) {
+function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, outputDir, jobId }) {
   return new Promise((resolve, reject) => {
     // Cloud / Render guard:
     // Render free-tier containers provide 0.1 vCPU and 512MB RAM.
@@ -59,11 +59,13 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
     const safeStart = typeof startTime === "number" ? secondsToTime(startTime) : (startTime || "00:00:00");
     const safeEnd = typeof endTime === "number" ? secondsToTime(endTime) : (endTime || "00:00:30");
     const ratio = aspectRatio || "9:16";
+    const targetOutDir = outputDir || exportsDir;
+    fs.mkdirSync(targetOutDir, { recursive: true });
 
     const proc = spawn(pythonBin, [
       scriptPath,
       inputPath,
-      exportsDir,
+      targetOutDir,
       safeStart,
       safeEnd,
       ratio,
@@ -73,14 +75,15 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
     let stderr = "";
     let settled = false;
 
-    // Safety timeout: 10 seconds max for Python face-tracking reframe
+    // Configurable timeout for Python face-tracking reframe (default: 25s, configurable via SMART_REFRAME_TIMEOUT_MS)
+    const timeoutMs = Number(process.env.SMART_REFRAME_TIMEOUT_MS) || 25000;
     const timeout = setTimeout(() => {
       if (!settled) {
         settled = true;
         try { proc.kill("SIGKILL"); } catch {}
-        reject(new Error("Face tracking reframe timed out (10s limit)"));
+        reject(new Error(`Face tracking reframe timed out (${Math.round(timeoutMs / 1000)}s limit)`));
       }
-    }, 10000);
+    }, timeoutMs);
 
     proc.stdout.on("data", (d) => { stdout += d.toString(); });
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
@@ -116,12 +119,13 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio }) 
   });
 }
 
-async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio }) {
-  fs.mkdirSync(exportsDir, { recursive: true });
+async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio, outputDir, jobId }) {
+  const targetDir = outputDir || exportsDir;
+  fs.mkdirSync(targetDir, { recursive: true });
 
   // 1. Try AI face-tracking reframe first
   try {
-    const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio });
+    const faceTracked = await runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, outputDir: targetDir, jobId });
     return faceTracked;
   } catch (err) {
     console.warn("Face tracking reframe failed, using fallback center crop:", err.message);
@@ -135,8 +139,9 @@ async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio })
     const targetH = Math.round((targetW * (rH || 16)) / (rW || 9));
     const duration = Math.max(1, toSeconds(endTime) - toSeconds(startTime));
 
-    const fileName = `smart_clip_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`;
-    const outputPath = path.join(exportsDir, fileName);
+    const prefix = jobId ? `smart_clip_${String(jobId).replace(/[^\w-]/g, "_")}` : "smart_clip";
+    const fileName = `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.mp4`;
+    const outputPath = path.join(targetDir, fileName);
 
     const ffmpegPath = getFFmpegPath();
 

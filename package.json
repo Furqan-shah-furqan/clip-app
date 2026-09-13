@@ -6,6 +6,7 @@
     "build": "prisma generate && (python3 -m pip install --no-cache-dir -r python/requirements.txt || pip3 install --no-cache-dir -r python/requirements.txt || pip install --no-cache-dir -r python/requirements.txt || true)",
     "start": "node server/server.js",
     "dev": "node server/server.js",
+    "worker:generation": "node server/queue/generationWorker.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

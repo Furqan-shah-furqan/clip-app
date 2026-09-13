@@ -11,6 +11,8 @@ const {
   exportsDir,
   projectsFile,
 } = require("../utils/paths");
+const prisma = require("../lib/prisma");
+const { addGenerationJob } = require("../queue/generationQueue");
 const { smartGenerateClip } = require("../services/smartClipService");
 const { getPythonCandidates } = require("../utils/pythonRuntime");
 const { findSmartClipMoments } = require("../services/smartClipRanker");
@@ -19,6 +21,21 @@ const {
   extractYouTubeId,
   cleanupFile,
 } = require("../services/youtubeDownloader");
+const {
+  timeToSeconds,
+  secondsToTime,
+  ensureValidClipWindow,
+  cleanSmartClipError,
+  vttTimeToSeconds,
+  parseTranscriptVtt,
+  getFallbackSegmentsFromVideoMeta,
+  getYouTubeSmartTranscript,
+  resolveSmartInputVideo,
+  generateFallbackSegments,
+  getLocalSmartTranscript,
+  downloadVideoViaRapidApi,
+  buildSmartGeneratedClipPayload,
+} = require("../services/smartGenerationService");
 
 const router = express.Router();
 
@@ -40,32 +57,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
-function timeToSeconds(timeStr) {
-  if (!timeStr) return 0;
-  const parts = String(timeStr).split(":").map(Number);
-  if (parts.some((n) => Number.isNaN(n) || n < 0)) return NaN;
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return NaN;
-}
-
-function secondsToTime(totalSeconds) {
-  const s = Math.max(0, Math.floor(totalSeconds || 0));
-  const hrs = String(Math.floor(s / 3600)).padStart(2, "0");
-  const mins = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
-  const secs = String(s % 60).padStart(2, "0");
-  return `${hrs}:${mins}:${secs}`;
-}
-
-function ensureValidClipWindow(startTime, endTime) {
-  const startSec = timeToSeconds(startTime);
-  const endSec = timeToSeconds(endTime);
-  if (Number.isNaN(startSec) || Number.isNaN(endSec)) throw new Error("Invalid start or end time format");
-  if (endSec <= startSec) throw new Error("End time must be greater than start time");
-  return { startSec, endSec, durationSec: endSec - startSec };
-}
-
 
 const THIRTY_ONE_DAYS_MS = 31 * 24 * 60 * 60 * 1000;
 
@@ -125,353 +116,6 @@ function saveProject(project) {
   } catch { projects = []; }
   projects.push(project);
   fs.writeFileSync(projectsFile, JSON.stringify(projects, null, 2), "utf8");
-}
-
-function cleanSmartClipError(error) {
-  const raw = String(error?.message || error || "");
-  if (raw.includes("RAPIDAPI_KEY is not configured")) {
-    return "RAPIDAPI_KEY is not configured on the server. Please add your key in Render environment settings.";
-  }
-  if (raw.includes("RapidAPI file preparation timed out") || raw.includes("Timed out waiting for RapidAPI")) {
-    return "RapidAPI CDN video preparation timed out. Try another video or upload directly.";
-  }
-  if (raw.includes("HTTP 403") || raw.includes("Forbidden")) {
-    return "RapidAPI authentication failed. Please verify your RAPIDAPI_KEY.";
-  }
-  if (raw.includes("transcript")) return raw;
-  return raw || "Smart clipping failed. Try uploading the source video directly.";
-}
-
-function runCommand(command, args = [], options = {}) {
-  const timeoutMs = Number(options.timeoutMs || 360000);
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
-    let stdout = "", stderr = "", settled = false;
-
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      try { child.kill("SIGKILL"); } catch {}
-      reject(new Error(`${command} timed out after ${Math.round(timeoutMs / 1000)}s`));
-    }, timeoutMs);
-
-    child.stdout.on("data", (d) => { stdout += d.toString(); });
-    child.stderr.on("data", (d) => { stderr += d.toString(); });
-    child.on("error", (err) => { if (settled) return; settled = true; clearTimeout(timeout); reject(err); });
-    child.on("close", (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (code === 0) resolve({ stdout, stderr });
-      else reject(new Error(stderr || stdout || `${command} exited with code ${code}`));
-    });
-  });
-}
-
-// ── YouTube transcript via YouTube Data API ──────────────────────────────────
-async function getYouTubeSmartTranscript(sourceUrl) {
-  if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) throw new Error("Valid YouTube source URL is required");
-  const videoId = extractYouTubeId(sourceUrl);
-  if (!videoId) throw new Error("Could not extract YouTube video ID");
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) throw new Error("YOUTUBE_API_KEY not set");
-
-  try {
-    const axios = require("axios");
-    const captionsRes = await axios.get(
-      `https://www.googleapis.com/youtube/v3/captions?part=snippet&videoId=${videoId}&key=${apiKey}`
-    );
-    const tracks = captionsRes.data.items || [];
-    const enTrack = tracks.find((t) => t.snippet.language === "en" || t.snippet.trackKind === "asr");
-    if (!enTrack) return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
-    const captionRes = await axios.get(
-      `https://www.googleapis.com/youtube/v3/captions/${enTrack.id}?tfmt=vtt&key=${apiKey}`,
-      { responseType: "text" }
-    );
-    const segments = parseTranscriptVtt(captionRes.data);
-    if (segments.length) return segments;
-    return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
-  } catch (err) {
-    return await getFallbackSegmentsFromVideoMeta(videoId, apiKey);
-  }
-}
-
-function parseTranscriptVtt(vttText = "") {
-  const segments = [];
-  const lines = String(vttText || "").split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line.includes("-->")) continue;
-    const [startRaw, endRawFull] = line.split("-->");
-    const endRaw = String(endRawFull || "").trim().split(/\s+/)[0];
-    const start = vttTimeToSeconds(startRaw);
-    const end = vttTimeToSeconds(endRaw);
-    const textLines = [];
-    i++;
-    while (i < lines.length && lines[i].trim()) {
-      textLines.push(lines[i].replace(/<[^>]+>/g, " ").trim());
-      i++;
-    }
-    const text = textLines.join(" ").replace(/\s+/g, " ").trim();
-    if (text && end > start) segments.push({ start, end, text });
-  }
-  return segments;
-}
-
-function vttTimeToSeconds(value = "") {
-  const clean = String(value || "").replace(",", ".").trim();
-  const parts = clean.split(":").map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return Number(clean) || 0;
-}
-
-async function getFallbackSegmentsFromVideoMeta(videoId, apiKey) {
-  const axios = require("axios");
-  const res = await axios.get(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`
-  );
-  const item = res.data.items?.[0];
-  if (!item) throw new Error("Video not found");
-  const description = item.snippet.description || "";
-  const title = item.snippet.title || "";
-  const lines = [title, ...description.split(/\n+/)].filter((l) => l.trim().length > 20);
-  const segments = [];
-  let t = 0;
-  for (const line of lines.slice(0, 30)) {
-    const dur = 4 + Math.random() * 6;
-    segments.push({ start: t, end: t + dur, text: line.trim() });
-    t += dur + 1;
-  }
-  if (!segments.length) throw new Error("No usable content found for this video");
-  return segments;
-}
-
-// ── Local video transcript ───────────────────────────────────────────────────
-function resolveSmartInputVideo(inputPath = "") {
-  if (!inputPath) return null;
-  const raw = String(inputPath).trim();
-  const base = path.basename(raw);
-  const candidates = [raw, path.join(uploadsDir, base)];
-  for (const candidate of candidates) {
-    if (candidate && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
-  }
-  return null;
-}
-
-async function getLocalSmartTranscript(inputPath) {
-  const videoPath = resolveSmartInputVideo(inputPath);
-  if (!videoPath) throw new Error("Input video file not found for smart clipping");
-
-  const pythonCandidates = getPythonCandidates();
-  const TRANSCRIBE_SCRIPT = path.join(rootDir, "python", "transcribe_whisper.py");
-
-  if (fs.existsSync(TRANSCRIBE_SCRIPT)) {
-    for (const pythonBin of pythonCandidates) {
-      try {
-        const result = await new Promise((resolve, reject) => {
-          const child = spawn(pythonBin, [TRANSCRIBE_SCRIPT, videoPath], { windowsHide: true });
-          let stdout = "", stderr = "";
-          child.stdout.on("data", (d) => { stdout += d.toString(); });
-          child.stderr.on("data", (d) => { stderr += d.toString(); });
-          child.on("close", (code) => {
-            if (code !== 0) return reject(new Error(stderr || "Transcription failed"));
-            try {
-              const parsed = JSON.parse(stdout || "{}");
-              resolve(Array.isArray(parsed.segments) ? parsed.segments : []);
-            } catch { reject(new Error("Invalid transcription output")); }
-          });
-          child.on("error", reject);
-        });
-        if (result.length) return result;
-      } catch { continue; }
-    }
-  }
-
-  return generateFallbackSegments();
-}
-
-function generateFallbackSegments() {
-  const MOCK_PHRASES = [
-    "This is a powerful moment worth clipping.",
-    "Here is where the key insight happens.",
-    "This part has strong engagement potential.",
-    "The speaker makes an important point here.",
-    "This moment has high viral potential.",
-    "A compelling story unfolds here.",
-    "This is the emotional peak of the content.",
-    "The audience reacts strongly to this part.",
-  ];
-  const segments = [];
-  let t = 0;
-  let idx = 0;
-  while (t < 300) {
-    const dur = 3 + Math.random() * 4;
-    segments.push({ start: t, end: t + dur, text: MOCK_PHRASES[idx % MOCK_PHRASES.length] });
-    t += dur + 1;
-    idx++;
-  }
-  return segments;
-}
-
-// ── Exclusive RapidAPI Video Downloader ("YouTube Video FAST Downloader 24/7") ──
-const RAPIDAPI_FAST_HOST = "youtube-video-fast-downloader-24-7.p.rapidapi.com";
-
-async function downloadVideoViaRapidApi(sourceUrl) {
-  const videoId = extractYouTubeId(sourceUrl);
-  if (!videoId) throw new Error("Invalid YouTube URL: unable to extract Video ID");
-
-  const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
-  if (!rapidApiKey) {
-    throw new Error("RAPIDAPI_KEY is not configured on the server. Please configure your RapidAPI key in environment variables.");
-  }
-
-  const host = RAPIDAPI_FAST_HOST;
-  const headers = {
-    "x-rapidapi-key": rapidApiKey,
-    "x-rapidapi-host": host,
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-  };
-
-  // 1. Call RapidAPI endpoint ONCE to fetch the metadata JSON with verified API contract
-  const cleanId = videoId.trim();
-  const apiUrl = `https://youtube-video-fast-downloader-24-7.p.rapidapi.com/download_video/${cleanId}?quality=720`;
-
-  console.log(`[RapidAPI][FAST] Requesting download payload from verified contract: ${apiUrl}`);
-
-  let response;
-  try {
-    response = await axios.get(apiUrl, {
-      headers: {
-        "x-rapidapi-host": "youtube-video-fast-downloader-24-7.p.rapidapi.com",
-        "x-rapidapi-key": rapidApiKey,
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-      timeout: 35000,
-    });
-  } catch (err) {
-    const status = err.response?.status;
-    const msg = err.response?.data?.message || err.response?.data?.error || err.message;
-    throw new Error(`RapidAPI request failed (HTTP ${status || "ERR"}): ${msg}`);
-  }
-
-  const data = response.data;
-  // Extract the direct CDN download link from payload (e.g., data.file, data.link, or data.downloadUrl)
-  const cdnUrl = data.file || data.link || data.download_url || data.downloadUrl || data.url || data.video?.file || data.video?.url;
-  if (!cdnUrl) {
-    throw new Error("No CDN URL found in RapidAPI payload: " + JSON.stringify(data));
-  }
-
-  const cdnFileUrl = cdnUrl;
-  console.log(`[RapidAPI][FAST] Extracted direct CDN file URL: ${cdnFileUrl.slice(0, 80)}...`);
-
-  // 2. Implement safe polling function for CDN file URL:
-  // Poll raw file URL every 6 seconds (up to 30 attempts / 3 minutes max)
-  const maxAttempts = 30;
-  const pollIntervalMs = 6000;
-  let fileReady = false;
-  const targetPath = path.join(uploadsDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
-
-  console.log(`[RapidAPI-Poll] Starting safe polling for CDN file: ${cdnFileUrl.slice(0, 80)}...`);
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const probe = await axios({
-        method: "GET",
-        url: cdnFileUrl,
-        responseType: "stream",
-        timeout: 15000,
-        maxRedirects: 5,
-        validateStatus: (status) => status === 200 || status === 404,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
-
-      if (probe.status === 200) {
-        console.log(`[RapidAPI-Poll] ✅ CDN file ready on attempt ${attempt} (HTTP 200)`);
-        console.log(`[RapidAPI-Stream] Streaming completed CDN file to disk: ${targetPath}`);
-
-        const writer = fs.createWriteStream(targetPath);
-        await new Promise((resolve, reject) => {
-          probe.data.pipe(writer);
-          writer.on("finish", () => {
-            writer.close(() => {
-              if (!fs.existsSync(targetPath)) return reject(new Error("File stream failed to write to disk."));
-              const stat = fs.statSync(targetPath);
-              if (stat.size < 5000) {
-                cleanupFile(targetPath);
-                return reject(new Error(`Downloaded file is too small or incomplete (${stat.size} bytes).`));
-              }
-              console.log(`[RapidAPI-Stream] ✅ Saved ${(stat.size / 1024 / 1024).toFixed(2)} MB to ${targetPath}`);
-              resolve();
-            });
-          });
-          writer.on("error", (err) => {
-            cleanupFile(targetPath);
-            reject(err);
-          });
-          probe.data.on("error", (err) => {
-            cleanupFile(targetPath);
-            reject(err);
-          });
-        });
-
-        fileReady = true;
-        break;
-      }
-
-      if (probe.status === 404) {
-        try { probe.data.destroy(); } catch {}
-        console.log("File still preparing, retrying in 6s...");
-      } else {
-        try { probe.data.destroy(); } catch {}
-        console.log(`[RapidAPI-Poll] Received HTTP ${probe.status}, retrying in 6s...`);
-      }
-    } catch (err) {
-      console.log("File still preparing, retrying in 6s...");
-    }
-
-    if (attempt < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-    }
-  }
-
-  if (!fileReady) {
-    throw new Error("RapidAPI CDN file preparation timed out after 3 minutes (30 attempts).");
-  }
-
-  return targetPath;
-}
-
-function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
-  const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
-  const startTime = suggestion.start || secondsToTime(suggestion.startSec || 0);
-  const endTime = suggestion.end || secondsToTime(suggestion.endSec || 0);
-  const duration = Math.max(0, timeToSeconds(endTime) - timeToSeconds(startTime));
-
-  return {
-    message: "Smart clip generated successfully",
-    fileName: result.fileName,
-    outputPath: result.outputPath,
-    filePath: result.outputPath,
-    downloadUrl: `/api/files/download/${result.fileName}`,
-    previewUrl: `/api/files/download/${result.fileName}`,
-    startTime, endTime,
-    startSec: suggestion.startSec,
-    endSec: suggestion.endSec,
-    duration, durationSec: duration,
-    size: outputStat?.size || 0,
-    sourceType: normalizedSourceType,
-    hook: suggestion.title || `Smart Clip #${index + 1}`,
-    title: suggestion.title || `Smart Clip #${index + 1}`,
-    smartScore: suggestion.score || 0,
-    score: suggestion.score || 0,
-    smartReason: suggestion.reason || "Smart transcript moment",
-    reason: suggestion.reason || "Smart transcript moment",
-    signals: suggestion.signals || [],
-    previewText: suggestion.previewText || suggestion.text || "",
-  };
 }
 
 // ── Routes ───────────────────────────────────────────────────────────────────
@@ -660,10 +304,6 @@ router.get("/diag", async (req, res) => {
 });
 
 router.post("/smart-generate", async (req, res) => {
-  const startedAt = Date.now();
-  // Safe ceiling to finalize and return clips before Render's hard 100s proxy timeout
-  const maxSmartGenerateMs = 85 * 1000;
-
   try {
     const {
       sourceType, inputPath, sourceUrl, segments,
@@ -672,213 +312,139 @@ router.post("/smart-generate", async (req, res) => {
     } = req.body || {};
 
     const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
-    const safeMaxClips = Math.max(1, Math.min(10, Number(maxClips) || 3));
-    const safeMinScore = Math.max(1, Math.min(100, Number(minScore) || 50));
 
     if (normalizedSourceType === "youtube" && (!sourceUrl || !isValidYouTubeUrl(sourceUrl))) {
-      return res.status(400).json({ error: "Valid YouTube source URL is required.", clips: [] });
+      return res.status(400).json({ error: "Valid YouTube source URL is required." });
     }
     if (normalizedSourceType !== "youtube" && !inputPath) {
-      return res.status(400).json({ error: "Input video file is required.", clips: [] });
+      return res.status(400).json({ error: "Input video file is required." });
     }
 
-    // ── Get transcript ──
-    let transcriptSegments = [];
-    if (Array.isArray(segments) && segments.length) {
-      transcriptSegments = segments;
-    } else if (normalizedSourceType === "youtube") {
-      transcriptSegments = await getYouTubeSmartTranscript(sourceUrl);
-    } else {
-      transcriptSegments = await getLocalSmartTranscript(inputPath);
-    }
-
-    const allSuggestions = findSmartClipMoments(transcriptSegments, {
-      maxClips: Math.max(safeMaxClips * 3, 10),
-      preferredDurationSec: Number(clipLengthSec) || 45,
-      minDurationSec: Number(minDurationSec) || 25,
-      maxDurationSec: Number(maxDurationSec) || 90,
-      videoDurationSec: Number(videoDurationSec) || 0,
+    // 1. Create persistent GenerationJob record in PostgreSQL/Prisma
+    const job = await prisma.generationJob.create({
+      data: {
+        sourceType: normalizedSourceType,
+        sourceUrl: normalizedSourceType === "youtube" ? sourceUrl : null,
+        inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
+        status: "QUEUED",
+        progress: 0,
+        stage: "Queued for processing",
+        requestJson: {
+          sourceType: normalizedSourceType,
+          inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
+          sourceUrl: normalizedSourceType === "youtube" ? sourceUrl : null,
+          segments: Array.isArray(segments) ? segments : null,
+          maxClips: Number(maxClips) || 3,
+          minScore: Number(minScore) || 50,
+          clipLengthSec: Number(clipLengthSec) || 45,
+          minDurationSec: Number(minDurationSec) || 25,
+          maxDurationSec: Number(maxDurationSec) || 90,
+          aspectRatio: aspectRatio || "9:16",
+          videoDurationSec: Number(videoDurationSec) || 0,
+        },
+      },
     });
 
-    let suggestions = allSuggestions
-      .filter((item) => Number(item.score || 0) >= safeMinScore)
-      .slice(0, safeMaxClips);
+    // 2. Enqueue job into BullMQ
+    await addGenerationJob(job.id);
 
-    // ── Fallback 1: if no clips pass minScore, take the best available ones ──
-    if (!suggestions.length && allSuggestions.length > 0) {
-      console.log(`[SmartClip] No clips scored ${safeMinScore}+. Falling back to top ${safeMaxClips} best clips.`);
-      suggestions = allSuggestions.slice(0, safeMaxClips);
+    console.log(`[SmartGenerate] Enqueued background generation job: ${job.id} (${normalizedSourceType})`);
+
+    // 3. Return immediately with 202 Accepted (Browser/HTTP request does NOT own the job lifecycle)
+    return res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      progress: job.progress,
+      stage: job.stage,
+    });
+  } catch (error) {
+    console.error("[POST /smart-generate] Failed to queue generation job:", error);
+    return res.status(500).json({
+      error: "Failed to queue smart clip generation",
+      details: error.message,
+    });
+  }
+});
+
+router.get("/generation-jobs/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId || typeof jobId !== "string") {
+      return res.status(400).json({ error: "Valid job ID is required" });
     }
 
-    // ── Fallback 2: if findSmartClipMoments found nothing, use transcript segments or time windows ──
-    if (!suggestions.length) {
-      const clipDuration = Math.max(15, Number(clipLengthSec) || 30);
-      const videoDur = Number(videoDurationSec) || 0;
+    const job = await prisma.generationJob.findUnique({
+      where: { id: jobId },
+    });
 
-      if (transcriptSegments.length > 0) {
-        // Use transcript time ranges directly — group consecutive segments
-        const used = new Set();
-        let groupStart = null, groupEnd = null, groupText = [];
-
-        const pushGroup = () => {
-          if (groupStart !== null && groupEnd > groupStart) {
-            suggestions.push({
-              startSec: groupStart,
-              endSec: Math.min(groupEnd, groupStart + clipDuration),
-              start: secondsToTime(groupStart),
-              end: secondsToTime(Math.min(groupEnd, groupStart + clipDuration)),
-              durationSec: Math.min(groupEnd, groupStart + clipDuration) - groupStart,
-              score: 35,
-              title: groupText.join(" ").slice(0, 78) || "Video moment",
-              reason: "transcript segment",
-              signals: ["transcript segment"],
-              previewText: groupText.join(" ").slice(0, 260),
-              text: groupText.join(" "),
-            });
-          }
-        };
-
-        for (const seg of transcriptSegments) {
-          if (suggestions.length >= safeMaxClips) break;
-          if (used.has(seg)) continue;
-          if (groupStart === null || seg.start - groupEnd > 5) {
-            pushGroup();
-            groupStart = seg.start;
-            groupEnd = seg.end;
-            groupText = [seg.text || ""];
-          } else {
-            groupEnd = Math.max(groupEnd, seg.end);
-            groupText.push(seg.text || "");
-          }
-          used.add(seg);
-        }
-        pushGroup();
-      }
-
-      // If still no suggestions, create time-window placeholders
-      if (!suggestions.length && videoDur > 0) {
-        for (let i = 0; i < safeMaxClips; i++) {
-          const startSec = Math.max(0, Math.floor((videoDur / (safeMaxClips + 1)) * (i + 1)) - Math.floor(clipDuration / 2));
-          const endSec = Math.min(videoDur, startSec + clipDuration);
-          if (endSec <= startSec) continue;
-          suggestions.push({
-            startSec,
-            endSec,
-            start: secondsToTime(startSec),
-            end: secondsToTime(endSec),
-            durationSec: endSec - startSec,
-            score: 30,
-            title: `Video Clip ${i + 1}`,
-            reason: "time-based fallback",
-            signals: ["time-based"],
-            previewText: "",
-            text: "",
-          });
-        }
-      }
+    if (!job) {
+      return res.status(404).json({ error: "Generation job not found" });
     }
 
-    if (!suggestions.length) {
-      return res.json({
-        success: true,
-        source: "transcript",
-        segmentCount: transcriptSegments.length,
-        suggestions: [],
-        clips: [],
-        message: `No suitable clip moments found in this video.`,
-      });
-    }
-
-    // ── declare clips here — before any branch uses it ──
-    const clips = [];
-    fs.mkdirSync(exportsDir, { recursive: true });
-
-    // ── YouTube → Download source video ONCE via RapidAPI FAST Downloader and slice clips with FFmpeg ──
-    if (normalizedSourceType === "youtube") {
-      let sourceVideoPath = null;
-      try {
-        console.log(`[SmartClip] Downloading YouTube source via RapidAPI for ${sourceUrl}...`);
-        sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl);
-
-        for (let i = 0; i < suggestions.length; i++) {
-          if (i > 0 && Date.now() - startedAt > maxSmartGenerateMs) {
-            console.warn("[SmartClip] Reached processing time limit, finalizing completed clips.");
-            break;
-          }
-
-          const suggestion = suggestions[i];
-          const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-          const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-          const result = await smartGenerateClip({
-            inputPath: sourceVideoPath,
-            startTime: secondsToTime(startSec),
-            endTime: secondsToTime(endSec),
-            aspectRatio: aspectRatio || "9:16",
-          });
-
-          clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-        }
-
-        if (!clips.length) {
-          throw new Error("No clips could be produced from the source video.");
-        }
-      } catch (err) {
-        console.error("[SmartClip] YouTube clip generation failed:", err.message || err);
-        const cleanMsg = cleanSmartClipError(err);
-        return res.json({
-          success: false,
-          needsUpload: true,
-          error: "YouTube clip generation failed",
-          details: cleanMsg,
-          message: cleanMsg,
-          suggestions,
-          clips: [],
-        });
-      } finally {
-        if (sourceVideoPath) {
-          cleanupFile(sourceVideoPath);
-        }
-      }
-    } else {
-      // ── Local upload → FFmpeg ──
-      for (let i = 0; i < suggestions.length; i++) {
-        if (Date.now() - startedAt > maxSmartGenerateMs) throw new Error("Smart clipping timed out.");
-
-        const suggestion = suggestions[i];
-        const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-        const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-        const result = await smartGenerateClip({
-          inputPath,
-          startTime: secondsToTime(startSec),
-          endTime: secondsToTime(endSec),
-          aspectRatio: aspectRatio || "9:16",
-        });
-
-        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
-      }
-    }
+    const resultClips = job.resultJson?.clips || [];
+    const suggestions = job.suggestionsJson || [];
+    const isAwaitingUpload = job.status === "AWAITING_UPLOAD";
 
     return res.json({
       success: true,
-      source: "transcript",
-      segmentCount: transcriptSegments.length,
-      minScore: safeMinScore,
-      suggestions,
-      clips,
+      job: {
+        id: job.id,
+        status: job.status,
+        progress: job.progress,
+        stage: job.stage || "",
+        message: job.stage || "",
+        needsUpload: isAwaitingUpload,
+        suggestions,
+        clips: resultClips,
+        error: job.errorMessage || null,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+      },
+    });
+  } catch (error) {
+    console.error("[GET /generation-jobs/:jobId] Error fetching job:", error);
+    return res.status(500).json({ error: "Failed to fetch job status" });
+  }
+});
+
+router.post("/generation-jobs/:jobId/cancel", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const job = await prisma.generationJob.findUnique({
+      where: { id: jobId },
     });
 
-  } catch (error) {
-    const cleanMessage = cleanSmartClipError(error);
-    console.error("SMART GENERATE PIPELINE ERROR:", error);
-    return res.status(500).json({
-      error: "Smart clip generation failed",
-      details: cleanMessage,
-      message: cleanMessage,
-      suggestions: [],
-      clips: [],
+    if (!job) {
+      return res.status(404).json({ error: "Generation job not found" });
+    }
+
+    if (["COMPLETED", "FAILED", "CANCELLED"].includes(job.status)) {
+      return res.json({
+        success: true,
+        message: `Job is already ${job.status.toLowerCase()}`,
+        status: job.status,
+      });
+    }
+
+    await prisma.generationJob.update({
+      where: { id: jobId },
+      data: {
+        cancelRequestedAt: new Date(),
+        status: "CANCELLED",
+        stage: "Cancellation requested by user",
+      },
     });
+
+    return res.json({
+      success: true,
+      message: "Cancellation requested successfully",
+      status: "CANCELLED",
+    });
+  } catch (error) {
+    console.error("[POST /generation-jobs/:jobId/cancel] Error cancelling job:", error);
+    return res.status(500).json({ error: "Failed to cancel generation job" });
   }
 });
 

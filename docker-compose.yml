@@ -32,6 +32,35 @@ services:
     volumes:
       - clip_uploads:/app/uploads
       - clip_exports:/app/exports
+      - clip_scratch:/app/scratch
+
+  worker:
+    build: .
+    container_name: clip-worker
+    restart: unless-stopped
+    command: npm run worker:generation
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://clipuser:clippassword@postgres:5432/clipapp?schema=public
+      - REDIS_URL=redis://redis:6379
+      - TOKEN_ENCRYPTION_KEY=CHANGE_THIS_TO_A_32_CHAR_SECRET_KEY
+      - GENERATION_WORKER_CONCURRENCY=1
+      - SMART_REFRAME_TIMEOUT_MS=25000
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY:-}
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:-}
+      # Cloudinary credentials (for cloud media hosting)
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME:-}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY:-}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - clip_uploads:/app/uploads
+      - clip_exports:/app/exports
+      - clip_scratch:/app/scratch
 
   postgres:
     image: postgres:15-alpine
@@ -70,3 +99,4 @@ volumes:
   redisdata:
   clip_uploads:
   clip_exports:
+  clip_scratch:

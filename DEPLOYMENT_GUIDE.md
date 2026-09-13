@@ -191,6 +191,51 @@ If you prefer a virtual private server:
 
 ---
 
+## ⚙️ Local Development & Background Worker Architecture
+
+ClipFlow Studio utilizes a fully decoupled, fault-tolerant background processing architecture:
+
+```
+Browser (Observer)
+   ↓ POST /api/clips/smart-generate (returns HTTP 202 in <100ms)
+Express API (Terminal 1)
+   ↓ Persists GenerationJob in PostgreSQL & Enqueues in Redis (BullMQ)
+Generation Worker Process (Terminal 2: npm run worker:generation)
+   ↓ Performs Transcription, Viral Moment Analysis, Video Download & FFmpeg/Python Slicing
+PostgreSQL (Authoritative Status & Clips Source)
+   ↑ Polled periodically by Browser (GET /api/clips/generation-jobs/:jobId)
+```
+
+### Running Locally (Dual-Terminal Workflow)
+
+**Terminal 1 — API Server**:
+```bash
+npm run dev
+```
+
+**Terminal 2 — Generation Worker**:
+```bash
+npm run worker:generation
+```
+
+### System Requirements:
+- **Node.js 20+**
+- **PostgreSQL** (running locally or remote Supabase/Neon connection in `DATABASE_URL`)
+- **Redis** (running locally or remote Upstash connection in `REDIS_URL`)
+- **FFmpeg** (accessible in PATH or in `./bin/ffmpeg.exe`)
+- **Python 3** (with `requirements.txt` packages installed in `.venv` or global)
+
+### Key Architectural Guarantees:
+1. **Zero Browser Coupling**: Closing the tab, refreshing the page, or temporary Wi-Fi drops will **NOT** interrupt clip rendering. The browser automatically reconnects to the active job via `localStorage` on reload.
+2. **Process Independence**: Restarting the Express web server (Terminal 1), saving frontend code, or editing styles will **NOT** interrupt a video being rendered by the worker process (Terminal 2).
+3. **Dedicated Resource Concurrency**: Configurable via `GENERATION_WORKER_CONCURRENCY=1` to prevent CPU thrashing during multi-clip video encoding.
+
+### Cloud & Shared Storage Note:
+- **Docker Compose**: The included `docker-compose.yml` mounts shared volumes (`clip_uploads`, `clip_exports`, `clip_scratch`) across the `app` and `worker` containers.
+- **Render / Multi-Service Cloud**: When running separate API and background worker services on cloud providers like Render, containers do not share local disk by default. For uploaded video files, mount a shared Render Persistent Disk or configure Cloudinary object storage (`CLOUDINARY_*`). YouTube-sourced jobs do not require shared uploads because the worker downloads the video directly using the YouTube URL.
+
+---
+
 ## ✅ Deployment Checklist
 
 - [ ] Repository committed and pushed to GitHub (`git push origin main`).
