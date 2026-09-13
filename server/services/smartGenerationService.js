@@ -388,7 +388,7 @@ async function runSmartGeneration({
     throw new Error("Input video file is required.");
   }
 
-  if (isCancelled()) throw new Error("Job cancelled by user");
+  if (await isCancelled()) throw new Error("Job cancelled by user");
 
   // Step 1: Transcript extraction
   onProgress(10, "Extracting transcript...");
@@ -401,7 +401,7 @@ async function runSmartGeneration({
     transcriptSegments = await getLocalSmartTranscript(inputPath);
   }
 
-  if (isCancelled()) throw new Error("Job cancelled by user");
+  if (await isCancelled()) throw new Error("Job cancelled by user");
 
   // Step 2: Viral moment selection & ranking
   onProgress(30, "Analyzing content & finding viral moments...");
@@ -504,7 +504,7 @@ async function runSmartGeneration({
 
   onProgress(45, "Moments selected");
 
-  if (isCancelled()) throw new Error("Job cancelled by user");
+  if (await isCancelled()) throw new Error("Job cancelled by user");
 
   const clips = [];
   fs.mkdirSync(exportsDir, { recursive: true });
@@ -513,11 +513,12 @@ async function runSmartGeneration({
   if (normalizedSourceType === "youtube") {
     let sourceVideoPath = null;
     try {
+      if (await isCancelled()) throw new Error("Job cancelled by user");
       onProgress(50, "Downloading YouTube source video...");
       sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl, workspace.sourceDir);
 
       for (let i = 0; i < suggestions.length; i++) {
-        if (isCancelled()) throw new Error("Job cancelled by user");
+        if (await isCancelled()) throw new Error("Job cancelled by user");
 
         const progressPercent = Math.round(55 + (i / suggestions.length) * 40);
         onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
@@ -573,7 +574,7 @@ async function runSmartGeneration({
   } else {
     // Step 4: Local Upload Rendering
     for (let i = 0; i < suggestions.length; i++) {
-      if (isCancelled()) throw new Error("Job cancelled by user");
+      if (await isCancelled()) throw new Error("Job cancelled by user");
 
       const progressPercent = Math.round(55 + (i / suggestions.length) * 40);
       onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
@@ -604,6 +605,8 @@ async function runSmartGeneration({
       clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
     }
   }
+
+  if (await isCancelled()) throw new Error("Job cancelled by user");
 
   onProgress(98, "Finalizing generated clips...");
 

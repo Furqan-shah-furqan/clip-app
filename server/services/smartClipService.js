@@ -38,6 +38,46 @@ function secondsToTime(sec) {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// Map of active child processes per GenerationJob: jobId -> childProcess
+const activeJobProcesses = new Map();
+
+function registerJobProcess(jobId, proc) {
+  if (!jobId || !proc) return;
+  activeJobProcesses.set(String(jobId), proc);
+}
+
+function unregisterJobProcess(jobId, proc) {
+  if (!jobId) return;
+  const current = activeJobProcesses.get(String(jobId));
+  if (current === proc || !proc) {
+    activeJobProcesses.delete(String(jobId));
+  }
+}
+
+function terminateJobProcess(jobId) {
+  if (!jobId) return false;
+  const proc = activeJobProcesses.get(String(jobId));
+  if (!proc) return false;
+
+  console.log(`[smartClipService] Terminating active child process for job ${jobId}`);
+  activeJobProcesses.delete(String(jobId));
+
+  try {
+    proc.kill("SIGTERM");
+    const timer = setTimeout(() => {
+      try {
+        if (proc && !proc.killed) {
+          proc.kill("SIGKILL");
+        }
+      } catch {}
+    }, 1500);
+    if (timer.unref) timer.unref();
+  } catch (err) {
+    console.warn(`[smartClipService] Error terminating process for job ${jobId}:`, err.message);
+  }
+  return true;
+}
+
 function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, outputDir, jobId }) {
   return new Promise((resolve, reject) => {
     // Cloud / Render guard:
@@ -71,6 +111,8 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ou
       ratio,
     ], { windowsHide: true });
 
+    if (jobId) registerJobProcess(jobId, proc);
+
     let stdout = "";
     let stderr = "";
     let settled = false;
@@ -89,6 +131,7 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ou
     proc.stderr.on("data", (d) => { stderr += d.toString(); });
 
     proc.on("close", (code) => {
+      if (jobId) unregisterJobProcess(jobId, proc);
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -111,6 +154,7 @@ function runFaceTrackingReframe({ inputPath, startTime, endTime, aspectRatio, ou
     });
 
     proc.on("error", (err) => {
+      if (jobId) unregisterJobProcess(jobId, proc);
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
@@ -173,6 +217,7 @@ async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio, o
     ];
 
     const child = spawn(ffmpegPath, args, { windowsHide: true });
+    if (jobId) registerJobProcess(jobId, child);
 
     let stderr = "";
     child.stderr.on("data", (d) => {
@@ -180,6 +225,7 @@ async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio, o
     });
 
     child.on("close", (code) => {
+      if (jobId) unregisterJobProcess(jobId, child);
       if (code === 0 && fs.existsSync(outputPath)) {
         resolve({ fileName, outputPath });
       } else {
@@ -190,9 +236,15 @@ async function smartGenerateClip({ inputPath, startTime, endTime, aspectRatio, o
     });
 
     child.on("error", (err) => {
+      if (jobId) unregisterJobProcess(jobId, child);
       reject(new Error(`FFmpeg not found: ${err.message}`));
     });
   });
 }
 
-module.exports = { smartGenerateClip };
+module.exports = {
+  smartGenerateClip,
+  registerJobProcess,
+  unregisterJobProcess,
+  terminateJobProcess,
+};

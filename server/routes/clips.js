@@ -13,7 +13,10 @@ const {
 } = require("../utils/paths");
 const prisma = require("../lib/prisma");
 const { addGenerationJob } = require("../queue/generationQueue");
-const { smartGenerateClip } = require("../services/smartClipService");
+const {
+  smartGenerateClip,
+  terminateJobProcess,
+} = require("../services/smartClipService");
 const { getPythonCandidates } = require("../utils/pythonRuntime");
 const { findSmartClipMoments } = require("../services/smartClipRanker");
 const {
@@ -412,6 +415,10 @@ router.get("/generation-jobs/:jobId", async (req, res) => {
 router.post("/generation-jobs/:jobId/cancel", async (req, res) => {
   try {
     const { jobId } = req.params;
+    if (!jobId) {
+      return res.status(400).json({ error: "jobId is required" });
+    }
+
     const job = await prisma.generationJob.findUnique({
       where: { id: jobId },
     });
@@ -428,12 +435,16 @@ router.post("/generation-jobs/:jobId/cancel", async (req, res) => {
       });
     }
 
+    // Terminate any active FFmpeg/Python child process belonging to this job
+    terminateJobProcess(jobId);
+
     await prisma.generationJob.update({
       where: { id: jobId },
       data: {
         cancelRequestedAt: new Date(),
         status: "CANCELLED",
-        stage: "Cancellation requested by user",
+        stage: "Cancelled by user",
+        completedAt: new Date(),
       },
     });
 

@@ -7,6 +7,7 @@ const {
   runSmartGeneration,
   cleanSmartClipError,
 } = require("../services/smartGenerationService");
+const { terminateJobProcess } = require("../services/smartClipService");
 
 const concurrency = Math.max(
   1,
@@ -152,6 +153,7 @@ const generationWorker = new Worker(
     } catch (err) {
       if (err.message === "Job cancelled by user") {
         console.log(`[GenerationWorker][${generationJobId}] Cancelled by user`);
+        terminateJobProcess(generationJobId);
         await prisma.generationJob.update({
           where: { id: generationJobId },
           data: {

@@ -225,6 +225,49 @@ const startTimeInput = document.getElementById("startTime");
 const endTimeInput = document.getElementById("endTime");
 const aspectRatioInput = document.getElementById("aspectRatio");
 const smartClipBtn = document.getElementById("smartClipBtn");
+const cancelGenerationBtn = document.getElementById("cancelGenerationBtn");
+const generationActionRow = document.getElementById("generationActionRow");
+
+function setGenerationUIState(uiState, label) {
+  if (uiState === "generating") {
+    if (cancelGenerationBtn) {
+      cancelGenerationBtn.classList.remove("is-hidden");
+      cancelGenerationBtn.disabled = false;
+      cancelGenerationBtn.textContent = "✕";
+      cancelGenerationBtn.title = "Cancel generation";
+      cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
+    }
+    if (smartClipBtn) {
+      smartClipBtn.disabled = true;
+      smartClipBtn.textContent = label || "Generating clips...";
+    }
+  } else if (uiState === "cancelling") {
+    if (cancelGenerationBtn) {
+      cancelGenerationBtn.classList.remove("is-hidden");
+      cancelGenerationBtn.disabled = true;
+      cancelGenerationBtn.textContent = "…";
+      cancelGenerationBtn.title = "Cancelling...";
+      cancelGenerationBtn.setAttribute("aria-label", "Cancelling clip generation");
+    }
+    if (smartClipBtn) {
+      smartClipBtn.disabled = true;
+      smartClipBtn.textContent = label || "Cancelling...";
+    }
+  } else {
+    // idle
+    if (cancelGenerationBtn) {
+      cancelGenerationBtn.classList.add("is-hidden");
+      cancelGenerationBtn.disabled = false;
+      cancelGenerationBtn.textContent = "✕";
+      cancelGenerationBtn.title = "Cancel generation";
+      cancelGenerationBtn.setAttribute("aria-label", "Cancel clip generation");
+    }
+    if (smartClipBtn) {
+      smartClipBtn.disabled = false;
+      smartClipBtn.textContent = label || "Get clips in 1 click";
+    }
+  }
+}
 const saveProjectBtn = document.getElementById("saveProjectBtn");
 const refreshProjectsBtn = document.getElementById("refreshProjectsBtn");
 const projectHistoryList = document.getElementById("projectHistoryList");
@@ -393,8 +436,11 @@ async function apiFetch(url, options = {}) {
     data = { error: text || "Request failed" };
   }
 
-  if (!response.ok)
-    throw new Error(data.details || data.error || "Request failed");
+  if (!response.ok) {
+    const err = new Error(data.details || data.error || "Request failed");
+    err.status = response.status;
+    throw err;
+  }
   return data;
 }
 
@@ -2750,17 +2796,71 @@ async function createSmartGenerationJob(payload) {
   return res;
 }
 
-async function pollGenerationJob(jobId, onProgress) {
+let activePollingToken = 0;
+
+cancelGenerationBtn?.addEventListener("click", async (e) => {
+  e.preventDefault();
+  const currentJobId = state.activeGenerationJobId;
+  if (!currentJobId) {
+    setGenerationUIState("idle");
+    return;
+  }
+
+  // 1. Prevent duplicate clicks & temporarily disable X
+  setGenerationUIState("cancelling");
+
+  // 2. Invalidate active status polling token immediately
+  activePollingToken++;
+
+  // 3. Clear activeGenerationJobId from frontend state & localStorage
+  clearActiveGenerationJob();
+
+  // 4. Request backend cancellation
+  try {
+    await apiFetch(
+      `${API_BASE}/clips/generation-jobs/${encodeURIComponent(currentJobId)}/cancel`,
+      { method: "POST" }
+    );
+  } catch (err) {
+    console.warn("[CancelGeneration] Backend cancel error (ignored, UI reset):", err.message);
+  }
+
+  // 5. Reset generation UI to idle immediately
+  updateProgress(0, "Generation cancelled.");
+  setGenerationUIState("idle");
+});
+
+async function pollGenerationJob(jobId, onProgress, token = 0) {
   const pollIntervalMs = 2000;
   let consecutiveNetworkErrors = 0;
   const maxConsecutiveNetworkErrors = 15;
 
   while (true) {
+    // Stop polling if cancelled or replaced
+    if (token && token !== activePollingToken) {
+      return { status: "CANCELLED" };
+    }
+    if (state.activeGenerationJobId !== jobId) {
+      return { status: "CANCELLED" };
+    }
+
     let responseData = null;
     try {
       responseData = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(jobId)}`);
       consecutiveNetworkErrors = 0;
     } catch (fetchErr) {
+      if (token && token !== activePollingToken) {
+        return { status: "CANCELLED" };
+      }
+      if (state.activeGenerationJobId !== jobId) {
+        return { status: "CANCELLED" };
+      }
+
+      // If server returned 404, the job no longer exists
+      if (fetchErr.status === 404) {
+        throw fetchErr;
+      }
+
       consecutiveNetworkErrors++;
       console.warn(
         `[JobPolling] Temporary network issue fetching job ${jobId} (attempt ${consecutiveNetworkErrors}/${maxConsecutiveNetworkErrors}):`,
@@ -2775,6 +2875,13 @@ async function pollGenerationJob(jobId, onProgress) {
 
       await new Promise((r) => setTimeout(r, Math.min(5000, 1000 * Math.pow(1.3, consecutiveNetworkErrors))));
       continue;
+    }
+
+    if (token && token !== activePollingToken) {
+      return { status: "CANCELLED" };
+    }
+    if (state.activeGenerationJobId !== jobId) {
+      return { status: "CANCELLED" };
     }
 
     const job = responseData?.job;
@@ -2826,10 +2933,7 @@ async function consumeCompletedClips(rawClips = []) {
   if (!clips.length) {
     updateProgress(0, "No clips generated for this video.");
     clearActiveGenerationJob();
-    if (smartClipBtn) {
-      smartClipBtn.disabled = false;
-      smartClipBtn.textContent = "Get clips in 1 click";
-    }
+    setGenerationUIState("idle");
     return;
   }
 
@@ -2871,11 +2975,7 @@ async function consumeCompletedClips(rawClips = []) {
   renderGeneratedClips();
   persistStudioSession();
   clearActiveGenerationJob();
-
-  if (smartClipBtn) {
-    smartClipBtn.disabled = false;
-    smartClipBtn.textContent = "Get clips in 1 click";
-  }
+  setGenerationUIState("idle");
 
   await animateProgressTo(
     100,
@@ -2908,19 +3008,30 @@ async function handleUploadForSmartClips(input, suggestions) {
     };
 
     const { jobId } = await createSmartGenerationJob(body);
+    setGenerationUIState("generating");
+    const token = ++activePollingToken;
 
     const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
       updateProgress(progress, stage);
-    });
+    }, token);
+
+    if (jobResult?.status === "CANCELLED") {
+      updateProgress(0, "Generation cancelled.");
+      clearActiveGenerationJob();
+      setGenerationUIState("idle");
+      return;
+    }
 
     if (jobResult?.status === "COMPLETED") {
       await consumeCompletedClips(jobResult.clips);
     } else if (jobResult?.needsUpload) {
       showUploadRequiredForSmartClips(jobResult);
       clearActiveGenerationJob();
+      setGenerationUIState("idle");
     }
   } catch (error) {
     clearActiveGenerationJob();
+    setGenerationUIState("idle");
     updateProgress(0, error.message || "Upload failed");
     alert(error.message || "Upload failed");
   }
@@ -2940,21 +3051,14 @@ function showUploadRequiredForSmartClips(data) {
   if (data?.isUnavailable) {
     const unavailMsg = data.message || "This video is unavailable, private, or has been removed on YouTube. Please check the URL.";
     updateProgress(0, unavailMsg);
-    if (smartClipBtn) {
-      smartClipBtn.disabled = false;
-      smartClipBtn.textContent = "Get clips in 1 click";
-    }
+    setGenerationUIState("idle");
     alert(unavailMsg);
     return;
   }
 
   const message = data?.message || "YouTube transcript analyzed. Upload source video to clip moments:";
   updateProgress(0, message);
-
-  if (smartClipBtn) {
-    smartClipBtn.disabled = false;
-    smartClipBtn.textContent = "Get clips in 1 click";
-  }
+  setGenerationUIState("idle");
 
   const suggestions = Array.isArray(data?.suggestions) ? data.suggestions : [];
 
@@ -3022,10 +3126,13 @@ async function generateSmartClipsFromSource() {
   const createRes = await createSmartGenerationJob(body);
   const jobId = createRes.jobId;
 
+  // New active polling token
+  const token = ++activePollingToken;
+
   // 2. Poll the job status resiliently without blocking or request timeouts
   const jobResult = await pollGenerationJob(jobId, (progress, stage) => {
     updateProgress(progress, stage);
-  });
+  }, token);
 
   return jobResult;
 }
@@ -3042,8 +3149,7 @@ smartClipBtn?.addEventListener("click", async () => {
       return;
     }
 
-    smartClipBtn.disabled = true;
-    smartClipBtn.textContent = "Generating clips...";
+    setGenerationUIState("generating");
     state.smartSuggestions = [];
     state.uploadRequiredActive = false;
     _currentProgress = 0;
@@ -3059,14 +3165,14 @@ smartClipBtn?.addEventListener("click", async () => {
     if (jobResult?.status === "CANCELLED") {
       updateProgress(0, "Generation cancelled.");
       clearActiveGenerationJob();
-      smartClipBtn.disabled = false;
-      smartClipBtn.textContent = "Get clips in 1 click";
+      setGenerationUIState("idle");
       return;
     }
 
     if (jobResult?.needsUpload || jobResult?.status === "AWAITING_UPLOAD") {
       showUploadRequiredForSmartClips(jobResult);
       clearActiveGenerationJob();
+      setGenerationUIState("idle");
       return;
     }
 
@@ -3079,11 +3185,11 @@ smartClipBtn?.addEventListener("click", async () => {
     clearActiveGenerationJob();
     const cleanMsg = getCleanSmartClipError(error);
     updateProgress(0, cleanMsg);
+    setGenerationUIState("idle");
     alert(cleanMsg);
   } finally {
-    if (!state.activeGenerationJobId && smartClipBtn) {
-      smartClipBtn.disabled = false;
-      smartClipBtn.textContent = "Get clips in 1 click";
+    if (!state.activeGenerationJobId) {
+      setGenerationUIState("idle");
     }
   }
 });
@@ -3261,74 +3367,112 @@ async function downloadAllClips() {
 
 async function resumeActiveGenerationJobIfAny() {
   const active = getActiveGenerationJob();
-  if (!active || !active.jobId) return;
+  if (!active || !active.jobId) {
+    setGenerationUIState("idle");
+    return;
+  }
 
   console.log("[Boot] Detected active generation job in localStorage:", active.jobId);
   state.activeGenerationJobId = active.jobId;
 
-  if (smartClipBtn) {
-    smartClipBtn.disabled = true;
-    smartClipBtn.textContent = "Generating clips...";
-  }
+  // Show [ X ] [ Generating clips... ] while active
+  setGenerationUIState("generating");
 
   const mpTrackEl = document.querySelector("#modernProgressCard .mp-track");
   if (mpTrackEl) mpTrackEl.style.display = "flex";
 
   try {
-    const res = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(active.jobId)}`);
+    let res = null;
+    try {
+      res = await apiFetch(`${API_BASE}/clips/generation-jobs/${encodeURIComponent(active.jobId)}`);
+    } catch (fetchErr) {
+      // 404 / nonexistent persisted job = stale local state!
+      if (
+        fetchErr.status === 404 ||
+        String(fetchErr.message || "").includes("404") ||
+        String(fetchErr.message || "").toLowerCase().includes("not found")
+      ) {
+        console.warn("[Boot] Persisted job not found on server (404). Clearing stale job reference.");
+        clearActiveGenerationJob();
+        setGenerationUIState("idle");
+        updateProgress(0, "Ready");
+        return;
+      }
+      // Temporary network error: DO NOT clear the job! Keep UI active and start polling loop to reconnect
+      console.warn("[Boot] Network error checking active job on startup, will attempt polling retry:", fetchErr.message);
+    }
+
     const job = res?.job;
 
-    if (!job) {
+    if (res && !job) {
+      console.warn("[Boot] Job payload missing in response. Clearing stale job reference.");
       clearActiveGenerationJob();
-      if (smartClipBtn) {
-        smartClipBtn.disabled = false;
-        smartClipBtn.textContent = "Get clips in 1 click";
+      setGenerationUIState("idle");
+      return;
+    }
+
+    if (job) {
+      if (job.status === "COMPLETED") {
+        console.log("[Boot] Generation job completed while page was closed/refreshed. Consuming clips.");
+        clearActiveGenerationJob();
+        setGenerationUIState("idle");
+        await consumeCompletedClips(job.clips);
+        return;
       }
-      return;
-    }
 
-    if (job.status === "COMPLETED") {
-      console.log("[Boot] Generation job completed while page was closed/refreshed. Consuming clips.");
-      await consumeCompletedClips(job.clips);
-      return;
-    }
-
-    if (job.status === "AWAITING_UPLOAD" || job.needsUpload) {
-      showUploadRequiredForSmartClips(job);
-      clearActiveGenerationJob();
-      return;
-    }
-
-    if (job.status === "FAILED") {
-      updateProgress(0, job.error || "Previous generation job failed.");
-      clearActiveGenerationJob();
-      if (smartClipBtn) {
-        smartClipBtn.disabled = false;
-        smartClipBtn.textContent = "Get clips in 1 click";
+      if (job.status === "AWAITING_UPLOAD" || job.needsUpload) {
+        clearActiveGenerationJob();
+        setGenerationUIState("idle");
+        showUploadRequiredForSmartClips(job);
+        return;
       }
-      return;
+
+      if (job.status === "FAILED") {
+        clearActiveGenerationJob();
+        setGenerationUIState("idle");
+        updateProgress(0, job.error || "Previous generation job failed.");
+        return;
+      }
+
+      if (job.status === "CANCELLED") {
+        clearActiveGenerationJob();
+        setGenerationUIState("idle");
+        updateProgress(0, "Previous generation was cancelled.");
+        return;
+      }
     }
 
-    if (["QUEUED", "TRANSCRIBING", "ANALYZING", "SELECTING_MOMENTS", "DOWNLOADING", "RENDERING", "FINALIZING"].includes(job.status)) {
-      updateProgress(job.progress || 10, job.stage || "Resuming clip generation...");
+    // Active status or temporary network issue: keep [ X ] [ Generating clips... ] and resume polling
+    if (!job || ["QUEUED", "TRANSCRIBING", "ANALYZING", "SELECTING_MOMENTS", "DOWNLOADING", "RENDERING", "FINALIZING"].includes(job.status)) {
+      setGenerationUIState("generating");
+      if (job) {
+        updateProgress(job.progress || 10, job.stage || "Resuming clip generation...");
+      }
+
+      const token = ++activePollingToken;
 
       pollGenerationJob(active.jobId, (progress, stage) => {
         updateProgress(progress, stage);
-      }).then(async (result) => {
+      }, token).then(async (result) => {
+        if (token !== activePollingToken || state.activeGenerationJobId !== active.jobId) return;
+
         if (result?.status === "COMPLETED") {
           await consumeCompletedClips(result.clips);
         } else if (result?.needsUpload || result?.status === "AWAITING_UPLOAD") {
-          showUploadRequiredForSmartClips(result);
           clearActiveGenerationJob();
+          setGenerationUIState("idle");
+          showUploadRequiredForSmartClips(result);
+        } else if (result?.status === "CANCELLED") {
+          clearActiveGenerationJob();
+          setGenerationUIState("idle");
+          updateProgress(0, "Generation cancelled.");
         }
       }).catch((err) => {
+        if (token !== activePollingToken || state.activeGenerationJobId !== active.jobId) return;
         console.error("[Boot] Resumed generation job error:", err);
         clearActiveGenerationJob();
+        setGenerationUIState("idle");
         updateProgress(0, err.message || "Generation failed");
-        if (smartClipBtn) {
-          smartClipBtn.disabled = false;
-          smartClipBtn.textContent = "Get clips in 1 click";
-        }
       });
     }
   } catch (err) {
