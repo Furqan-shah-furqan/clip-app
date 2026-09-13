@@ -1,8 +1,14 @@
 require("dotenv").config();
 const { Worker } = require("bullmq");
-const redis = require("../lib/redis");
+const { createRedisClient } = require("../lib/redis");
+const defaultRedis = require("../lib/redis");
 const prisma = require("../lib/prisma");
-const { GENERATION_QUEUE_NAME } = require("./generationQueue");
+const {
+  GENERATION_QUEUE_NAME,
+  WORKER_HEARTBEAT_KEY,
+  WORKER_HEARTBEAT_TTL_SEC,
+  WORKER_HEARTBEAT_INTERVAL_MS,
+} = require("./generationConstants");
 const {
   runSmartGeneration,
   cleanSmartClipError,
@@ -14,9 +20,52 @@ const concurrency = Math.max(
   parseInt(process.env.GENERATION_WORKER_CONCURRENCY || "1", 10)
 );
 
-console.log(
-  `[GenerationWorker] Initializing worker on queue "${GENERATION_QUEUE_NAME}" with concurrency: ${concurrency}`
-);
+console.log("[GenerationWorker] Starting...");
+
+// Dedicated connection for the BullMQ Worker (handles blocking BRPOP/BLPOP commands)
+const workerConnection = createRedisClient("GenerationWorker");
+
+// ── Heartbeat Mechanism ───────────────────────────────────────────────────────
+let heartbeatInterval = null;
+
+async function sendWorkerHeartbeat() {
+  try {
+    await defaultRedis.set(
+      WORKER_HEARTBEAT_KEY,
+      String(Date.now()),
+      "EX",
+      WORKER_HEARTBEAT_TTL_SEC
+    );
+  } catch (err) {
+    console.warn(`[GenerationWorker] Heartbeat write failed: ${err.message}`);
+  }
+}
+
+async function startHeartbeat() {
+  await sendWorkerHeartbeat();
+  heartbeatInterval = setInterval(sendWorkerHeartbeat, WORKER_HEARTBEAT_INTERVAL_MS);
+}
+
+// ── Validate Database and Start Worker ────────────────────────────────────────
+async function initWorker() {
+  try {
+    // 1. Verify Prisma database connectivity
+    await prisma.$queryRaw`SELECT 1`;
+    console.log("[GenerationWorker] Database ready");
+
+    // 2. Start worker heartbeat in Redis
+    await startHeartbeat();
+    console.log("[GenerationWorker] Redis connected & heartbeat active");
+
+    console.log(`[GenerationWorker] Queue: ${GENERATION_QUEUE_NAME}`);
+    console.log(`[GenerationWorker] Concurrency: ${concurrency}`);
+    console.log("[GenerationWorker] Ready and waiting for jobs");
+  } catch (err) {
+    console.error("[GenerationWorker] Startup check failed:", err.message);
+  }
+}
+
+initWorker();
 
 const generationWorker = new Worker(
   GENERATION_QUEUE_NAME,
@@ -27,15 +76,19 @@ const generationWorker = new Worker(
       throw new Error("Missing generationJobId in generation job payload");
     }
 
-    console.log(`[GenerationWorker] Picked up job ${job.id} for GenerationJob ID: ${generationJobId}`);
+    console.log(`[GenerationWorker] Active job ${job.id} for GenerationJob ID: ${generationJobId}`);
 
     // 1. Fetch persistent GenerationJob from Prisma
     const dbJob = await prisma.generationJob.findUnique({
       where: { id: generationJobId },
     });
 
+    // Handle Case B: BullMQ job exists but database record does not
     if (!dbJob) {
-      throw new Error(`GenerationJob record ${generationJobId} not found in database`);
+      console.warn(
+        `[GenerationWorker] GenerationJob record ${generationJobId} not found in database. Removing stale queue job.`
+      );
+      return { skipped: true, reason: "Record not found in database" };
     }
 
     // Check if cancellation was already requested
@@ -52,7 +105,7 @@ const generationWorker = new Worker(
       return { cancelled: true };
     }
 
-    // 2. Mark started & update attempt info
+    // 2. Claim job immediately in database (Proves queue consumption)
     const attemptCount = (dbJob.attemptCount || 0) + 1;
     await prisma.generationJob.update({
       where: { id: generationJobId },
@@ -60,11 +113,13 @@ const generationWorker = new Worker(
         attemptCount,
         startedAt: dbJob.startedAt || new Date(),
         status: "TRANSCRIBING",
-        stage: "Starting smart generation...",
+        stage: "Starting generation...",
         progress: 5,
         bullJobId: job.id,
       },
     });
+
+    console.log(`[GenerationWorker] Job ${job.id} started (claimed in database as TRANSCRIBING)`);
 
     const isCancelled = async () => {
       const current = await prisma.generationJob.findUnique({
@@ -74,7 +129,10 @@ const generationWorker = new Worker(
       return Boolean(current?.cancelRequestedAt || current?.status === "CANCELLED");
     };
 
+    let lastProgressTime = Date.now();
+
     const onProgress = async (progressPercent, stageMessage) => {
+      lastProgressTime = Date.now();
       console.log(
         `[GenerationWorker][${generationJobId}] [${progressPercent}%] ${stageMessage}`
       );
@@ -82,7 +140,7 @@ const generationWorker = new Worker(
       let status = "RENDERING";
       if (progressPercent <= 25) status = "TRANSCRIBING";
       else if (progressPercent <= 45) status = "SELECTING_MOMENTS";
-      else if (progressPercent <= 55 && stageMessage.toLowerCase().includes("download")) status = "DOWNLOADING";
+      else if (progressPercent <= 64 && stageMessage.toLowerCase().includes("download")) status = "DOWNLOADING";
       else if (progressPercent >= 98) status = "FINALIZING";
 
       try {
@@ -201,23 +259,23 @@ const generationWorker = new Worker(
     }
   },
   {
-    connection: redis,
+    connection: workerConnection,
     concurrency,
   }
 );
 
 generationWorker.on("completed", (job) => {
-  console.log(`[GenerationWorker] BullMQ job ${job.id} marked completed`);
+  console.log(`[GenerationWorker] Job ${job.id} completed`);
 });
 
 generationWorker.on("failed", (job, err) => {
   console.error(
-    `[GenerationWorker] BullMQ job ${job?.id} failed on attempt ${job?.attemptsMade}/${job?.opts?.attempts}: ${err.message}`
+    `[GenerationWorker] Job ${job?.id} failed: ${err.message}`
   );
 });
 
 generationWorker.on("error", (err) => {
-  console.error("[GenerationWorker] Worker internal error:", err);
+  console.error("[GenerationWorker] Worker error:", err.message);
 });
 
 // Graceful shutdown handling
@@ -227,6 +285,14 @@ const gracefulShutdown = async (signal) => {
   isShuttingDown = true;
   console.log(`[GenerationWorker] Received ${signal}. Closing worker gracefully...`);
 
+  if (heartbeatInterval) {
+    clearInterval(heartbeatInterval);
+  }
+
+  try {
+    await defaultRedis.del(WORKER_HEARTBEAT_KEY);
+  } catch {}
+
   try {
     await generationWorker.close();
     console.log("[GenerationWorker] BullMQ worker closed successfully.");
@@ -234,7 +300,7 @@ const gracefulShutdown = async (signal) => {
     console.log("[GenerationWorker] Prisma disconnected.");
     process.exit(0);
   } catch (err) {
-    console.error("[GenerationWorker] Error during shutdown:", err);
+    console.error("[GenerationWorker] Error during shutdown:", err.message);
     process.exit(1);
   }
 };

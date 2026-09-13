@@ -1,14 +1,33 @@
 const { Queue } = require("bullmq");
-const redis = require("../lib/redis");
+const { createRedisClient } = require("../lib/redis");
+const defaultRedis = require("../lib/redis");
+const {
+  GENERATION_QUEUE_NAME,
+  WORKER_HEARTBEAT_KEY,
+} = require("./generationConstants");
 
-const GENERATION_QUEUE_NAME = "clip-generation-jobs";
+// Dedicated Redis connection for BullMQ Queue operations
+const queueConnection = createRedisClient("GenerationQueue");
 
 const generationQueue = new Queue(GENERATION_QUEUE_NAME, {
-  connection: redis,
+  connection: queueConnection,
 });
 
 function getGenerationBullJobId(generationJobId) {
   return `generation-${generationJobId}`;
+}
+
+/**
+ * Checks if the generation worker has posted a heartbeat recently.
+ * @returns {Promise<boolean>}
+ */
+async function isGenerationWorkerAlive() {
+  try {
+    const exists = await defaultRedis.exists(WORKER_HEARTBEAT_KEY);
+    return exists === 1;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -22,7 +41,19 @@ async function addGenerationJob(generationJobId) {
 
   const bullJobId = getGenerationBullJobId(generationJobId);
 
-  return generationQueue.add(
+  // Check worker heartbeat before enqueuing to produce actionable diagnostics
+  const workerAlive = await isGenerationWorkerAlive();
+  if (!workerAlive) {
+    console.warn(
+      `[GenerationQueue] Notice: No active generation worker heartbeat detected in Redis. Job ${generationJobId} will be queued, but ensure a background worker is running.`
+    );
+  }
+
+  console.log(
+    `[GenerationQueue] Adding generation job ${generationJobId} to queue "${GENERATION_QUEUE_NAME}" (BullMQ Job ID: ${bullJobId})`
+  );
+
+  const job = await generationQueue.add(
     "generate-smart-clips",
     { generationJobId },
     {
@@ -36,6 +67,12 @@ async function addGenerationJob(generationJobId) {
       removeOnFail: 100,
     }
   );
+
+  console.log(
+    `[GenerationQueue] Added generation job ${generationJobId}, BullMQ job id: ${job.id} on queue "${GENERATION_QUEUE_NAME}"`
+  );
+
+  return job;
 }
 
 async function removeGenerationJob(generationJobId) {
@@ -45,6 +82,7 @@ async function removeGenerationJob(generationJobId) {
   if (!job) return false;
 
   await job.remove();
+  console.log(`[GenerationQueue] Removed BullMQ job ${bullJobId} from queue "${GENERATION_QUEUE_NAME}"`);
   return true;
 }
 
@@ -54,4 +92,5 @@ module.exports = {
   addGenerationJob,
   removeGenerationJob,
   getGenerationBullJobId,
+  isGenerationWorkerAlive,
 };

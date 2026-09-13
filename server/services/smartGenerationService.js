@@ -201,13 +201,27 @@ async function getLocalSmartTranscript(inputPath) {
 
 const RAPIDAPI_FAST_HOST = "youtube-video-fast-downloader-24-7.p.rapidapi.com";
 
-async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) {
+const YOUTUBE_SOURCE_DOWNLOAD_TIMEOUT_MS = Number(
+  process.env.YOUTUBE_SOURCE_DOWNLOAD_TIMEOUT_MS || 600000
+);
+
+async function downloadVideoViaRapidApi(
+  sourceUrl,
+  destinationDir = uploadsDir,
+  onProgress = () => {}
+) {
   const videoId = extractYouTubeId(sourceUrl);
   if (!videoId) throw new Error("Invalid YouTube URL: unable to extract Video ID");
 
   const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
+  const targetPath = path.join(destinationDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
+
+  // If RapidAPI key is not configured, seamlessly hand off to youtubeDownloader's multi-tier engine
   if (!rapidApiKey) {
-    throw new Error("RAPIDAPI_KEY is not configured on the server. Please configure your RapidAPI key in environment variables.");
+    console.log("[SmartGenerationService] RAPIDAPI_KEY not configured. Handing off to local downloader engine...");
+    onProgress(48, "Using direct video downloader...");
+    const { downloadYouTubeSource } = require("./youtubeDownloader");
+    return await downloadYouTubeSource({ sourceUrl, targetPath });
   }
 
   const host = RAPIDAPI_FAST_HOST;
@@ -215,6 +229,7 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
   const apiUrl = `https://youtube-video-fast-downloader-24-7.p.rapidapi.com/download_video/${cleanId}?quality=720`;
 
   console.log(`[RapidAPI][FAST] Requesting download payload from verified contract: ${apiUrl}`);
+  onProgress(46, "Resolving video download stream from RapidAPI...");
 
   let response;
   try {
@@ -229,13 +244,17 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
   } catch (err) {
     const status = err.response?.status;
     const msg = err.response?.data?.message || err.response?.data?.error || err.message;
-    throw new Error(`RapidAPI request failed (HTTP ${status || "ERR"}): ${msg}`);
+    console.warn(`[RapidAPI][FAST] Request failed (HTTP ${status || "ERR"}): ${msg}. Trying fallback downloader...`);
+    const { downloadYouTubeSource } = require("./youtubeDownloader");
+    return await downloadYouTubeSource({ sourceUrl, targetPath });
   }
 
   const data = response.data;
   const cdnUrl = data.file || data.link || data.download_url || data.downloadUrl || data.url || data.video?.file || data.video?.url;
   if (!cdnUrl) {
-    throw new Error("No CDN URL found in RapidAPI payload: " + JSON.stringify(data));
+    console.warn("[RapidAPI][FAST] No CDN URL in payload. Falling back to alternative downloader...");
+    const { downloadYouTubeSource } = require("./youtubeDownloader");
+    return await downloadYouTubeSource({ sourceUrl, targetPath });
   }
 
   const cdnFileUrl = cdnUrl;
@@ -245,12 +264,12 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
   const pollIntervalMs = 6000;
   let fileReady = false;
   fs.mkdirSync(destinationDir, { recursive: true });
-  const targetPath = path.join(destinationDir, `yt_rapidapi_${videoId}_${Date.now()}.mp4`);
 
   console.log(`[RapidAPI-Poll] Starting safe polling for CDN file: ${cdnFileUrl.slice(0, 80)}...`);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
+      onProgress(48, `Waiting for video CDN stream (attempt ${attempt}/${maxAttempts})...`);
       const probe = await axios({
         method: "GET",
         url: cdnFileUrl,
@@ -267,8 +286,30 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
         console.log(`[RapidAPI-Poll] ✅ CDN file ready on attempt ${attempt} (HTTP 200)`);
         console.log(`[RapidAPI-Stream] Streaming completed CDN file to disk: ${targetPath}`);
 
+        const totalBytes = Number(probe.headers["content-length"]) || 0;
+        let downloadedBytes = 0;
+        let lastProgressUpdate = 0;
+
         const writer = fs.createWriteStream(targetPath);
         await new Promise((resolve, reject) => {
+          probe.data.on("data", (chunk) => {
+            downloadedBytes += chunk.length;
+            const now = Date.now();
+            if (now - lastProgressUpdate > 1800) {
+              lastProgressUpdate = now;
+              if (totalBytes > 0) {
+                const ratio = Math.min(1, downloadedBytes / totalBytes);
+                const mappedPercent = Math.min(64, Math.round(48 + ratio * 16));
+                const dlMb = (downloadedBytes / 1048576).toFixed(1);
+                const totMb = (totalBytes / 1048576).toFixed(1);
+                onProgress(mappedPercent, `Downloading source video — ${dlMb} MB / ${totMb} MB (${Math.round(ratio * 100)}%)`);
+              } else {
+                const dlMb = (downloadedBytes / 1048576).toFixed(1);
+                onProgress(54, `Downloading source video — ${dlMb} MB downloaded`);
+              }
+            }
+          });
+
           probe.data.pipe(writer);
           writer.on("finish", () => {
             writer.close(() => {
@@ -279,6 +320,7 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
                 return reject(new Error(`Downloaded file is too small or incomplete (${stat.size} bytes).`));
               }
               console.log(`[RapidAPI-Stream] ✅ Saved ${(stat.size / 1024 / 1024).toFixed(2)} MB to ${targetPath}`);
+              onProgress(64, `Source video ready (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
               resolve();
             });
           });
@@ -313,25 +355,32 @@ async function downloadVideoViaRapidApi(sourceUrl, destinationDir = uploadsDir) 
   }
 
   if (!fileReady) {
-    throw new Error("RapidAPI CDN file preparation timed out after 3 minutes (30 attempts).");
+    console.warn("[RapidAPI-Poll] RapidAPI file preparation timed out. Trying fallback downloader...");
+    const { downloadYouTubeSource } = require("./youtubeDownloader");
+    return await downloadYouTubeSource({ sourceUrl, targetPath });
   }
 
   return targetPath;
 }
 
-function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType) {
+function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSourceType, options = {}) {
   const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;
   const startTime = suggestion.start || secondsToTime(suggestion.startSec || 0);
   const endTime = suggestion.end || secondsToTime(suggestion.endSec || 0);
   const duration = Math.max(0, timeToSeconds(endTime) - timeToSeconds(startTime));
+
+  const persistentUrl = options.storageUrl || null;
+  const localDownloadUrl = `/api/files/download/${result.fileName}`;
+  const accessibleUrl = persistentUrl || localDownloadUrl;
 
   return {
     message: "Smart clip generated successfully",
     fileName: result.fileName,
     outputPath: result.outputPath,
     filePath: result.outputPath,
-    downloadUrl: `/api/files/download/${result.fileName}`,
-    previewUrl: `/api/files/download/${result.fileName}`,
+    storageUrl: persistentUrl,
+    downloadUrl: accessibleUrl,
+    previewUrl: accessibleUrl,
     startTime,
     endTime,
     startSec: suggestion.startSec,
@@ -514,13 +563,13 @@ async function runSmartGeneration({
     let sourceVideoPath = null;
     try {
       if (await isCancelled()) throw new Error("Job cancelled by user");
-      onProgress(50, "Downloading YouTube source video...");
-      sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl, workspace.sourceDir);
+      onProgress(45, "Starting YouTube source download...");
+      sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl, workspace.sourceDir, onProgress);
 
       for (let i = 0; i < suggestions.length; i++) {
         if (await isCancelled()) throw new Error("Job cancelled by user");
 
-        const progressPercent = Math.round(55 + (i / suggestions.length) * 40);
+        const progressPercent = Math.round(65 + (i / suggestions.length) * 30);
         onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
 
         const suggestion = suggestions[i];
@@ -546,7 +595,23 @@ async function runSmartGeneration({
           }
         }
 
-        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+        // Production storage persistence (Render cross-container support)
+        let storageUrl = null;
+        if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+          try {
+            onProgress(progressPercent, `Saving clip ${i + 1} to cloud storage...`);
+            const { uploadVideoToCloudinary } = require("./storage/cloudinaryStorageService");
+            const cloudRes = await uploadVideoToCloudinary(result.outputPath, {
+              folder: `clipflow/jobs/${generationJobId}`,
+            });
+            storageUrl = cloudRes.secureUrl;
+            console.log(`[SmartGenerationService][Job ${generationJobId}] Uploaded clip ${i + 1} to Cloudinary: ${storageUrl}`);
+          } catch (cloudErr) {
+            console.warn(`[SmartGenerationService][Job ${generationJobId}] Cloudinary clip upload warning:`, cloudErr.message);
+          }
+        }
+
+        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl }));
       }
 
       if (!clips.length) {
@@ -573,36 +638,76 @@ async function runSmartGeneration({
     }
   } else {
     // Step 4: Local Upload Rendering
-    for (let i = 0; i < suggestions.length; i++) {
-      if (await isCancelled()) throw new Error("Job cancelled by user");
+    let effectiveInputPath = resolveSmartInputVideo(inputPath);
+    let downloadedRemoteSource = null;
 
-      const progressPercent = Math.round(55 + (i / suggestions.length) * 40);
-      onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
-
-      const suggestion = suggestions[i];
-      const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-      const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
-
-      const result = await smartGenerateClip({
-        inputPath,
-        startTime: secondsToTime(startSec),
-        endTime: secondsToTime(endSec),
-        aspectRatio: aspectRatio || "9:16",
-        outputDir: workspace.clipsDir,
-        jobId: generationJobId,
-      });
-
-      // Ensure clip is also present in exportsDir for global downloads/views
-      const targetExportPath = path.join(exportsDir, result.fileName);
-      if (fs.existsSync(result.outputPath) && result.outputPath !== targetExportPath) {
-        try {
-          fs.copyFileSync(result.outputPath, targetExportPath);
-        } catch (copyErr) {
-          console.warn(`[SmartGenerationService] Failed copying clip to exportsDir:`, copyErr.message);
-        }
+    try {
+      // If local path is missing on this worker instance, check if remote storageUrl was passed
+      if (!effectiveInputPath && (sourceUrl || (inputPath && inputPath.startsWith("http")))) {
+        const remoteSourceUrl = sourceUrl || inputPath;
+        console.log(`[SmartGenerationService][Job ${generationJobId}] Uploaded file not found locally. Streaming from remote URL: ${remoteSourceUrl.slice(0, 80)}...`);
+        onProgress(48, "Downloading source video from storage...");
+        downloadedRemoteSource = path.join(workspace.sourceDir, `source_${Date.now()}.mp4`);
+        const { streamRemoteVideoToFile } = require("./youtubeDownloader");
+        await streamRemoteVideoToFile(remoteSourceUrl, downloadedRemoteSource);
+        effectiveInputPath = downloadedRemoteSource;
       }
 
-      clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType));
+      if (!effectiveInputPath) {
+        throw new Error("Input video file could not be found or retrieved for processing.");
+      }
+
+      for (let i = 0; i < suggestions.length; i++) {
+        if (await isCancelled()) throw new Error("Job cancelled by user");
+
+        const progressPercent = Math.round(55 + (i / suggestions.length) * 40);
+        onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
+
+        const suggestion = suggestions[i];
+        const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
+        const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+
+        const result = await smartGenerateClip({
+          inputPath: effectiveInputPath,
+          startTime: secondsToTime(startSec),
+          endTime: secondsToTime(endSec),
+          aspectRatio: aspectRatio || "9:16",
+          outputDir: workspace.clipsDir,
+          jobId: generationJobId,
+        });
+
+        // Ensure clip is also present in exportsDir for global downloads/views
+        const targetExportPath = path.join(exportsDir, result.fileName);
+        if (fs.existsSync(result.outputPath) && result.outputPath !== targetExportPath) {
+          try {
+            fs.copyFileSync(result.outputPath, targetExportPath);
+          } catch (copyErr) {
+            console.warn(`[SmartGenerationService] Failed copying clip to exportsDir:`, copyErr.message);
+          }
+        }
+
+        // Production storage persistence (Render cross-container support)
+        let storageUrl = null;
+        if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+          try {
+            onProgress(progressPercent, `Saving clip ${i + 1} to cloud storage...`);
+            const { uploadVideoToCloudinary } = require("./storage/cloudinaryStorageService");
+            const cloudRes = await uploadVideoToCloudinary(result.outputPath, {
+              folder: `clipflow/jobs/${generationJobId}`,
+            });
+            storageUrl = cloudRes.secureUrl;
+            console.log(`[SmartGenerationService][Job ${generationJobId}] Uploaded clip ${i + 1} to Cloudinary: ${storageUrl}`);
+          } catch (cloudErr) {
+            console.warn(`[SmartGenerationService][Job ${generationJobId}] Cloudinary clip upload warning:`, cloudErr.message);
+          }
+        }
+
+        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl }));
+      }
+    } finally {
+      if (downloadedRemoteSource) {
+        cleanupFile(downloadedRemoteSource);
+      }
     }
   }
 

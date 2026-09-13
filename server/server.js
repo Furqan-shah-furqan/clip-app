@@ -1242,5 +1242,8 @@ server.on("upgrade", (request, socket, head) => {
 });
 
 server.listen(PORT, () => {
+  console.log(`[ClipFlow] Web API starting on port ${PORT}`);
+  console.log(`[ClipFlow] Database configured: ${Boolean(process.env.DATABASE_URL) ? "yes" : "no"}`);
+  console.log(`[ClipFlow] Redis configured: ${Boolean(process.env.REDIS_URL) ? "yes" : "no"}`);
   console.log(`Server running on http://localhost:${PORT}`);
 });

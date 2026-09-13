@@ -2889,10 +2889,23 @@ async function pollGenerationJob(jobId, onProgress, token = 0) {
       throw new Error("Invalid response received from generation job status endpoint");
     }
 
-    const { status, progress, stage, message, needsUpload, suggestions, clips, error } = job;
+    const { status, progress, stage, message, needsUpload, suggestions, clips, error, createdAt, startedAt } = job;
+
+    let displayStage = stage || message || "Processing...";
+    let displayProgress = progress != null ? progress : 0;
+
+    if (status === "QUEUED") {
+      displayProgress = 5;
+      const queuedElapsedMs = createdAt ? (Date.now() - new Date(createdAt).getTime()) : 0;
+      if (queuedElapsedMs > 60000 && !startedAt) {
+        displayStage = "Waiting for generation worker (worker may be spinning up)...";
+      } else {
+        displayStage = stage || "Waiting for generation worker...";
+      }
+    }
 
     if (onProgress && typeof onProgress === "function") {
-      onProgress(progress || 0, stage || message || "Processing...");
+      onProgress(displayProgress, displayStage);
     }
 
     if (status === "COMPLETED") {
@@ -3446,7 +3459,11 @@ async function resumeActiveGenerationJobIfAny() {
     if (!job || ["QUEUED", "TRANSCRIBING", "ANALYZING", "SELECTING_MOMENTS", "DOWNLOADING", "RENDERING", "FINALIZING"].includes(job.status)) {
       setGenerationUIState("generating");
       if (job) {
-        updateProgress(job.progress || 10, job.stage || "Resuming clip generation...");
+        const queuedElapsed = job.status === "QUEUED" && job.createdAt ? (Date.now() - new Date(job.createdAt).getTime()) : 0;
+        const stageMsg = (job.status === "QUEUED" && queuedElapsed > 60000)
+          ? "Waiting for generation worker (worker may be spinning up)..."
+          : (job.stage || (job.status === "QUEUED" ? "Waiting for generation worker..." : "Resuming clip generation..."));
+        updateProgress(job.status === "QUEUED" ? 5 : (job.progress || 10), stageMsg);
       }
 
       const token = ++activePollingToken;

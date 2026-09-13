@@ -306,10 +306,37 @@ router.get("/diag", async (req, res) => {
   return res.json(results);
 });
 
+router.get("/generation-health", async (req, res) => {
+  try {
+    const defaultRedis = require("../lib/redis");
+    const { WORKER_HEARTBEAT_KEY, GENERATION_QUEUE_NAME } = require("../queue/generationConstants");
+    const heartbeatVal = await defaultRedis.get(WORKER_HEARTBEAT_KEY);
+    const workerRecentlySeen = Boolean(heartbeatVal);
+    const heartbeatAgeSec = heartbeatVal ? Math.round((Date.now() - Number(heartbeatVal)) / 1000) : null;
+
+    return res.json({
+      ok: true,
+      redisConfigured: true,
+      queueReachable: true,
+      generationWorkerRecentlySeen: workerRecentlySeen,
+      lastWorkerHeartbeatAgoSeconds: heartbeatAgeSec,
+      queueName: GENERATION_QUEUE_NAME,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      ok: false,
+      redisConfigured: false,
+      queueReachable: false,
+      generationWorkerRecentlySeen: false,
+      error: err.message,
+    });
+  }
+});
+
 router.post("/smart-generate", async (req, res) => {
   try {
     const {
-      sourceType, inputPath, sourceUrl, segments,
+      sourceType, inputPath, sourceUrl, storageUrl, segments,
       maxClips, minScore, clipLengthSec, minDurationSec,
       maxDurationSec, aspectRatio, videoDurationSec,
     } = req.body || {};
@@ -323,19 +350,21 @@ router.post("/smart-generate", async (req, res) => {
       return res.status(400).json({ error: "Input video file is required." });
     }
 
+    const resolvedRemoteUrl = normalizedSourceType === "youtube" ? sourceUrl : (storageUrl || null);
+
     // 1. Create persistent GenerationJob record in PostgreSQL/Prisma
     const job = await prisma.generationJob.create({
       data: {
         sourceType: normalizedSourceType,
-        sourceUrl: normalizedSourceType === "youtube" ? sourceUrl : null,
+        sourceUrl: resolvedRemoteUrl,
         inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
         status: "QUEUED",
         progress: 0,
-        stage: "Queued for processing",
+        stage: "Waiting for generation worker...",
         requestJson: {
           sourceType: normalizedSourceType,
           inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
-          sourceUrl: normalizedSourceType === "youtube" ? sourceUrl : null,
+          sourceUrl: resolvedRemoteUrl,
           segments: Array.isArray(segments) ? segments : null,
           maxClips: Number(maxClips) || 3,
           minScore: Number(minScore) || 50,
@@ -349,7 +378,24 @@ router.post("/smart-generate", async (req, res) => {
     });
 
     // 2. Enqueue job into BullMQ
-    await addGenerationJob(job.id);
+    try {
+      await addGenerationJob(job.id);
+    } catch (enqueueError) {
+      console.error(`[SmartGenerate] Failed to add job ${job.id} to BullMQ:`, enqueueError.message);
+      await prisma.generationJob.update({
+        where: { id: job.id },
+        data: {
+          status: "FAILED",
+          stage: "Failed to queue job",
+          errorMessage: `Queue error: ${enqueueError.message}`,
+          completedAt: new Date(),
+        },
+      });
+      return res.status(500).json({
+        error: "Failed to queue smart clip generation",
+        details: enqueueError.message,
+      });
+    }
 
     console.log(`[SmartGenerate] Enqueued background generation job: ${job.id} (${normalizedSourceType})`);
 
@@ -357,9 +403,9 @@ router.post("/smart-generate", async (req, res) => {
     return res.status(202).json({
       success: true,
       jobId: job.id,
-      status: job.status,
-      progress: job.progress,
-      stage: job.stage,
+      status: "QUEUED",
+      progress: 0,
+      stage: "Waiting for generation worker...",
     });
   } catch (error) {
     console.error("[POST /smart-generate] Failed to queue generation job:", error);
