@@ -2,7 +2,7 @@ services:
   # Single Free Web Service running both Express API and Generation Worker via supervisor
   - type: web
     name: clipflow-studio
-    env: docker
+    runtime: docker
     dockerfilePath: Dockerfile
     dockerCommand: npm run start:render
     plan: free

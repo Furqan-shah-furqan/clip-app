@@ -47,6 +47,7 @@ function startService(key) {
   console.log(`[Supervisor] Launching ${svc.name} (${path.relative(process.cwd(), svc.script)})...`);
 
   const child = spawn(process.execPath, [svc.script], {
+    cwd: path.resolve(__dirname, ".."),
     env: process.env,
     stdio: "inherit",
     windowsHide: true,
@@ -94,8 +95,11 @@ function startService(key) {
   });
 }
 
-// Start both child processes
+// Start both child processes with explicit logging
+console.log("[Supervisor] Starting web process");
 startService("web");
+
+console.log("[Supervisor] Starting generation worker");
 startService("worker");
 
 // ── Graceful Shutdown ─────────────────────────────────────────────────────────
