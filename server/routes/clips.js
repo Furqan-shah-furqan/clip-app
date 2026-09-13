@@ -434,6 +434,27 @@ router.get("/generation-jobs/:jobId", async (req, res) => {
     const resultClips = job.resultJson?.clips || [];
     const suggestions = job.suggestionsJson || [];
     const isAwaitingUpload = job.status === "AWAITING_UPLOAD";
+    const isUploadJob = job.sourceType === "upload";
+    const youtubeSourceUrl =
+      job.sourceType === "youtube"
+        ? job.sourceUrl ||
+          job.requestJson?.sourceUrl ||
+          job.requestJson?.youtubeUrl ||
+          null
+        : null;
+    const hasUploadSource = isUploadJob
+      ? Boolean(
+          job.inputPath ||
+            job.requestJson?.inputPath ||
+            job.requestJson?.originalFilename ||
+            job.requestJson?.fileName
+        )
+      : false;
+    const uploadFileName = isUploadJob
+      ? job.requestJson?.originalFilename ||
+        job.requestJson?.fileName ||
+        "Uploaded video"
+      : null;
 
     return res.json({
       success: true,
@@ -443,6 +464,10 @@ router.get("/generation-jobs/:jobId", async (req, res) => {
         progress: job.progress,
         stage: job.stage || "",
         message: job.stage || "",
+        sourceType: job.sourceType || (youtubeSourceUrl ? "youtube" : "upload"),
+        sourceUrl: youtubeSourceUrl,
+        hasUploadSource,
+        sourceName: uploadFileName,
         needsUpload: isAwaitingUpload,
         suggestions,
         clips: resultClips,
