@@ -578,28 +578,22 @@ router.post("/generate", async (req, res) => {
     fs.mkdirSync(exportsDir, { recursive: true });
 
     let result;
-    let tempSectionPath = null;
 
-    try {
-      if (normalizedSourceType === "youtube") {
-        tempSectionPath = await downloadVideoViaRapidApi(sourceUrl);
-
-        result = await smartGenerateClip({
-          inputPath: tempSectionPath,
-          startTime,
-          endTime,
-          aspectRatio: aspectRatio || "9:16",
-        });
-      } else {
-        result = await smartGenerateClip({
-          inputPath,
-          startTime,
-          endTime,
-          aspectRatio: aspectRatio || "9:16",
-        });
-      }
-    } finally {
-      cleanupFile(tempSectionPath);
+    if (normalizedSourceType === "youtube") {
+      result = await smartGenerateClip({
+        sourceUrl,
+        inputPath: sourceUrl,
+        startTime,
+        endTime,
+        aspectRatio: aspectRatio || "9:16",
+      });
+    } else {
+      result = await smartGenerateClip({
+        inputPath,
+        startTime,
+        endTime,
+        aspectRatio: aspectRatio || "9:16",
+      });
     }
 
     const outputStat = fs.existsSync(result.outputPath) ? fs.statSync(result.outputPath) : null;

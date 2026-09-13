@@ -665,26 +665,23 @@ async function runSmartGeneration({
   const clips = [];
   fs.mkdirSync(exportsDir, { recursive: true });
 
-  // Step 3: Source Acquisition (if YouTube)
+  // Step 3: Individual Trimmed Clip Acquisition & Generation (if YouTube)
   if (normalizedSourceType === "youtube") {
-    let sourceVideoPath = null;
     try {
-      if (await isCancelled()) throw new Error("Job cancelled by user");
-      onProgress(45, "Starting YouTube source download...");
-      sourceVideoPath = await downloadVideoViaRapidApi(sourceUrl, workspace.sourceDir, onProgress);
-
       for (let i = 0; i < suggestions.length; i++) {
         if (await isCancelled()) throw new Error("Job cancelled by user");
 
-        const progressPercent = Math.round(65 + (i / suggestions.length) * 30);
-        onProgress(progressPercent, `Generating clip ${i + 1} of ${suggestions.length}...`);
+        const progressPercent = Math.round(45 + (i / suggestions.length) * 50);
+        onProgress(progressPercent, `Downloading & clipping moment ${i + 1} of ${suggestions.length}...`);
 
         const suggestion = suggestions[i];
-        const startSec = Number(suggestion.startSec || timeToSeconds(suggestion.start || "00:00:00"));
-        const endSec = Number(suggestion.endSec || timeToSeconds(suggestion.end || "00:00:30"));
+        const startSec = Number(suggestion.startSec != null ? suggestion.startSec : timeToSeconds(suggestion.start || "00:00:00"));
+        const endSec = Number(suggestion.endSec != null ? suggestion.endSec : timeToSeconds(suggestion.end || "00:00:30"));
 
         const result = await smartGenerateClip({
-          inputPath: sourceVideoPath,
+          sourceUrl,
+          inputPath: sourceUrl,
+          clip: { startTime: startSec, endTime: endSec },
           startTime: secondsToTime(startSec),
           endTime: secondsToTime(endSec),
           aspectRatio: aspectRatio || "9:16",
@@ -729,21 +726,17 @@ async function runSmartGeneration({
     } catch (err) {
       if (err.message === "Job cancelled by user") throw err;
 
-      console.error(`[SmartGenerationService][Job ${generationJobId}] YouTube source acquisition failed:`, err.message || err);
-      const cleanMsg = cleanSmartClipError(err);
+      console.error(`[SmartGenerationService][Job ${generationJobId}] YouTube clip generation failed:`, err.message || err);
+      const cleanMsg = err.message || "Failed to generate clips";
       return {
         success: false,
         needsUpload: true,
-        error: "YOUTUBE_AUTH_REQUIRED",
+        error: "YOUTUBE_CLIP_FAILED",
         details: cleanMsg,
         message: cleanMsg,
         suggestions,
         clips: [],
       };
-    } finally {
-      if (sourceVideoPath) {
-        cleanupFile(sourceVideoPath);
-      }
     }
   } else {
     // Step 4: Local Upload Rendering
