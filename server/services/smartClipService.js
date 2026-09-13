@@ -99,6 +99,20 @@ function terminateJobProcess(jobId) {
   return true;
 }
 
+// Rate-limit tracking to ensure at least 4-second cool-down between RapidAPI calls
+let lastRapidApiCallTimestamp = 0;
+
+async function enforceRapidApiCooldown() {
+  const now = Date.now();
+  const elapsed = now - lastRapidApiCallTimestamp;
+  if (lastRapidApiCallTimestamp > 0 && elapsed < 4000) {
+    const delay = 4000 - elapsed;
+    console.log(`[smartClipService] Cool-down: waiting ${delay}ms before next RapidAPI trim request...`);
+    await new Promise((res) => setTimeout(res, delay));
+  }
+  lastRapidApiCallTimestamp = Date.now();
+}
+
 /**
  * Downloads an individual clip snippet using RapidAPI's trim parameters.
  * Enables long-form podcast clipping (1-2+ hours) without downloading the full video.
@@ -136,18 +150,26 @@ async function downloadTrimmedClipViaRapidApi({
   const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
   const host = "youtube-video-fast-downloader-24-7.p.rapidapi.com";
 
-  if (rapidApiKey) {
-    const apiUrl = `https://${host}/download_video/${cleanId}?quality=18&trim_start_time=${trimStart}&trim_duration=${trimDuration}`;
-    console.log(`[smartClipService] Requesting trimmed clip from RapidAPI: ${apiUrl}`);
+  if (!rapidApiKey) {
+    throw new Error("RAPIDAPI_KEY is not configured on the server. Please add your key in environment settings.");
+  }
 
+  const maxRapidApiAttempts = 2; // Initial attempt + 1 retry on network hiccup
+
+  for (let attempt = 1; attempt <= maxRapidApiAttempts; attempt++) {
     try {
+      await enforceRapidApiCooldown();
+
+      const apiUrl = `https://${host}/download_video/${cleanId}?quality=18&trim_start_time=${trimStart}&trim_duration=${trimDuration}`;
+      console.log(`[smartClipService] RapidAPI trim request (attempt ${attempt}/${maxRapidApiAttempts}): ${apiUrl}`);
+
       const response = await axios.get(apiUrl, {
         headers: {
           "x-rapidapi-host": host,
           "x-rapidapi-key": rapidApiKey,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
-        timeout: 45000,
+        timeout: 120000, // 120s timeout (2 minutes)
       });
 
       const data = response.data;
@@ -168,18 +190,18 @@ async function downloadTrimmedClipViaRapidApi({
 
       console.log(`[smartClipService] RapidAPI returned CDN URL: ${cdnUrl.slice(0, 80)}...`);
 
-      // Poll CDN URL until status 200
-      const maxAttempts = 35;
+      // Poll CDN URL until status 200 (allow up to 120 seconds)
+      const maxAttempts = 40;
       const pollIntervalMs = 3000;
       let fileReady = false;
 
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      for (let poll = 1; poll <= maxAttempts; poll++) {
         try {
           const probe = await axios({
             method: "GET",
             url: cdnUrl,
             responseType: "stream",
-            timeout: 12000,
+            timeout: 15000,
             maxRedirects: 5,
             validateStatus: (status) => status === 200 || status === 404,
             headers: {
@@ -195,7 +217,7 @@ async function downloadTrimmedClipViaRapidApi({
           try { probe.data.destroy(); } catch {}
         } catch (probeErr) {}
 
-        if (attempt < maxAttempts) {
+        if (poll < maxAttempts) {
           await new Promise((r) => setTimeout(r, pollIntervalMs));
         }
       }
@@ -206,7 +228,7 @@ async function downloadTrimmedClipViaRapidApi({
         method: "GET",
         url: cdnUrl,
         responseType: "stream",
-        timeout: 90000,
+        timeout: 120000, // 120s timeout
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
@@ -230,35 +252,19 @@ async function downloadTrimmedClipViaRapidApi({
         console.log(`[smartClipService] ✅ Successfully downloaded trimmed snippet (${(fs.statSync(snippetPath).size / 1024 / 1024).toFixed(2)} MB): ${snippetPath}`);
         return snippetPath;
       }
+
+      throw new Error("Downloaded snippet file is missing or empty");
     } catch (rapidErr) {
-      console.warn(`[smartClipService] RapidAPI trim download failed (${rapidErr.message}). Trying fallback section download...`);
+      console.warn(`[smartClipService] RapidAPI trim download attempt ${attempt}/${maxRapidApiAttempts} failed (${rapidErr.message})`);
       try { if (fs.existsSync(snippetPath)) fs.unlinkSync(snippetPath); } catch {}
+
+      if (attempt < maxRapidApiAttempts) {
+        console.log("[smartClipService] Network hiccup detected. Retrying RapidAPI trim download in 4 seconds...");
+        await new Promise((res) => setTimeout(res, 4000));
+      } else {
+        throw new Error(`RapidAPI trimmed download failed after ${maxRapidApiAttempts} attempts: ${rapidErr.message}`);
+      }
     }
-  } else {
-    console.log("[smartClipService] RAPIDAPI_KEY not configured. Using direct section downloader...");
-  }
-
-  // Fallback: yt-dlp section download (--download-sections) to fetch ONLY the clip section without full-video download
-  console.log(`[smartClipService] Fallback: downloading trimmed section ${trimStart}-${trimStart + trimDuration}s via yt-dlp...`);
-  const { getYtDlpPath, buildYtDlpBaseArgs, runCommand } = require("./youtubeDownloader");
-
-  const binary = getYtDlpPath();
-  const args = buildYtDlpBaseArgs({
-    targetUrl: `https://www.youtube.com/watch?v=${cleanId}`,
-    targetPath: snippetPath,
-    format: "bestvideo*[height<=720]+bestaudio/best[height<=720]/18/best",
-    extraArgs: [
-      "--download-sections",
-      `*${trimStart}-${trimStart + trimDuration}`,
-      "--force-keyframes-at-cuts",
-    ],
-  });
-
-  await runCommand(binary, args, { timeoutMs: 120000 });
-
-  if (fs.existsSync(snippetPath) && fs.statSync(snippetPath).size > 5000) {
-    console.log(`[smartClipService] ✅ yt-dlp trimmed section download succeeded: ${snippetPath}`);
-    return snippetPath;
   }
 
   throw new Error(`Failed to download trimmed video segment (${trimStart}s - ${trimStart + trimDuration}s)`);

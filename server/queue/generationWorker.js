@@ -192,10 +192,10 @@ const generationWorker = new Worker(
         isCancelled,
       });
 
-      // 4. Handle YouTube AWAITING_UPLOAD case
-      if (result.needsUpload) {
+      // 4. Handle YouTube AWAITING_UPLOAD case (only when NO clips were generated)
+      if (result.needsUpload && (!result.clips || result.clips.length === 0)) {
         console.log(
-          `[GenerationWorker][${generationJobId}] YouTube direct download unavailable. Setting AWAITING_UPLOAD.`
+          `[GenerationWorker][${generationJobId}] YouTube direct download unavailable and 0 clips generated. Setting AWAITING_UPLOAD.`
         );
         await prisma.generationJob.update({
           where: { id: generationJobId },

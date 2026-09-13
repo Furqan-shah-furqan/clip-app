@@ -667,17 +667,23 @@ async function runSmartGeneration({
 
   // Step 3: Individual Trimmed Clip Acquisition & Generation (if YouTube)
   if (normalizedSourceType === "youtube") {
-    try {
-      for (let i = 0; i < suggestions.length; i++) {
-        if (await isCancelled()) throw new Error("Job cancelled by user");
+    for (let i = 0; i < suggestions.length; i++) {
+      if (await isCancelled()) throw new Error("Job cancelled by user");
 
-        const progressPercent = Math.round(45 + (i / suggestions.length) * 50);
-        onProgress(progressPercent, `Downloading & clipping moment ${i + 1} of ${suggestions.length}...`);
+      // Requirement 2: 4-second cool-down between clips to prevent tripping RapidAPI rate limit
+      if (i > 0) {
+        console.log(`[SmartGenerationService] Cooling down 4s before requesting clip ${i + 1}...`);
+        await new Promise((res) => setTimeout(res, 4000));
+      }
 
-        const suggestion = suggestions[i];
-        const startSec = Number(suggestion.startSec != null ? suggestion.startSec : timeToSeconds(suggestion.start || "00:00:00"));
-        const endSec = Number(suggestion.endSec != null ? suggestion.endSec : timeToSeconds(suggestion.end || "00:00:30"));
+      const progressPercent = Math.round(45 + (i / suggestions.length) * 50);
+      onProgress(progressPercent, `Downloading & clipping moment ${i + 1} of ${suggestions.length}...`);
 
+      const suggestion = suggestions[i];
+      const startSec = Number(suggestion.startSec != null ? suggestion.startSec : timeToSeconds(suggestion.start || "00:00:00"));
+      const endSec = Number(suggestion.endSec != null ? suggestion.endSec : timeToSeconds(suggestion.end || "00:00:30"));
+
+      try {
         const result = await smartGenerateClip({
           sourceUrl,
           inputPath: sourceUrl,
@@ -718,22 +724,26 @@ async function runSmartGeneration({
         }
 
         clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl }));
+      } catch (clipErr) {
+        if (clipErr.message === "Job cancelled by user") throw clipErr;
+        console.error(`[SmartGenerationService][Job ${generationJobId}] Moment ${i + 1} processing error:`, clipErr.message || clipErr);
+        // Requirement 4: Do not abort entire job if other clips succeeded or can succeed
       }
+    }
 
-      if (!clips.length) {
-        throw new Error("No clips could be produced from the source video.");
-      }
-    } catch (err) {
-      if (err.message === "Job cancelled by user") throw err;
-
-      console.error(`[SmartGenerationService][Job ${generationJobId}] YouTube clip generation failed:`, err.message || err);
-      const cleanMsg = err.message || "Failed to generate clips";
+    // Requirement 4: Partial success preservation (if 2 out of 3 clips succeed, return success)
+    if (clips.length > 0) {
+      console.log(
+        `[SmartGenerationService][Job ${generationJobId}] ✅ Generated ${clips.length}/${suggestions.length} clips successfully.`
+      );
+    } else {
+      console.error(`[SmartGenerationService][Job ${generationJobId}] All clips failed for YouTube source.`);
       return {
         success: false,
         needsUpload: true,
         error: "YOUTUBE_CLIP_FAILED",
-        details: cleanMsg,
-        message: cleanMsg,
+        details: "Unable to download video clips from YouTube.",
+        message: "Unable to download video clips from YouTube. Upload the source video to continue.",
         suggestions,
         clips: [],
       };
