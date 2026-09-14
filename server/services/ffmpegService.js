@@ -33,11 +33,11 @@ function parseTimeToSeconds(time) {
 }
 
 function toAssTime(sec) {
-  const s = Math.max(0, Number(sec) || 0);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = Math.floor(s % 60);
-  const cs = Math.round((s % 1) * 100);
+  const total = Math.round(Math.max(0, Number(sec) || 0) * 100);
+  const h = Math.floor(total / 360000);
+  const m = Math.floor(total / 6000) % 60;
+  const ss = Math.floor(total / 100) % 60;
+  const cs = total % 100;
   return `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
 }
 
@@ -348,7 +348,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   const events = segments.map((seg) => {
     const start = Number(seg.start) || 0;
-    const end = Math.max(start + 0.2, Number(seg.end) || start + 0.2);
+    const end = Math.max(start + 0.01, Number(seg.end) || start + 0.01);
     const durationMs = Math.round((end - start) * 1000);
 
     let text = normalizeText(seg.text, textTransform);
@@ -384,7 +384,7 @@ function buildDrawtextFilters(segments, style = {}) {
 
   return segments.map((seg) => {
     const start = Number(seg.start) || 0;
-    const end = Math.max(start + 0.2, Number(seg.end) || start + 0.2);
+    const end = Math.max(start + 0.01, Number(seg.end) || start + 0.01);
     const dur = end - start;
     const fadeInDur = Math.min(0.3, dur * 0.25);
     const fadeOutDur = Math.min(0.25, dur * 0.18);
@@ -454,7 +454,7 @@ function burnSubtitles({ inputPath, segments, style }) {
     const safeAssPath = escapeFilterPath(assPath);
     const safeOutput = outputPath.replace(/\\/g, '/');
 
-    const ffmpegBin = fs.existsSync(localBinFfmpeg) ? localBinFfmpeg : 'ffmpeg';
+    const ffmpegBin = process.env.FFMPEG_PATH || (fs.existsSync(localBinFfmpeg) ? localBinFfmpeg : 'ffmpeg');
     const proc = spawn(ffmpegBin, [
       '-y',
       '-i', inputPath,
