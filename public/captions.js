@@ -1118,6 +1118,10 @@ function persistCaptions() {
       start: s.start,
       end: s.end,
       text: s.text,
+      // ✅ FIX 1: Preserve Whisper word-level timestamps through localStorage round-trip.
+      // Without this, every page reload loses precise word timing and falls back to
+      // dumb progress-based word switching (bad timing, wrong highlights).
+      words: Array.isArray(s.words) && s.words.length > 0 ? s.words : undefined,
     })),
     captionStyle: { ...editorState.style },
   };
@@ -1595,21 +1599,32 @@ function generateSmartCaptionsForClip(clip = {}, duration = 30) {
   const chunks = [];
   const wordsPerChunk = 5;
   for (let i = 0; i < words.length; i += wordsPerChunk) {
-    chunks.push(words.slice(i, i + wordsPerChunk).join(" "));
+    chunks.push(words.slice(i, i + wordsPerChunk));
   }
 
   const timePerChunk = Math.max(1.4, (dur - 1) / chunks.length);
   const segments = [];
 
-  chunks.forEach((chunkText, i) => {
+  chunks.forEach((chunkWords, i) => {
     const start = Math.round((0.5 + i * timePerChunk) * 100) / 100;
     const end = Math.round(Math.min(dur - 0.2, start + timePerChunk - 0.2) * 100) / 100;
     if (end > start) {
+      const chunkDur = end - start;
+      const timePerWord = chunkDur / chunkWords.length;
+      // ✅ FIX 2: Attach synthetic word-level timestamps to fallback segments.
+      // This lets getWordGroupText use real timing even before Whisper completes,
+      // so word-by-word captions switch at correct moments, not just % progress.
+      const wordTimestamps = chunkWords.map((word, wi) => ({
+        word,
+        start: Math.round((start + wi * timePerWord) * 1000) / 1000,
+        end: Math.round((start + (wi + 1) * timePerWord) * 1000) / 1000,
+      }));
       segments.push({
         id: uniqueId(),
         start,
         end,
-        text: chunkText,
+        text: chunkWords.join(" "),
+        words: wordTimestamps,
       });
     }
   });
@@ -2672,11 +2687,48 @@ function syncCaptionOverlay() {
 
   let activeWordIndex = 0;
   if (activeSegment && activeSegment.end > activeSegment.start) {
-    const dur = activeSegment.end - activeSegment.start;
-    const elapsed = Math.max(0, currentTime - activeSegment.start);
-    const words = (displayText || "").trim().split(/\s+/).filter(Boolean);
-    if (words.length > 0) {
-      activeWordIndex = Math.min(words.length - 1, Math.floor((elapsed / dur) * words.length));
+    // ✅ FIX 3: Use real Whisper word timestamps for the active-word highlight index.
+    // Previously this used a dumb (elapsed / duration) fraction which highlights
+    // the wrong word — e.g. if someone pauses mid-sentence, the wrong word lit up.
+    if (Array.isArray(activeSegment.words) && activeSegment.words.length > 0) {
+      // For wordsPerRow / oneword / twoword: displayText is a sub-group of the full segment.
+      // We need to find which word within the display group is active.
+      const displayWords = (displayText || "").trim().split(/\s+/).filter(Boolean);
+      if (displayWords.length > 0) {
+        // Find the first word in the display group within the real word timestamps
+        const firstDisplayWord = displayWords[0].toLowerCase().replace(/[^\w]/g, "");
+        const groupStartInSeg = activeSegment.words.findIndex(
+          (w) => (w.word || "").toLowerCase().replace(/[^\w]/g, "") === firstDisplayWord
+        );
+        const segOffset = groupStartInSeg >= 0 ? groupStartInSeg : 0;
+
+        // Find which word within the display group is currently being spoken
+        const activeInGroup = displayWords.findIndex((_, di) => {
+          const segWordIdx = segOffset + di;
+          const w = activeSegment.words[segWordIdx];
+          if (!w) return false;
+          return currentTime >= w.start && currentTime < (w.end || w.start + 0.4);
+        });
+
+        if (activeInGroup >= 0) {
+          activeWordIndex = activeInGroup;
+        } else {
+          // Past last word in group or between words — highlight the last one spoken
+          const lastSpoken = [...displayWords].reduce((best, _, di) => {
+            const w = activeSegment.words[segOffset + di];
+            return (w && currentTime >= w.start) ? di : best;
+          }, 0);
+          activeWordIndex = lastSpoken;
+        }
+      }
+    } else {
+      // Fallback: progress-based for segments without real word timestamps
+      const dur = activeSegment.end - activeSegment.start;
+      const elapsed = Math.max(0, currentTime - activeSegment.start);
+      const words = (displayText || "").trim().split(/\s+/).filter(Boolean);
+      if (words.length > 0) {
+        activeWordIndex = Math.min(words.length - 1, Math.floor((elapsed / dur) * words.length));
+      }
     }
   }
 
