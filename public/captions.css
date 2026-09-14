@@ -375,19 +375,19 @@ body.caption-editor-page .scene-grid {
 
 .ce-phone-frame {
   position: relative;
-  width: 226px; /* Decreased 50px height (485px -> 435px), increased 30px width (196px -> 226px) */
-  height: 435px;
+  width: 100%;
+  max-width: 360px;
+  height: 100%;
+  min-height: 580px;
   max-height: calc(100vh - 65px);
-  aspect-ratio: 226 / 435;
   margin: 0px !important;
   padding: 0px !important;
-  border-radius: 30px !important;
+  border-radius: 44px !important;
+  border: 10px solid #1C1F26 !important;
   background: #000000;
   box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.14),
-    0 0 0 8px #141416,
     0 24px 60px rgba(0, 0, 0, 0.9),
-    0 0 40px rgba(255, 255, 255, 0.08);
+    0 0 40px rgba(0, 229, 255, 0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;

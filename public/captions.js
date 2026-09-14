@@ -2044,14 +2044,20 @@ function applyTextBoxVisuals(element, style) {
   if (merged.bgColor && merged.bgColor !== "transparent" && Number(merged.bgOpacity) > 0) {
     const [r, g, b] = hexToRgb(merged.bgColor);
     const op = clamp(Number(merged.bgOpacity) || 0, 100) / 100;
-    element.style.background = `rgba(${r},${g},${b},${op})`;
+    element.style.backgroundColor = `rgba(${r},${g},${b},${op})`;
+    const pad = Number(merged.paddingX) || 14;
+    element.style.padding = `${Math.max(4, Math.round(pad * 0.7))}px ${pad}px`;
+    element.style.borderRadius = "12px";
+    element.style.display = "inline-block";
   } else {
-    element.style.background = "transparent";
+    element.style.backgroundColor = "transparent";
+    element.style.padding = "0px";
   }
 
-  // Padding & Border Radius
-  element.style.borderRadius = `${Number(merged.borderRadius) || 10}px`;
-  element.style.padding = `${Number(merged.paddingY) || 8}px ${Number(merged.paddingX) || 14}px`;
+  // Border Radius fallback
+  if (!element.style.borderRadius) {
+    element.style.borderRadius = `${Number(merged.borderRadius) || 10}px`;
+  }
   
   // Line Height
   const lineSpacing = Number(merged.lineSpacing || 1.35);
@@ -2078,8 +2084,12 @@ function applyTextBoxVisuals(element, style) {
     element.style.strokeLinejoin = "round";
   }
 
-  // Text Shadow
-  if (merged.textShadow && typeof merged.textShadow === "string" && merged.textShadow !== "none" && merged.textShadow !== "true") {
+  // Neon Glow (Layered for high intensity)
+  const glow = Number(merged.glowIntensity) || Number(merged.neonGlow) || 0;
+  if (glow > 0) {
+    const glowColor = merged.textColor || "#00e5ff";
+    element.style.textShadow = `0 0 ${glow * 0.5}px ${glowColor}, 0 0 ${glow}px ${glowColor}, 0 0 ${glow * 2}px ${glowColor}`;
+  } else if (merged.textShadow && typeof merged.textShadow === "string" && merged.textShadow !== "none" && merged.textShadow !== "true") {
     element.style.textShadow = merged.textShadow;
   } else if (merged.textShadow === true || Number(merged.shadowBlur) > 0) {
     element.style.textShadow = getShadowCss(merged);
@@ -4148,20 +4158,31 @@ async function init() {
     );
   }
 
-  const isMock = isPlaceholderOrMockCaptions(initialSegments, session.clip);
+  // Instant Fallback to Existing Clip Transcript: do not freeze the UI waiting for Whisper if transcript exists
+  const hasExistingTranscript = Boolean(
+    initialSegments.length ||
+    session.clip?.transcript ||
+    session.clip?.words ||
+    session.clip?.segments ||
+    session.clip?.captions
+  );
 
-  if (session.clip && (!initialSegments.length || isMock)) {
+  if (session.clip && !hasExistingTranscript) {
     const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
-    if (statusLabel) statusLabel.textContent = "Transcribing Audio with Whisper AI...";
+    if (statusLabel) statusLabel.textContent = "Loading Audio Captions...";
     try {
       const serverSegments = await fetchServerCaptions(session.clip);
       if (serverSegments && serverSegments.length) {
-        console.log("Real audio transcription loaded:", serverSegments.length, "segments");
         initialSegments = serverSegments;
         if (statusLabel) statusLabel.textContent = `Audio Transcribed (${serverSegments.length} Segments)`;
       }
     } catch (err) {
       console.warn("Could not fetch server captions during init:", err);
+    }
+  } else {
+    const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
+    if (statusLabel && initialSegments.length) {
+      statusLabel.textContent = `Audio Synced (${initialSegments.length} Segments)`;
     }
   }
 

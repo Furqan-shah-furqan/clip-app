@@ -3,9 +3,9 @@ import PresetsGallery from "./PresetsGallery";
 import { DEFAULT_PRESET } from "../../constants/captionPresets";
 
 /**
- * Reliable Hex / RGB to RGBA converter to avoid invalid CSS syntax.
+ * RGBA Converter Helper: converts hex and opacity percentage to valid rgba string.
  */
-function getRgba(hex = "#000000", opacity = 100) {
+function hexToRgba(hex = "#000000", opacity = 100) {
   if (typeof hex !== "string") {
     return `rgba(0, 0, 0, ${Math.max(0, Math.min(1, opacity / 100))})`;
   }
@@ -64,9 +64,9 @@ function parseTimeToSeconds(val) {
  * CaptionStudio Component
  * Full-featured Caption Studio matching ClipFlow Studio's layout.
  * Features:
- *  - Expanded Phone Mockup (aspect 9/19.5, min-height 780px matching 2-row controls grid)
- *  - Real-time Cadence Word Slicing (Whisper word-level timestamps, zero ghosting)
- *  - Direct styleState bindings for Background Color, BG Opacity, Box Padding, Neon Glow
+ *  - Vertically Aligned Phone Mockup: Flush with control stack top to bottom (no height truncation)
+ *  - Real-time Cadence Word Slicing with instant fallback to existing clip transcript
+ *  - Fully Wired Background Pill, Opacity (0-100%), Box Padding (0-50px), Layered Neon Glow (0-60px)
  *  - 3-Layer Subject Segmentation ("Behind the Person") with MediaPipe Selfie Segmentation
  */
 export default function CaptionStudio({
@@ -143,14 +143,6 @@ export default function CaptionStudio({
     };
   });
 
-  // State updater helper to mutate styleState and trigger re-render
-  const updateStyle = (key, value) => {
-    setStyleState((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
-  };
-
   // Presets Gallery Drawer State
   const [isPresetsGalleryOpen, setIsPresetsGalleryOpen] = useState(false);
   const [activePreset, setActivePreset] = useState(DEFAULT_PRESET.id);
@@ -176,7 +168,13 @@ export default function CaptionStudio({
     );
   }, [styleState.behindPerson, activePresetStyle, activePreset]);
 
-  // Real-time animation frame loop to read videoRef.current.currentTime continuously
+  // Handle video playback time updates for instant frame-by-frame sync
+  const handleTimeUpdate = (e) => {
+    const curr = e?.target?.currentTime ?? (videoRef.current?.currentTime || 0);
+    setCurrentTime(curr);
+  };
+
+  // Continuous animation frame loop to synchronize currentTime at 60fps
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -354,20 +352,52 @@ export default function CaptionStudio({
     };
   }, [isBehindPerson, clip.videoUrl]);
 
-  // ── Normalized Transcript Segments & Word Timestamps ───────────────────
+  // ── Instant Transcript Fallback: Extracts segments/words without UI freeze ──
   const transcriptSegments = useMemo(() => {
-    const rawSegments = clip.transcript || clip.segments || clip.subtitles || null;
-    const clipStartSec = parseTimeToSeconds(clip.start || 0);
+    const raw =
+      clip.transcript ||
+      clip.words ||
+      clip.segments ||
+      clip.captions ||
+      clip.subtitleSegments ||
+      null;
 
-    if (Array.isArray(rawSegments) && rawSegments.length > 0) {
-      const firstSegStart = parseTimeToSeconds(rawSegments[0].start || 0);
-      const isAbsoluteTimestamps = firstSegStart >= clipStartSec - 2 && clipStartSec > 2;
+    const clipStartSec = parseTimeToSeconds(clip.start || clip.startTime || 0);
 
-      return rawSegments.map((seg, sIdx) => {
+    if (Array.isArray(raw) && raw.length > 0) {
+      // Direct word-level array: [{ word: "...", start: 0.2, end: 0.6 }]
+      const isFlatWords = Boolean(raw[0]?.word && !raw[0]?.words && !raw[0]?.text);
+      if (isFlatWords) {
+        const segments = [];
+        const wordsPerSeg = 4;
+        for (let i = 0; i < raw.length; i += wordsPerSeg) {
+          const chunk = raw.slice(i, i + wordsPerSeg);
+          const segStart = parseTimeToSeconds(chunk[0].start);
+          const segEnd = parseTimeToSeconds(chunk[chunk.length - 1].end);
+          segments.push({
+            id: `word-seg-${i}`,
+            start: segStart,
+            end: segEnd,
+            text: chunk.map((w) => w.word).join(" "),
+            words: chunk.map((w) => ({
+              word: (w.word || "").trim(),
+              start: parseTimeToSeconds(w.start),
+              end: parseTimeToSeconds(w.end),
+            })),
+          });
+        }
+        return segments;
+      }
+
+      // Segment array with possible sub-words
+      const firstSegStart = parseTimeToSeconds(raw[0].start || 0);
+      const isAbsolute = firstSegStart >= clipStartSec - 2 && clipStartSec > 2;
+
+      return raw.map((seg, sIdx) => {
         let segStart = parseTimeToSeconds(seg.start);
         let segEnd = parseTimeToSeconds(seg.end);
 
-        if (isAbsoluteTimestamps) {
+        if (isAbsolute) {
           segStart = Math.max(0, segStart - clipStartSec);
           segEnd = Math.max(segStart + 0.3, segEnd - clipStartSec);
         }
@@ -380,7 +410,7 @@ export default function CaptionStudio({
             .map((w) => {
               let wStart = parseTimeToSeconds(w.start);
               let wEnd = parseTimeToSeconds(w.end);
-              if (isAbsoluteTimestamps) {
+              if (isAbsolute) {
                 wStart = Math.max(0, wStart - clipStartSec);
                 wEnd = Math.max(wStart + 0.1, wEnd - clipStartSec);
               }
@@ -392,10 +422,10 @@ export default function CaptionStudio({
             })
             .filter((w) => Boolean(w.word));
         } else {
-          const wordTokens = text.split(/\s+/).filter(Boolean);
+          const tokens = text.split(/\s+/).filter(Boolean);
           const dur = Math.max(0.3, segEnd - segStart);
-          const wDur = dur / Math.max(1, wordTokens.length);
-          words = wordTokens.map((w, wIdx) => ({
+          const wDur = dur / Math.max(1, tokens.length);
+          words = tokens.map((w, wIdx) => ({
             word: w,
             start: segStart + wIdx * wDur,
             end: segStart + (wIdx + 1) * wDur,
@@ -412,15 +442,20 @@ export default function CaptionStudio({
       });
     }
 
-    // Synthesize realistic transcript segments from previewText / text / title
-    const rawText = (clip.previewText || clip.text || clip.title || "THIS IS HOW YOU GO VIRAL").trim();
+    // Instant Synthesized Fallback from previewText / text / title
+    const rawText = (
+      clip.previewText ||
+      clip.text ||
+      clip.title ||
+      "THIS IS HOW YOU GO VIRAL"
+    ).trim();
     const allWords = rawText.split(/\s+/).filter(Boolean);
     if (allWords.length === 0) return [];
 
     const segments = [];
     const wordsPerSeg = 4;
     const wordDuration = 0.38;
-    const pauseBetweenSeg = 0.35;
+    const pauseBetweenSeg = 0.3;
     let curTime = 0.3;
 
     for (let i = 0; i < allWords.length; i += wordsPerSeg) {
@@ -446,14 +481,14 @@ export default function CaptionStudio({
     return segments;
   }, [clip]);
 
-  // ── Cadence Word Slicing (Single Element, Real-time Sync, Zero Ghosting) ──
+  // ── Cadence Word Slicing: Single Element, Real-time Sync, Zero Ghosting ──
   const activeCaption = useMemo(() => {
     if (!transcriptSegments || transcriptSegments.length === 0) return null;
 
     const isVideoPaused = !videoRef.current || videoRef.current.paused;
     const isAtZero = currentTime <= 0.05;
 
-    // When paused at 0.0s (initial editor load), provide preview words so user can style captions
+    // Initial load at 0.0s: Show preview words so user can configure styles
     if (isVideoPaused && isAtZero) {
       const firstSeg = transcriptSegments[0];
       if (!firstSeg || !firstSeg.words || firstSeg.words.length === 0) return null;
@@ -488,31 +523,31 @@ export default function CaptionStudio({
       return { words: previewWords };
     }
 
-    // During active playback or seeking: find active transcript segment
-    const activeSeg = transcriptSegments.find(
-      (seg) => currentTime >= seg.start && currentTime <= seg.end
+    // Active playback: find active segment matching currentTime
+    const activeSegment = transcriptSegments.find(
+      (s) => currentTime >= s.start && currentTime <= s.end
     );
 
-    // If no segment is currently active, render nothing (do not leave previous words stuck)
-    if (!activeSeg || !activeSeg.words || activeSeg.words.length === 0) {
+    // If no segment is active at currentTime, clear caption completely (no orphaned words)
+    if (!activeSegment || !activeSegment.words || activeSegment.words.length === 0) {
       return null;
     }
 
     const cadence = styleState.wordsInRow || "2 Words";
-    const segWords = activeSeg.words;
+    const segWords = activeSegment.words;
 
-    // Cadence: 1 Word
+    // 1 Word Cadence
     if (cadence === "1 Word") {
       const activeWord = segWords.find(
         (w) => currentTime >= w.start && currentTime <= w.end
       );
-      if (!activeWord) return null;
+      if (!activeWord) return null; // Clean fade between spoken words
       return {
         words: [{ text: activeWord.word, isCurrent: true }],
       };
     }
 
-    // Cadence: 2 Words
+    // 2 Words Cadence
     if (cadence === "2 Words") {
       for (let i = 0; i < segWords.length; i += 2) {
         const pair = segWords.slice(i, i + 2);
@@ -528,10 +563,10 @@ export default function CaptionStudio({
           };
         }
       }
-      return null;
+      return null; // Clean fade between pairs
     }
 
-    // Cadence: 3 Words
+    // 3 Words Cadence
     if (cadence === "3 Words") {
       for (let i = 0; i < segWords.length; i += 3) {
         const triplet = segWords.slice(i, i + 3);
@@ -550,7 +585,7 @@ export default function CaptionStudio({
       return null;
     }
 
-    // Cadence: 4 Words
+    // 4 Words Cadence
     if (cadence === "4 Words") {
       for (let i = 0; i < segWords.length; i += 4) {
         const quad = segWords.slice(i, i + 4);
@@ -569,7 +604,7 @@ export default function CaptionStudio({
       return null;
     }
 
-    // Cadence: Auto / Full segment
+    // Auto Cadence (Full segment)
     return {
       words: segWords.map((w) => ({
         text: w.word,
@@ -603,7 +638,7 @@ export default function CaptionStudio({
         parsedOpacity = Math.round(parseFloat(match[3]) * 100);
       }
     } else if (parsedBg === "transparent") {
-      parsedOpacity = 0;
+      initialOpacity = 0;
       parsedBg = "#000000";
     }
 
@@ -812,7 +847,7 @@ export default function CaptionStudio({
         </div>
       </header>
 
-      {/* ── Main Workspace: 12-Column Grid Layout with Aligned Height ── */}
+      {/* ── Main Workspace: Aligned Grid Layout matching phone height to controls ── */}
       <main
         className="flex-1 w-full max-w-[1440px] mx-auto p-4 sm:p-6"
         style={{
@@ -825,15 +860,15 @@ export default function CaptionStudio({
         }}
       >
         <div
-          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch min-h-[780px]"
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch"
           style={{
             display: "grid",
             gap: "24px",
-            minHeight: "780px",
             alignItems: "stretch",
+            minHeight: "820px",
           }}
         >
-          {/* ── Left Column: Phone Mockup Live Preview (fills vertical height) ── */}
+          {/* ── Left Column: Phone Mockup Frame (Fills full column height, flush with controls) ── */}
           <section
             className="lg:col-span-4 h-full flex flex-col items-center justify-center"
             style={{
@@ -846,13 +881,12 @@ export default function CaptionStudio({
             }}
           >
             <div
-              className="h-full w-full max-w-[340px] aspect-[9/19.5] rounded-[48px] border-[10px] border-[#1C1F26] bg-black shadow-2xl relative overflow-hidden flex flex-col"
+              className="h-full w-full max-w-[360px] rounded-[44px] border-[10px] border-[#1C1F26] bg-black shadow-2xl relative overflow-hidden flex flex-col"
               style={{
                 height: "100%",
                 width: "100%",
-                maxWidth: "340px",
-                aspectRatio: "9 / 19.5",
-                borderRadius: "48px",
+                maxWidth: "360px",
+                borderRadius: "44px",
                 border: "10px solid #1C1F26",
                 backgroundColor: "#000000",
                 boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8)",
@@ -866,10 +900,10 @@ export default function CaptionStudio({
               <div
                 style={{
                   position: "absolute",
-                  top: "12px",
+                  top: "14px",
                   left: "50%",
                   transform: "translateX(-50%)",
-                  width: "90px",
+                  width: "96px",
                   height: "18px",
                   backgroundColor: "#1C1F26",
                   borderRadius: "9999px",
@@ -880,12 +914,15 @@ export default function CaptionStudio({
 
               {/* Inner Screen Area */}
               <div
+                className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center bg-black flex-1"
                 style={{
                   position: "relative",
                   width: "100%",
                   height: "100%",
+                  flex: 1,
                   overflow: "hidden",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: "#000000",
@@ -924,11 +961,12 @@ export default function CaptionStudio({
                   <video
                     ref={videoRef}
                     src={clip.videoUrl}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover flex-1 absolute inset-0 z-[1]"
                     style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
+                      flex: 1,
                       position: "absolute",
                       top: 0,
                       left: 0,
@@ -937,14 +975,17 @@ export default function CaptionStudio({
                     controls
                     playsInline
                     crossOrigin="anonymous"
-                    onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
-                    onSeeked={(e) => setCurrentTime(e.target.currentTime)}
+                    onTimeUpdate={handleTimeUpdate}
+                    onSeeked={handleTimeUpdate}
+                    onPlay={handleTimeUpdate}
+                    onPause={handleTimeUpdate}
                   />
                 ) : (
                   <div
                     style={{
                       width: "100%",
                       height: "100%",
+                      flex: 1,
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "center",
@@ -992,38 +1033,38 @@ export default function CaptionStudio({
                       style={{
                         fontFamily: styleState.fontFamily || "Montserrat",
                         fontSize: `${styleState.fontSize || 24}px`,
-                        letterSpacing: `${styleState.letterSpacing || 0}px`,
-                        lineHeight: styleState.lineSpacing || 1.2,
+                        color: styleState.textColor || "#FFFFFF",
                         textTransform:
                           styleState.letterCase === "ALL CAPS" ? "uppercase" : "none",
-                        color: styleState.textColor || "#FFFFFF",
+                        letterSpacing: `${styleState.letterSpacing || 0}px`,
+                        lineHeight: styleState.lineSpacing || 1.2,
 
-                        // Background Pill Styling:
+                        // 1. Background Pill Styling:
                         backgroundColor:
                           styleState.bgOpacity > 0
-                            ? getRgba(styleState.backgroundColor, styleState.bgOpacity)
+                            ? hexToRgba(styleState.backgroundColor, styleState.bgOpacity)
                             : "transparent",
                         padding:
                           styleState.bgOpacity > 0
-                            ? `${styleState.boxPadding || 8}px ${(styleState.boxPadding || 8) * 1.5}px`
+                            ? `${styleState.boxPadding || 8}px ${(styleState.boxPadding || 8) * 1.4}px`
                             : "0px",
-                        borderRadius: "10px",
+                        borderRadius: "12px",
+                        display: "inline-block",
 
-                        // Neon Glow:
+                        // 2. Neon Glow (Multiple layered text-shadows for intense glow):
                         textShadow:
                           styleState.neonGlow > 0
-                            ? `0 0 ${styleState.neonGlow}px ${styleState.textColor}, 0 0 ${styleState.neonGlow * 2}px ${styleState.textColor}`
+                            ? `0 0 ${styleState.neonGlow * 0.5}px ${styleState.textColor}, 0 0 ${styleState.neonGlow}px ${styleState.textColor}, 0 0 ${styleState.neonGlow * 2}px ${styleState.textColor}`
                             : styleState.textShadow
                             ? `${styleState.shadowOffsetX || 0}px ${styleState.shadowOffsetY || 4}px ${styleState.shadowBlur || 12}px rgba(0,0,0,0.8)`
                             : "none",
 
-                        // Outline Stroke:
+                        // 3. Outline Stroke:
                         WebkitTextStroke:
                           styleState.strokeWidth > 0
                             ? `${styleState.strokeWidth}px ${styleState.strokeColor || "#000000"}`
                             : "none",
 
-                        display: "inline-block",
                         boxSizing: "border-box",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
@@ -1059,13 +1100,14 @@ export default function CaptionStudio({
                 {/* Layer 3 (Top): Real-time MediaPipe Subject Segmentation Canvas */}
                 <canvas
                   ref={segmentationCanvasRef}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover flex-1 absolute inset-0 pointer-events-none z-[3]"
                   style={{
                     position: "absolute",
                     top: 0,
                     left: 0,
                     width: "100%",
                     height: "100%",
+                    flex: 1,
                     objectFit: "cover",
                     pointerEvents: "none",
                     zIndex: 3,
@@ -1107,7 +1149,9 @@ export default function CaptionStudio({
                     <label style={csStyles.label}>Font Family</label>
                     <select
                       value={styleState.fontFamily}
-                      onChange={(e) => updateStyle("fontFamily", e.target.value)}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({ ...prev, fontFamily: e.target.value }))
+                      }
                       style={csStyles.selectInput}
                     >
                       <option value="Montserrat">Montserrat (Modern Viral)</option>
@@ -1131,7 +1175,12 @@ export default function CaptionStudio({
                       min="16"
                       max="64"
                       value={styleState.fontSize}
-                      onChange={(e) => updateStyle("fontSize", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          fontSize: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1150,7 +1199,10 @@ export default function CaptionStudio({
                       step="0.5"
                       value={styleState.letterSpacing}
                       onChange={(e) =>
-                        updateStyle("letterSpacing", Number(e.target.value))
+                        setStyleState((prev) => ({
+                          ...prev,
+                          letterSpacing: Number(e.target.value),
+                        }))
                       }
                       style={csStyles.rangeInput}
                     />
@@ -1168,7 +1220,10 @@ export default function CaptionStudio({
                       step="0.05"
                       value={styleState.lineSpacing}
                       onChange={(e) =>
-                        updateStyle("lineSpacing", Number(e.target.value))
+                        setStyleState((prev) => ({
+                          ...prev,
+                          lineSpacing: Number(e.target.value),
+                        }))
                       }
                       style={csStyles.rangeInput}
                     />
@@ -1180,7 +1235,9 @@ export default function CaptionStudio({
                     <label style={csStyles.label}>Letter Case</label>
                     <select
                       value={styleState.letterCase}
-                      onChange={(e) => updateStyle("letterCase", e.target.value)}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({ ...prev, letterCase: e.target.value }))
+                      }
                       style={csStyles.selectInput}
                     >
                       <option value="ALL CAPS">ALL CAPS (Viral Punch)</option>
@@ -1194,7 +1251,9 @@ export default function CaptionStudio({
                     <label style={csStyles.label}>Words in a Row</label>
                     <select
                       value={styleState.wordsInRow}
-                      onChange={(e) => updateStyle("wordsInRow", e.target.value)}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({ ...prev, wordsInRow: e.target.value }))
+                      }
                       style={csStyles.selectInput}
                     >
                       <option value="Auto">Auto Wrap</option>
@@ -1219,8 +1278,10 @@ export default function CaptionStudio({
                     <label style={csStyles.label}>Text Color</label>
                     <input
                       type="color"
-                      value={styleState.textColor}
-                      onChange={(e) => updateStyle("textColor", e.target.value)}
+                      value={styleState.textColor || "#FFFFFF"}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({ ...prev, textColor: e.target.value }))
+                      }
                       style={csStyles.colorPicker}
                     />
                   </div>
@@ -1229,8 +1290,13 @@ export default function CaptionStudio({
                     <label style={csStyles.label}>Highlight Color</label>
                     <input
                       type="color"
-                      value={styleState.highlightColor}
-                      onChange={(e) => updateStyle("highlightColor", e.target.value)}
+                      value={styleState.highlightColor || "#22C55E"}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          highlightColor: e.target.value,
+                        }))
+                      }
                       style={csStyles.colorPicker}
                     />
                   </div>
@@ -1244,7 +1310,12 @@ export default function CaptionStudio({
                           ? styleState.backgroundColor
                           : "#000000"
                       }
-                      onChange={(e) => updateStyle("backgroundColor", e.target.value)}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          backgroundColor: e.target.value,
+                        }))
+                      }
                       style={csStyles.colorPicker}
                     />
                   </div>
@@ -1261,7 +1332,12 @@ export default function CaptionStudio({
                       min="0"
                       max="100"
                       value={styleState.bgOpacity}
-                      onChange={(e) => updateStyle("bgOpacity", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          bgOpacity: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1274,9 +1350,14 @@ export default function CaptionStudio({
                     <input
                       type="range"
                       min="0"
-                      max="24"
+                      max="50"
                       value={styleState.boxPadding}
-                      onChange={(e) => updateStyle("boxPadding", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          boxPadding: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1291,9 +1372,14 @@ export default function CaptionStudio({
                     <input
                       type="range"
                       min="0"
-                      max="40"
+                      max="60"
                       value={styleState.neonGlow}
-                      onChange={(e) => updateStyle("neonGlow", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          neonGlow: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1306,11 +1392,14 @@ export default function CaptionStudio({
                     <input
                       type="range"
                       min="0"
-                      max="6"
+                      max="10"
                       step="0.5"
                       value={styleState.strokeWidth}
                       onChange={(e) =>
-                        updateStyle("strokeWidth", Number(e.target.value))
+                        setStyleState((prev) => ({
+                          ...prev,
+                          strokeWidth: Number(e.target.value),
+                        }))
                       }
                       style={csStyles.rangeInput}
                     />
@@ -1336,7 +1425,12 @@ export default function CaptionStudio({
                       min="10"
                       max="90"
                       value={styleState.posY}
-                      onChange={(e) => updateStyle("posY", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          posY: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1351,7 +1445,12 @@ export default function CaptionStudio({
                       min="10"
                       max="90"
                       value={styleState.posX}
-                      onChange={(e) => updateStyle("posX", Number(e.target.value))}
+                      onChange={(e) =>
+                        setStyleState((prev) => ({
+                          ...prev,
+                          posX: Number(e.target.value),
+                        }))
+                      }
                       style={csStyles.rangeInput}
                     />
                   </div>
@@ -1369,7 +1468,10 @@ export default function CaptionStudio({
                       max="15"
                       value={styleState.rotateAngle}
                       onChange={(e) =>
-                        updateStyle("rotateAngle", Number(e.target.value))
+                        setStyleState((prev) => ({
+                          ...prev,
+                          rotateAngle: Number(e.target.value),
+                        }))
                       }
                       style={csStyles.rangeInput}
                     />
@@ -1380,7 +1482,10 @@ export default function CaptionStudio({
                     <button
                       type="button"
                       onClick={() =>
-                        updateStyle("behindPerson", !styleState.behindPerson)
+                        setStyleState((prev) => ({
+                          ...prev,
+                          behindPerson: !prev.behindPerson,
+                        }))
                       }
                       style={{
                         padding: "8px 12px",
