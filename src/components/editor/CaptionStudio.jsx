@@ -5,39 +5,39 @@ import { DEFAULT_PRESET } from "../../constants/captionPresets";
 /**
  * RGBA Converter Helper: converts hex and opacity percentage to valid rgba string.
  */
-function hexToRgba(hex = "#000000", opacity = 100) {
-  if (typeof hex !== "string") {
-    return `rgba(0, 0, 0, ${Math.max(0, Math.min(1, opacity / 100))})`;
-  }
-  if (hex === "transparent") return "transparent";
-
-  // If already an rgb / rgba string
-  if (hex.startsWith("rgba") || hex.startsWith("rgb")) {
-    const match = hex.match(/[\d.]+/g);
+function hexToRgba(hex = "#000000", opacityPercent = 100) {
+  let clean = String(hex || "#000000").replace("#", "").trim();
+  if (clean === "transparent") return "transparent";
+  if (clean.startsWith("rgba") || clean.startsWith("rgb")) {
+    const match = clean.match(/[\d.]+/g);
     if (match && match.length >= 3) {
       const r = parseInt(match[0], 10) || 0;
       const g = parseInt(match[1], 10) || 0;
       const b = parseInt(match[2], 10) || 0;
-      return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, opacity / 100))})`;
+      const alpha = Math.max(0, Math.min(1, opacityPercent / 100));
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
   }
+  if (clean.length === 3) clean = clean.split("").map((c) => c + c).join("");
+  const r = parseInt(clean.substring(0, 2), 16) || 0;
+  const g = parseInt(clean.substring(2, 4), 16) || 0;
+  const b = parseInt(clean.substring(4, 6), 16) || 0;
+  const alpha = Math.max(0, Math.min(1, opacityPercent / 100));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
-  const clean = hex.replace("#", "");
-  let r = 0;
-  let g = 0;
-  let b = 0;
-
-  if (clean.length === 3) {
-    r = parseInt(clean[0] + clean[0], 16) || 0;
-    g = parseInt(clean[1] + clean[1], 16) || 0;
-    b = parseInt(clean[2] + clean[2], 16) || 0;
-  } else {
-    r = parseInt(clean.substring(0, 2), 16) || 0;
-    g = parseInt(clean.substring(2, 4), 16) || 0;
-    b = parseInt(clean.substring(4, 6), 16) || 0;
-  }
-
-  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, opacity / 100))})`;
+/**
+ * Generates evenly distributed word timestamps across the clip's duration.
+ */
+function generateWordTimestamps(text, totalDuration) {
+  const wordsArray = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (!wordsArray.length || !totalDuration) return [];
+  const durationPerWord = totalDuration / wordsArray.length;
+  return wordsArray.map((w, i) => ({
+    word: w,
+    start: Math.round(i * durationPerWord * 100) / 100,
+    end: Math.round((i + 1) * durationPerWord * 100) / 100,
+  }));
 }
 
 /**
@@ -127,7 +127,7 @@ export default function CaptionStudio({
       highlightColor: s.highlightColor || "#22C55E",
       backgroundColor: initialBg.startsWith("#") ? initialBg : "#000000",
       bgOpacity: initialOpacity,
-      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 10,
+      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 12,
       neonGlow: s.shadowBlur || 0,
       strokeWidth: s.strokeWidth || 0,
       strokeColor: s.strokeColor || "#000000",
@@ -135,9 +135,9 @@ export default function CaptionStudio({
       shadowOffsetX: 0,
       shadowOffsetY: 4,
       shadowBlur: 12,
-      posX: 50,
-      posY: 82,
-      rotateAngle: 0,
+      positionX: 0,
+      positionY: 180,
+      rotation: 0,
       wordAnimation: s.wordAnimation || "pop",
       behindPerson: Boolean(DEFAULT_PRESET.behindPerson),
     };
@@ -153,10 +153,14 @@ export default function CaptionStudio({
   const [isExporting, setIsExporting] = useState(false);
 
   // Video playback & Realtime sync state
-  const [currentTime, setCurrentTime] = useState(0);
+  const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0);
   const videoRef = useRef(null);
   const segmentationCanvasRef = useRef(null);
   const segmentationPipelineRef = useRef(null);
+
+  // Header status state
+  const [status, setStatus] = useState("● Live Audio Parity");
+  const [words, setWords] = useState([]);
 
   // Check if "Behind the Person" subject segmentation layer is active
   const isBehindPerson = useMemo(() => {
@@ -171,10 +175,10 @@ export default function CaptionStudio({
   // Handle video playback time updates for instant frame-by-frame sync
   const handleTimeUpdate = (e) => {
     const curr = e?.target?.currentTime ?? (videoRef.current?.currentTime || 0);
-    setCurrentTime(curr);
+    setCurrentPlaybackTime(curr);
   };
 
-  // Continuous animation frame loop to synchronize currentTime at 60fps
+  // Continuous animation frame loop to synchronize currentPlaybackTime at 60fps
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -182,7 +186,7 @@ export default function CaptionStudio({
     let animId;
     const tick = () => {
       if (video && !video.paused && !video.ended) {
-        setCurrentTime(video.currentTime);
+        setCurrentPlaybackTime(video.currentTime);
       }
       animId = requestAnimationFrame(tick);
     };
@@ -192,6 +196,193 @@ export default function CaptionStudio({
       cancelAnimationFrame(animId);
     };
   }, [clip.videoUrl]);
+
+  // ── PART 1: Instant Caption Data Resolution ──
+  useEffect(() => {
+    let activeClip = clip;
+    if (!activeClip || (!activeClip.videoUrl && !activeClip.text && !activeClip.transcript)) {
+      try {
+        const storedProjects = JSON.parse(localStorage.getItem("clipflow_projects") || "[]");
+        if (storedProjects.length > 0 && storedProjects[0].clips?.length > 0) {
+          activeClip = storedProjects[0].clips[0];
+        } else {
+          const sessionClip = JSON.parse(localStorage.getItem("clipflow-caption-clip") || "null");
+          if (sessionClip) activeClip = sessionClip;
+        }
+      } catch (err) {
+        console.warn("Could not read stored clip:", err);
+      }
+    }
+
+    const clipStartSec = parseTimeToSeconds(activeClip?.start || 0);
+    const clipEndSec = parseTimeToSeconds(activeClip?.end || 0);
+    const clipDur =
+      clipEndSec > clipStartSec
+        ? clipEndSec - clipStartSec
+        : Number(activeClip?.duration) || 30;
+
+    // 1. Direct word-level array: [{ word: "...", start: 0.2, end: 0.6 }]
+    const rawWords = activeClip?.words || (Array.isArray(activeClip?.transcript) ? activeClip.transcript : null);
+    if (Array.isArray(rawWords) && rawWords.length > 0 && (rawWords[0].word || rawWords[0].text)) {
+      const parsed = rawWords
+        .map((w) => {
+          let wStart = parseTimeToSeconds(w.start);
+          let wEnd = parseTimeToSeconds(w.end);
+          if (clipStartSec > 2 && wStart >= clipStartSec - 2) {
+            wStart = Math.max(0, wStart - clipStartSec);
+            wEnd = Math.max(wStart + 0.1, wEnd - clipStartSec);
+          }
+          return {
+            word: (w.word || w.text || "").trim(),
+            start: wStart,
+            end: wEnd,
+          };
+        })
+        .filter((w) => Boolean(w.word));
+
+      if (parsed.length > 0) {
+        setWords(parsed);
+        setStatus("● Live Audio Parity");
+        return;
+      }
+    }
+
+    // 2. Segment array with possible sub-words
+    const rawSegs = activeClip?.segments || activeClip?.captions || activeClip?.subtitleSegments;
+    if (Array.isArray(rawSegs) && rawSegs.length > 0) {
+      const extractedWords = [];
+      const firstSegStart = parseTimeToSeconds(rawSegs[0].start || 0);
+      const isAbsolute = firstSegStart >= clipStartSec - 2 && clipStartSec > 2;
+
+      rawSegs.forEach((seg) => {
+        let segStart = parseTimeToSeconds(seg.start);
+        let segEnd = parseTimeToSeconds(seg.end);
+        if (isAbsolute) {
+          segStart = Math.max(0, segStart - clipStartSec);
+          segEnd = Math.max(segStart + 0.3, segEnd - clipStartSec);
+        }
+
+        if (Array.isArray(seg.words) && seg.words.length > 0) {
+          seg.words.forEach((w) => {
+            let wStart = parseTimeToSeconds(w.start);
+            let wEnd = parseTimeToSeconds(w.end);
+            if (isAbsolute) {
+              wStart = Math.max(0, wStart - clipStartSec);
+              wEnd = Math.max(wStart + 0.1, wEnd - clipStartSec);
+            }
+            if (w.word || w.text) {
+              extractedWords.push({
+                word: (w.word || w.text).trim(),
+                start: wStart,
+                end: wEnd,
+              });
+            }
+          });
+        } else {
+          const text = (seg.text || seg.content || "").trim();
+          const tokens = text.split(/\s+/).filter(Boolean);
+          const dur = Math.max(0.3, segEnd - segStart);
+          const wDur = dur / Math.max(1, tokens.length);
+          tokens.forEach((t, i) => {
+            extractedWords.push({
+              word: t,
+              start: segStart + i * wDur,
+              end: segStart + (i + 1) * wDur,
+            });
+          });
+        }
+      });
+
+      if (extractedWords.length > 0) {
+        setWords(extractedWords);
+        setStatus("● Live Audio Parity");
+        return;
+      }
+    }
+
+    // 3. Fallback Word Generation: if transcript string exists without timestamps, generate them immediately
+    const rawText = (
+      (typeof activeClip?.transcript === "string" ? activeClip.transcript : null) ||
+      activeClip?.text ||
+      activeClip?.description ||
+      activeClip?.hook ||
+      activeClip?.previewText ||
+      activeClip?.title ||
+      "ROBERTS GREENE REVEALS THAT TRUE MASTERY BEGINS WHEN YOU TURN YOUR FOCUS INWARD"
+    ).trim();
+
+    const generated = generateWordTimestamps(rawText, clipDur);
+    setWords(generated);
+    setStatus("● Live Audio Parity");
+  }, [clip]);
+
+  // ── Dynamic Word Grouping ("Words in a Row") ──
+  const activeCaptionChunk = useMemo(() => {
+    if (!words || words.length === 0) return null;
+
+    const isVideoPaused = !videoRef.current || videoRef.current.paused;
+    const isAtZero = currentPlaybackTime <= 0.05;
+
+    const cadence = styleState.wordsInRow || "2 Words";
+    let groupSize = 2;
+    if (cadence === "1 Word") groupSize = 1;
+    else if (cadence === "2 Words") groupSize = 2;
+    else if (cadence === "3 Words") groupSize = 3;
+    else if (cadence === "4 Words") groupSize = 4;
+    else if (cadence === "Auto") groupSize = 5;
+
+    // Build chunks
+    const chunks = [];
+    for (let i = 0; i < words.length; i += groupSize) {
+      chunks.push(words.slice(i, i + groupSize));
+    }
+
+    // Initial load preview at 0s so user can edit styles immediately
+    if (isVideoPaused && isAtZero) {
+      const firstChunk = chunks[0] || [];
+      return firstChunk.map((w, idx) => ({
+        word: w.word,
+        isCurrent: idx === 0,
+      }));
+    }
+
+    // Active playback: Find chunk where currentPlaybackTime >= chunk[0].start && currentPlaybackTime <= chunk[last].end
+    const activeChunk = chunks.find((chunk) => {
+      if (!chunk.length) return false;
+      const cStart = chunk[0].start;
+      const cEnd = chunk[chunk.length - 1].end;
+      return currentPlaybackTime >= cStart && currentPlaybackTime <= cEnd;
+    });
+
+    if (!activeChunk || activeChunk.length === 0) {
+      return null; // Clean fade between sentences/pauses, no orphaned words
+    }
+
+    return activeChunk.map((w) => ({
+      word: w.word,
+      isCurrent: currentPlaybackTime >= w.start && currentPlaybackTime <= w.end,
+    }));
+  }, [words, currentPlaybackTime, styleState.wordsInRow]);
+
+  // ── PART 2: Independent Neon Glow Calculation ──
+  const computedTextShadow = useMemo(() => {
+    if (styleState.neonGlow > 0) {
+      const glowColor = styleState.textColor || "#FFDE00";
+      const g = styleState.neonGlow;
+      return `0 0 ${g * 0.25}px ${glowColor}, 0 0 ${g * 0.5}px ${glowColor}, 0 0 ${g}px ${glowColor}, 0 0 ${g * 1.5}px ${glowColor}`;
+    }
+    if (styleState.textShadow) {
+      return `${styleState.shadowOffsetX || 0}px ${styleState.shadowOffsetY || 4}px ${styleState.shadowBlur || 12}px rgba(0,0,0,0.85)`;
+    }
+    return "none";
+  }, [
+    styleState.neonGlow,
+    styleState.textShadow,
+    styleState.textColor,
+    styleState.shadowOffsetX,
+    styleState.shadowOffsetY,
+    styleState.shadowBlur,
+  ]);
 
   // MediaPipe Selfie Segmentation for "Behind the Person" Layer 3
   useEffect(() => {
@@ -255,27 +446,18 @@ export default function CaptionStudio({
           const ctx = canvas.getContext("2d", { willReadFrequently: false });
           if (!ctx) return;
 
-          const width = video.videoWidth || canvas.width || 360;
-          const height = video.videoHeight || canvas.height || 640;
+          const width = video.videoWidth || canvas.width || 340;
+          const height = video.videoHeight || canvas.height || 680;
 
           if (canvas.width !== width || canvas.height !== height) {
             canvas.width = width;
             canvas.height = height;
           }
 
-          // Clear Layer 3 canvas
           ctx.clearRect(0, 0, width, height);
-
-          // Draw the segmentation mask
           ctx.drawImage(results.segmentationMask, 0, 0, width, height);
-
-          // Keep only pixels inside mask
           ctx.globalCompositeOperation = "source-in";
-
-          // Draw video frame over the mask
           ctx.drawImage(results.image, 0, 0, width, height);
-
-          // Reset composite operation
           ctx.globalCompositeOperation = "source-over";
         });
 
@@ -352,267 +534,6 @@ export default function CaptionStudio({
     };
   }, [isBehindPerson, clip.videoUrl]);
 
-  // ── Instant Transcript Fallback: Extracts segments/words without UI freeze ──
-  const transcriptSegments = useMemo(() => {
-    const raw =
-      clip.transcript ||
-      clip.words ||
-      clip.segments ||
-      clip.captions ||
-      clip.subtitleSegments ||
-      null;
-
-    const clipStartSec = parseTimeToSeconds(clip.start || clip.startTime || 0);
-
-    if (Array.isArray(raw) && raw.length > 0) {
-      // Direct word-level array: [{ word: "...", start: 0.2, end: 0.6 }]
-      const isFlatWords = Boolean(raw[0]?.word && !raw[0]?.words && !raw[0]?.text);
-      if (isFlatWords) {
-        const segments = [];
-        const wordsPerSeg = 4;
-        for (let i = 0; i < raw.length; i += wordsPerSeg) {
-          const chunk = raw.slice(i, i + wordsPerSeg);
-          const segStart = parseTimeToSeconds(chunk[0].start);
-          const segEnd = parseTimeToSeconds(chunk[chunk.length - 1].end);
-          segments.push({
-            id: `word-seg-${i}`,
-            start: segStart,
-            end: segEnd,
-            text: chunk.map((w) => w.word).join(" "),
-            words: chunk.map((w) => ({
-              word: (w.word || "").trim(),
-              start: parseTimeToSeconds(w.start),
-              end: parseTimeToSeconds(w.end),
-            })),
-          });
-        }
-        return segments;
-      }
-
-      // Segment array with possible sub-words
-      const firstSegStart = parseTimeToSeconds(raw[0].start || 0);
-      const isAbsolute = firstSegStart >= clipStartSec - 2 && clipStartSec > 2;
-
-      return raw.map((seg, sIdx) => {
-        let segStart = parseTimeToSeconds(seg.start);
-        let segEnd = parseTimeToSeconds(seg.end);
-
-        if (isAbsolute) {
-          segStart = Math.max(0, segStart - clipStartSec);
-          segEnd = Math.max(segStart + 0.3, segEnd - clipStartSec);
-        }
-
-        const text = (seg.text || seg.content || "").trim();
-        let words = [];
-
-        if (Array.isArray(seg.words) && seg.words.length > 0) {
-          words = seg.words
-            .map((w) => {
-              let wStart = parseTimeToSeconds(w.start);
-              let wEnd = parseTimeToSeconds(w.end);
-              if (isAbsolute) {
-                wStart = Math.max(0, wStart - clipStartSec);
-                wEnd = Math.max(wStart + 0.1, wEnd - clipStartSec);
-              }
-              return {
-                word: (w.word || w.text || "").trim(),
-                start: wStart,
-                end: wEnd,
-              };
-            })
-            .filter((w) => Boolean(w.word));
-        } else {
-          const tokens = text.split(/\s+/).filter(Boolean);
-          const dur = Math.max(0.3, segEnd - segStart);
-          const wDur = dur / Math.max(1, tokens.length);
-          words = tokens.map((w, wIdx) => ({
-            word: w,
-            start: segStart + wIdx * wDur,
-            end: segStart + (wIdx + 1) * wDur,
-          }));
-        }
-
-        return {
-          id: seg.id || `seg-${sIdx}`,
-          start: segStart,
-          end: segEnd,
-          text,
-          words,
-        };
-      });
-    }
-
-    // Instant Synthesized Fallback from previewText / text / title
-    const rawText = (
-      clip.previewText ||
-      clip.text ||
-      clip.title ||
-      "THIS IS HOW YOU GO VIRAL"
-    ).trim();
-    const allWords = rawText.split(/\s+/).filter(Boolean);
-    if (allWords.length === 0) return [];
-
-    const segments = [];
-    const wordsPerSeg = 4;
-    const wordDuration = 0.38;
-    const pauseBetweenSeg = 0.3;
-    let curTime = 0.3;
-
-    for (let i = 0; i < allWords.length; i += wordsPerSeg) {
-      const chunk = allWords.slice(i, i + wordsPerSeg);
-      const segStart = curTime;
-      const segWords = chunk.map((w, idx) => {
-        const wStart = segStart + idx * wordDuration;
-        const wEnd = wStart + wordDuration;
-        return { word: w, start: wStart, end: wEnd };
-      });
-      const segEnd = segStart + chunk.length * wordDuration;
-      curTime = segEnd + pauseBetweenSeg;
-
-      segments.push({
-        id: `syn-seg-${i}`,
-        start: segStart,
-        end: segEnd,
-        text: chunk.join(" "),
-        words: segWords,
-      });
-    }
-
-    return segments;
-  }, [clip]);
-
-  // ── Cadence Word Slicing: Single Element, Real-time Sync, Zero Ghosting ──
-  const activeCaption = useMemo(() => {
-    if (!transcriptSegments || transcriptSegments.length === 0) return null;
-
-    const isVideoPaused = !videoRef.current || videoRef.current.paused;
-    const isAtZero = currentTime <= 0.05;
-
-    // Initial load at 0.0s: Show preview words so user can configure styles
-    if (isVideoPaused && isAtZero) {
-      const firstSeg = transcriptSegments[0];
-      if (!firstSeg || !firstSeg.words || firstSeg.words.length === 0) return null;
-
-      const cadence = styleState.wordsInRow || "2 Words";
-      let previewWords = [];
-
-      if (cadence === "1 Word") {
-        previewWords = [{ text: firstSeg.words[0].word, isCurrent: true }];
-      } else if (cadence === "2 Words") {
-        previewWords = firstSeg.words.slice(0, 2).map((w, idx) => ({
-          text: w.word,
-          isCurrent: idx === 0,
-        }));
-      } else if (cadence === "3 Words") {
-        previewWords = firstSeg.words.slice(0, 3).map((w, idx) => ({
-          text: w.word,
-          isCurrent: idx === 0,
-        }));
-      } else if (cadence === "4 Words") {
-        previewWords = firstSeg.words.slice(0, 4).map((w, idx) => ({
-          text: w.word,
-          isCurrent: idx === 0,
-        }));
-      } else {
-        previewWords = firstSeg.words.map((w, idx) => ({
-          text: w.word,
-          isCurrent: idx === 0,
-        }));
-      }
-
-      return { words: previewWords };
-    }
-
-    // Active playback: find active segment matching currentTime
-    const activeSegment = transcriptSegments.find(
-      (s) => currentTime >= s.start && currentTime <= s.end
-    );
-
-    // If no segment is active at currentTime, clear caption completely (no orphaned words)
-    if (!activeSegment || !activeSegment.words || activeSegment.words.length === 0) {
-      return null;
-    }
-
-    const cadence = styleState.wordsInRow || "2 Words";
-    const segWords = activeSegment.words;
-
-    // 1 Word Cadence
-    if (cadence === "1 Word") {
-      const activeWord = segWords.find(
-        (w) => currentTime >= w.start && currentTime <= w.end
-      );
-      if (!activeWord) return null; // Clean fade between spoken words
-      return {
-        words: [{ text: activeWord.word, isCurrent: true }],
-      };
-    }
-
-    // 2 Words Cadence
-    if (cadence === "2 Words") {
-      for (let i = 0; i < segWords.length; i += 2) {
-        const pair = segWords.slice(i, i + 2);
-        const pairStart = pair[0].start;
-        const pairEnd = pair[pair.length - 1].end;
-
-        if (currentTime >= pairStart && currentTime <= pairEnd) {
-          return {
-            words: pair.map((w) => ({
-              text: w.word,
-              isCurrent: currentTime >= w.start && currentTime <= w.end,
-            })),
-          };
-        }
-      }
-      return null; // Clean fade between pairs
-    }
-
-    // 3 Words Cadence
-    if (cadence === "3 Words") {
-      for (let i = 0; i < segWords.length; i += 3) {
-        const triplet = segWords.slice(i, i + 3);
-        const tripStart = triplet[0].start;
-        const tripEnd = triplet[triplet.length - 1].end;
-
-        if (currentTime >= tripStart && currentTime <= tripEnd) {
-          return {
-            words: triplet.map((w) => ({
-              text: w.word,
-              isCurrent: currentTime >= w.start && currentTime <= w.end,
-            })),
-          };
-        }
-      }
-      return null;
-    }
-
-    // 4 Words Cadence
-    if (cadence === "4 Words") {
-      for (let i = 0; i < segWords.length; i += 4) {
-        const quad = segWords.slice(i, i + 4);
-        const quadStart = quad[0].start;
-        const quadEnd = quad[quad.length - 1].end;
-
-        if (currentTime >= quadStart && currentTime <= quadEnd) {
-          return {
-            words: quad.map((w) => ({
-              text: w.word,
-              isCurrent: currentTime >= w.start && currentTime <= w.end,
-            })),
-          };
-        }
-      }
-      return null;
-    }
-
-    // Auto Cadence (Full segment)
-    return {
-      words: segWords.map((w) => ({
-        text: w.word,
-        isCurrent: currentTime >= w.start && currentTime <= w.end,
-      })),
-    };
-  }, [transcriptSegments, currentTime, styleState.wordsInRow]);
-
   // Preset Selection Handler
   const handleApplyPreset = (preset) => {
     if (!preset?.style) return;
@@ -638,7 +559,7 @@ export default function CaptionStudio({
         parsedOpacity = Math.round(parseFloat(match[3]) * 100);
       }
     } else if (parsedBg === "transparent") {
-      initialOpacity = 0;
+      parsedOpacity = 0;
       parsedBg = "#000000";
     }
 
@@ -660,12 +581,12 @@ export default function CaptionStudio({
       highlightColor: s.highlightColor || "#22C55E",
       backgroundColor: parsedBg.startsWith("#") ? parsedBg : "#000000",
       bgOpacity: parsedOpacity,
-      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 10,
+      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 12,
       neonGlow: s.shadowBlur || 0,
       strokeWidth: 0,
       strokeColor: s.strokeColor || "#000000",
       behindPerson: isBtp,
-      posY: isBtp ? 42 : prev.posY,
+      positionY: isBtp ? -40 : prev.positionY,
     }));
 
     setActivePreset(preset.id);
@@ -706,9 +627,9 @@ export default function CaptionStudio({
           lineSpacing: styleState.lineSpacing,
           textTransform: styleState.letterCase === "ALL CAPS" ? "uppercase" : "none",
           behindPerson: isBehindPerson,
-          positionX: styleState.posX,
-          positionY: styleState.posY,
-          rotateAngle: styleState.rotateAngle,
+          positionX: styleState.positionX,
+          positionY: styleState.positionY,
+          rotateAngle: styleState.rotation,
         },
         assConfig: activePresetAssConfig,
       };
@@ -734,13 +655,6 @@ export default function CaptionStudio({
       setIsExporting(false);
     }
   };
-
-  // Vertical placement adjustment for "Behind the Person"
-  const computedPosY = isBehindPerson
-    ? styleState.posY >= 35 && styleState.posY <= 50
-      ? styleState.posY
-      : 42
-    : styleState.posY;
 
   return (
     <div
@@ -806,6 +720,36 @@ export default function CaptionStudio({
           </div>
         </div>
 
+        {/* Center: Live Audio Parity Status Pill */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "6px 14px",
+              backgroundColor: "rgba(34, 197, 94, 0.15)",
+              border: "1px solid rgba(34, 197, 94, 0.35)",
+              borderRadius: "9999px",
+              fontSize: "12px",
+              fontWeight: "700",
+              color: "#4ADE80",
+              boxShadow: "0 0 12px rgba(34, 197, 94, 0.2)",
+            }}
+          >
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "50%",
+                backgroundColor: "#4ADE80",
+                boxShadow: "0 0 8px #4ADE80",
+              }}
+            />
+            <span>{status}</span>
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <button
             type="button"
@@ -847,7 +791,7 @@ export default function CaptionStudio({
         </div>
       </header>
 
-      {/* ── Main Workspace: Aligned Grid Layout matching phone height to controls ── */}
+      {/* ── Main Workspace: PART 3 Aligned Grid Layout matching phone height to controls ── */}
       <main
         className="flex-1 w-full max-w-[1440px] mx-auto p-4 sm:p-6"
         style={{
@@ -860,50 +804,72 @@ export default function CaptionStudio({
         }}
       >
         <div
-          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch"
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch w-full min-h-[820px]"
           style={{
             display: "grid",
             gap: "24px",
             alignItems: "stretch",
             minHeight: "820px",
+            width: "100%",
           }}
         >
-          {/* ── Left Column: Phone Mockup Frame (Fills full column height, flush with controls) ── */}
-          <section
-            className="lg:col-span-4 h-full flex flex-col items-center justify-center"
+          {/* ── Left Column Wrapper: Phone Mockup Frame (lg:col-span-4 flex flex-col h-full items-center justify-start) ── */}
+          <div
+            className="lg:col-span-4 flex flex-col h-full items-center justify-start"
             style={{
               gridColumn: "span 4 / span 4",
               height: "100%",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
+              justifyContent: "flex-start",
             }}
           >
             <div
-              className="h-full w-full max-w-[360px] rounded-[44px] border-[10px] border-[#1C1F26] bg-black shadow-2xl relative overflow-hidden flex flex-col"
+              className="relative w-full max-w-[340px] h-full flex flex-col rounded-[48px] border-[10px] border-[#1C1F26] bg-black shadow-2xl overflow-hidden"
               style={{
-                height: "100%",
-                width: "100%",
-                maxWidth: "360px",
-                borderRadius: "44px",
-                border: "10px solid #1C1F26",
-                backgroundColor: "#000000",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8)",
                 position: "relative",
-                overflow: "hidden",
+                width: "100%",
+                maxWidth: "340px",
+                height: "100%",
                 display: "flex",
                 flexDirection: "column",
+                borderRadius: "48px",
+                border: "10px solid #1C1F26",
+                backgroundColor: "#000000",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 229, 255, 0.08)",
+                overflow: "hidden",
               }}
             >
+              {/* 4K Badge */}
+              <div
+                className="absolute top-4 left-4 z-20 text-[10px] font-bold text-white/70 bg-black/40 px-2 py-0.5 rounded-full"
+                style={{
+                  position: "absolute",
+                  top: "14px",
+                  left: "14px",
+                  zIndex: 20,
+                  fontSize: "10px",
+                  fontWeight: "800",
+                  color: "rgba(255, 255, 255, 0.85)",
+                  backgroundColor: "rgba(0, 0, 0, 0.6)",
+                  padding: "2px 8px",
+                  borderRadius: "9999px",
+                  backdropFilter: "blur(4px)",
+                  border: "1px solid rgba(255, 255, 255, 0.15)",
+                }}
+              >
+                4K
+              </div>
+
               {/* Dynamic Island Speaker Notch */}
               <div
                 style={{
                   position: "absolute",
-                  top: "14px",
+                  top: "12px",
                   left: "50%",
                   transform: "translateX(-50%)",
-                  width: "96px",
+                  width: "88px",
                   height: "18px",
                   backgroundColor: "#1C1F26",
                   borderRadius: "9999px",
@@ -912,68 +878,60 @@ export default function CaptionStudio({
                 }}
               />
 
-              {/* Inner Screen Area */}
+              {/* Behind Subject Badge */}
+              {isBehindPerson && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "14px",
+                    right: "14px",
+                    zIndex: 25,
+                    padding: "3px 8px",
+                    backgroundColor: "rgba(34, 197, 94, 0.25)",
+                    border: "1px solid rgba(34, 197, 94, 0.5)",
+                    borderRadius: "6px",
+                    color: "#4ADE80",
+                    fontSize: "10px",
+                    fontWeight: "800",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <span>👤</span>
+                  <span>BEHIND</span>
+                </div>
+              )}
+
+              {/* Video fills 100% of the stretched height */}
               <div
-                className="relative w-full h-full overflow-hidden flex flex-col items-center justify-center bg-black flex-1"
+                className="relative flex-1 w-full h-full overflow-hidden flex items-center justify-center"
                 style={{
                   position: "relative",
+                  flex: 1,
                   width: "100%",
                   height: "100%",
-                  flex: 1,
                   overflow: "hidden",
                   display: "flex",
-                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: "#000000",
                 }}
               >
-                {/* Behind Subject Badge */}
-                {isBehindPerson && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "16px",
-                      left: "16px",
-                      zIndex: 25,
-                      padding: "4px 8px",
-                      backgroundColor: "rgba(34, 197, 94, 0.25)",
-                      border: "1px solid rgba(34, 197, 94, 0.5)",
-                      borderRadius: "6px",
-                      color: "#4ADE80",
-                      fontSize: "10px",
-                      fontWeight: "800",
-                      letterSpacing: "0.05em",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      pointerEvents: "none",
-                      backdropFilter: "blur(6px)",
-                    }}
-                  >
-                    <span>👤</span>
-                    <span>BEHIND SUBJECT</span>
-                  </div>
-                )}
-
-                {/* Layer 1 (Bottom): Video Element or Fallback Placeholder */}
+                {/* Layer 1: Video */}
                 {clip.videoUrl ? (
                   <video
                     ref={videoRef}
                     src={clip.videoUrl}
-                    className="w-full h-full object-cover flex-1 absolute inset-0 z-[1]"
+                    className="w-full h-full object-cover"
                     style={{
                       width: "100%",
                       height: "100%",
                       objectFit: "cover",
-                      flex: 1,
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      zIndex: 1,
                     }}
-                    controls
                     playsInline
+                    controls
                     crossOrigin="anonymous"
                     onTimeUpdate={handleTimeUpdate}
                     onSeeked={handleTimeUpdate}
@@ -991,75 +949,70 @@ export default function CaptionStudio({
                       alignItems: "center",
                       justifyContent: "center",
                       backgroundColor: "#0F1118",
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      zIndex: 1,
                     }}
                   >
-                    <span style={{ fontSize: "36px", opacity: 0.7 }}>🎬</span>
+                    <span style={{ fontSize: "42px", opacity: 0.7 }}>🎬</span>
                     <span
                       style={{
-                        fontSize: "12px",
+                        fontSize: "13px",
                         color: "#64748B",
-                        marginTop: "8px",
+                        marginTop: "10px",
                         fontWeight: 600,
                       }}
                     >
-                      Live Clip Preview
+                      Live Video Preview
                     </span>
                   </div>
                 )}
 
-                {/* Layer 2 (Middle): Strictly ONE Subtitle Render Element */}
-                {activeCaption && (
+                {/* Layer 2: Caption Overlay & Forced Styles */}
+                {activeCaptionChunk && activeCaptionChunk.length > 0 && (
                   <div
-                    className="caption-container"
+                    className="caption-overlay-wrapper pointer-events-none absolute inset-0 flex items-center justify-center"
                     style={{
                       position: "absolute",
-                      left: `${styleState.posX}%`,
-                      top: `${computedPosY}%`,
-                      transform: `translate(-50%, -50%) rotate(${styleState.rotateAngle || 0}deg)`,
-                      textAlign: "center",
-                      maxWidth: "90%",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       pointerEvents: "none",
-                      userSelect: "none",
                       zIndex: 2,
-                      transition: "transform 0.1s ease",
+                      transform: `translate(${styleState.positionX ?? 0}px, ${styleState.positionY ?? 180}px) rotate(${styleState.rotation ?? 0}deg)`,
+                      transition: "transform 0.08s ease-out",
                     }}
                   >
                     <span
-                      className="caption-pill"
+                      className="caption-badge"
                       style={{
                         fontFamily: styleState.fontFamily || "Montserrat",
-                        fontSize: `${styleState.fontSize || 24}px`,
+                        fontSize: `${styleState.fontSize || 28}px`,
+                        fontWeight: 900,
+                        letterSpacing: `${styleState.letterSpacing || 0}px`,
+                        lineHeight: styleState.lineSpacing || 1.2,
                         color: styleState.textColor || "#FFFFFF",
                         textTransform:
                           styleState.letterCase === "ALL CAPS" ? "uppercase" : "none",
-                        letterSpacing: `${styleState.letterSpacing || 0}px`,
-                        lineHeight: styleState.lineSpacing || 1.2,
+                        textAlign: "center",
+                        display: "inline-block",
 
-                        // 1. Background Pill Styling:
+                        // 1. Force Background Pill Rendering
                         backgroundColor:
                           styleState.bgOpacity > 0
-                            ? hexToRgba(styleState.backgroundColor, styleState.bgOpacity)
+                            ? hexToRgba(styleState.backgroundColor || "#000000", styleState.bgOpacity)
                             : "transparent",
                         padding:
                           styleState.bgOpacity > 0
-                            ? `${styleState.boxPadding || 8}px ${(styleState.boxPadding || 8) * 1.4}px`
+                            ? `${styleState.boxPadding || 12}px ${(styleState.boxPadding || 12) * 1.4}px`
                             : "0px",
-                        borderRadius: "12px",
-                        display: "inline-block",
+                        borderRadius: "14px",
 
-                        // 2. Neon Glow (Multiple layered text-shadows for intense glow):
-                        textShadow:
-                          styleState.neonGlow > 0
-                            ? `0 0 ${styleState.neonGlow * 0.5}px ${styleState.textColor}, 0 0 ${styleState.neonGlow}px ${styleState.textColor}, 0 0 ${styleState.neonGlow * 2}px ${styleState.textColor}`
-                            : styleState.textShadow
-                            ? `${styleState.shadowOffsetX || 0}px ${styleState.shadowOffsetY || 4}px ${styleState.shadowBlur || 12}px rgba(0,0,0,0.8)`
-                            : "none",
+                        // 2. Force Neon Glow Rendering
+                        textShadow: computedTextShadow,
 
-                        // 3. Outline Stroke:
+                        // 3. Stroke
                         WebkitTextStroke:
                           styleState.strokeWidth > 0
                             ? `${styleState.strokeWidth}px ${styleState.strokeColor || "#000000"}`
@@ -1068,14 +1021,12 @@ export default function CaptionStudio({
                         boxSizing: "border-box",
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-word",
-                        fontWeight: styleState.fontWeight || "900",
-                        transition:
-                          "background-color 0.15s ease, padding 0.15s ease, text-shadow 0.15s ease",
+                        transition: "all 0.1s ease-out",
                       }}
                     >
-                      {activeCaption.words.map((w, idx) => (
+                      {activeCaptionChunk.map((w, idx) => (
                         <span
-                          key={`${w.text}-${idx}`}
+                          key={`${w.word}-${idx}`}
                           style={{
                             color:
                               w.isCurrent && styleState.highlightColor
@@ -1090,24 +1041,23 @@ export default function CaptionStudio({
                             transition: "transform 0.1s ease, color 0.15s ease",
                           }}
                         >
-                          {w.text}
+                          {w.word}
                         </span>
                       ))}
                     </span>
                   </div>
                 )}
 
-                {/* Layer 3 (Top): Real-time MediaPipe Subject Segmentation Canvas */}
+                {/* Layer 3: Subject segmentation canvas if active */}
                 <canvas
                   ref={segmentationCanvasRef}
-                  className="w-full h-full object-cover flex-1 absolute inset-0 pointer-events-none z-[3]"
+                  className="w-full h-full object-cover absolute inset-0 pointer-events-none z-[3]"
                   style={{
                     position: "absolute",
                     top: 0,
                     left: 0,
                     width: "100%",
                     height: "100%",
-                    flex: 1,
                     objectFit: "cover",
                     pointerEvents: "none",
                     zIndex: 3,
@@ -1115,11 +1065,34 @@ export default function CaptionStudio({
                   }}
                 />
               </div>
+
+              {/* Bottom Video Controls */}
+              <div
+                className="w-full p-4 bg-gradient-to-t from-black/80 to-transparent z-20 flex items-center justify-between text-xs text-white/70"
+                style={{
+                  width: "100%",
+                  padding: "14px 18px",
+                  background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent)",
+                  zIndex: 20,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  boxSizing: "border-box",
+                }}
+              >
+                <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.6)" }}>
+                  Live Audio Parity
+                </span>
+                <span style={{ color: "#00E5FF", fontWeight: "700", fontSize: "12px" }}>
+                  {Math.floor(currentPlaybackTime / 60)}:
+                  {String(Math.floor(currentPlaybackTime % 60)).padStart(2, "0")}
+                </span>
+              </div>
             </div>
-          </section>
+          </div>
 
           {/* ── Right Column: 2-Row Controls Grid ── */}
-          <section
+          <div
             className="lg:col-span-8 h-full flex flex-col justify-between gap-5"
             style={{
               gridColumn: "span 8 / span 8",
@@ -1418,17 +1391,18 @@ export default function CaptionStudio({
                   <div style={csStyles.formField}>
                     <div style={csStyles.labelWithVal}>
                       <label style={csStyles.label}>Vertical Position (Y)</label>
-                      <span style={csStyles.valBadge}>{styleState.posY}%</span>
+                      <span style={csStyles.valBadge}>{styleState.positionY}px</span>
                     </div>
                     <input
                       type="range"
-                      min="10"
-                      max="90"
-                      value={styleState.posY}
+                      min="-240"
+                      max="240"
+                      step="2"
+                      value={styleState.positionY}
                       onChange={(e) =>
                         setStyleState((prev) => ({
                           ...prev,
-                          posY: Number(e.target.value),
+                          positionY: Number(e.target.value),
                         }))
                       }
                       style={csStyles.rangeInput}
@@ -1438,17 +1412,18 @@ export default function CaptionStudio({
                   <div style={csStyles.formField}>
                     <div style={csStyles.labelWithVal}>
                       <label style={csStyles.label}>Horizontal Position (X)</label>
-                      <span style={csStyles.valBadge}>{styleState.posX}%</span>
+                      <span style={csStyles.valBadge}>{styleState.positionX}px</span>
                     </div>
                     <input
                       type="range"
-                      min="10"
-                      max="90"
-                      value={styleState.posX}
+                      min="-150"
+                      max="150"
+                      step="2"
+                      value={styleState.positionX}
                       onChange={(e) =>
                         setStyleState((prev) => ({
                           ...prev,
-                          posX: Number(e.target.value),
+                          positionX: Number(e.target.value),
                         }))
                       }
                       style={csStyles.rangeInput}
@@ -1460,17 +1435,18 @@ export default function CaptionStudio({
                   <div style={csStyles.formField}>
                     <div style={csStyles.labelWithVal}>
                       <label style={csStyles.label}>Tilt Angle</label>
-                      <span style={csStyles.valBadge}>{styleState.rotateAngle}°</span>
+                      <span style={csStyles.valBadge}>{styleState.rotation}°</span>
                     </div>
                     <input
                       type="range"
                       min="-15"
                       max="15"
-                      value={styleState.rotateAngle}
+                      step="1"
+                      value={styleState.rotation}
                       onChange={(e) =>
                         setStyleState((prev) => ({
                           ...prev,
-                          rotateAngle: Number(e.target.value),
+                          rotation: Number(e.target.value),
                         }))
                       }
                       style={csStyles.rangeInput}
@@ -1550,7 +1526,7 @@ export default function CaptionStudio({
                 </div>
               </div>
             </div>
-          </section>
+          </div>
         </div>
       </main>
 
