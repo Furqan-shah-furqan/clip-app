@@ -6067,6 +6067,62 @@ body.home-page {
   line-height: 1.6;
 }
 
+/* Dark Mode Typography & Hero Overrides */
+.theme-dark .hero-title {
+  color: #ffffff !important;
+}
+
+.theme-dark .hero-subtitle {
+  color: #cbd5e1 !important;
+}
+
+.theme-dark .hero-card-container {
+  background: #12141a !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1) !important;
+}
+
+.theme-dark .hero-pill-input-box {
+  background: #1a1d24 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-dark .hero-pill-input-box:focus-within {
+  border-color: #818cf8 !important;
+  background: #20242e !important;
+  box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.2) !important;
+}
+
+.theme-dark .hero-link-field {
+  color: #ffffff !important;
+}
+
+.theme-dark .hero-source-pill {
+  background: #1a1d24 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  color: #e2e8f0 !important;
+}
+
+.theme-dark .hero-source-pill:hover:not(.is-disabled) {
+  background: #20242e !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.theme-dark .hero-clear-btn {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #e2e8f0 !important;
+}
+
+.theme-dark .hero-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  color: #ffffff !important;
+}
+
+.home-page.theme-dark,
+.theme-dark .home-main-container {
+  background-color: #0a0b0e !important;
+}
+
 /* Elevated Pure White Input Card */
 .hero-card-container {
   background: #ffffff !important;

@@ -82,41 +82,8 @@
       <div class="home-content-scroll">
         <!-- ───── TAB 1: CLIP GENERATION VIEW ───── -->
         <section class="home-view-pane is-active" id="viewGenerate">
-        <!-- ───── TAB 1: CLIP GENERATION VIEW ───── -->
-        <section class="home-view-pane is-active" id="viewGenerate">
           <!-- ─── HERO SECTION ─── -->
           <article class="hero-redesign-panel">
-            <!-- Floating Micro-Badges (Desktop) -->
-            <div class="hero-floating-badges" aria-hidden="true">
-              <!-- Left: 3D YouTube Badge -->
-              <div class="hero-badge hero-badge-yt">
-                <div class="hero-badge-inner">
-                  <div class="hero-badge-icon yt-red-bg">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                    </svg>
-                  </div>
-                  <span class="hero-badge-label">From YouTube</span>
-                </div>
-                <div class="hero-badge-sub">Turn hours into viral clips ↗</div>
-              </div>
-
-              <!-- Right: 3D Google Drive Badge -->
-              <div class="hero-badge hero-badge-drive">
-                <div class="hero-badge-inner">
-                  <div class="hero-badge-icon drive-green-bg">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm4.87 0l6.55 11.5h-6.86L5.72 3.5h6.86zm7.71 12.5L16.86 21H3.14l3.43-5h13.72z"/>
-                    </svg>
-                  </div>
-                  <span class="hero-badge-label">Or your Google Drive</span>
-                </div>
-                <div class="hero-badge-glass-pill">
-                  ✦ AI finds the best moments — You just create more.
-                </div>
-              </div>
-            </div>
-
             <!-- Typography & Hero Headlines -->
             <div class="hero-headings">
               <h1 class="hero-title">
@@ -326,67 +293,40 @@
               </div>
             </div>
 
-            <!-- ─── VALUE PROPOSITION FOOTER (3 COLUMNS) ─── -->
-            <div class="hero-value-prop-grid">
-              <div class="value-prop-item">
-                <span class="value-prop-emoji">⚡</span>
-                <div class="value-prop-text">
-                  <strong>AI-Powered</strong>
-                  <p>Finds viral moments automatically</p>
-                </div>
+          </article>
+
+          <!-- Smart clip results section -->
+          <section class="created-clips-strip">
+            <div class="created-clips-strip-head">
+              <div>
+                <h3>Smart clip results</h3>
               </div>
 
-              <div class="value-prop-item">
-                <span class="value-prop-emoji">⏱️</span>
-                <div class="value-prop-text">
-                  <strong>Save Hours</strong>
-                  <p>Turn long content into shorts</p>
-                </div>
-              </div>
+              <div class="created-clips-actions">
+                <button class="action-btn ghost icon-action-btn" id="downloadAllBtn" title="Download All" type="button">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
 
-              <div class="value-prop-item">
-                <span class="value-prop-emoji">📈</span>
-                <div class="value-prop-text">
-                  <strong>More Reach</strong>
-                  <p>Create. Post. Grow.</p>
-                </div>
+                <button class="action-btn danger icon-action-btn" id="deleteAllBtn" title="Delete All" type="button">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6"/>
+                    <path d="M14 11v6"/>
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                  </svg>
+                </button>
               </div>
             </div>
-          </article>
 
-            <!-- Smart clip results section -->
-            <section class="created-clips-strip">
-              <div class="created-clips-strip-head">
-                <div>
-                  <h3>Smart clip results</h3>
-                </div>
-
-                <div class="created-clips-actions">
-                  <button class="action-btn ghost icon-action-btn" id="downloadAllBtn" title="Download All" type="button">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7 10 12 15 17 10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                  </button>
-
-                  <button class="action-btn danger icon-action-btn" id="deleteAllBtn" title="Delete All" type="button">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                      <path d="M10 11v6"/>
-                      <path d="M14 11v6"/>
-                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-
-              <div class="clips-view clips-story-row" id="generatedClipsGrid">
-                <div class="empty-state">No smart clips generated yet.</div>
-              </div>
-            </section>
-          </article>
+            <div class="clips-view clips-story-row" id="generatedClipsGrid">
+              <div class="empty-state">No smart clips generated yet.</div>
+            </div>
+          </section>
         </section>
 
         <!-- ───── TAB 2: ALL PROJECTS & SAVED VIEW ───── -->

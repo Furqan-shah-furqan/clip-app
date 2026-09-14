@@ -3311,12 +3311,15 @@ async function pollGenerationJob(jobId, onProgress, requestVersion) {
       return { status: "CANCELLED" };
     }
 
-    const job = responseData?.job;
+    const job = responseData?.job || responseData;
     if (!job) {
       throw new Error("Invalid response received from generation job status endpoint");
     }
 
-    const { status, progress, stage, message, needsUpload, suggestions, clips, error, createdAt, startedAt } = job;
+    const { stage, message, needsUpload, suggestions, error, createdAt, startedAt } = job;
+    const status = String(job.status || responseData?.status || "").toUpperCase();
+    const progress = job.progress !== undefined ? job.progress : responseData?.progress;
+    const clips = job.clips || responseData?.clips || job.resultJson?.clips || [];
 
     let displayStage = stage || message || "Processing...";
     let displayProgress = progress != null ? progress : 0;
@@ -3335,7 +3338,7 @@ async function pollGenerationJob(jobId, onProgress, requestVersion) {
       onProgress(displayProgress, displayStage);
     }
 
-    if (status === "COMPLETED") {
+    if (status === "COMPLETED" || Number(progress) === 100) {
       return {
         status: "COMPLETED",
         clips: Array.isArray(clips) ? clips : [],
@@ -3389,10 +3392,11 @@ function startGenerationPolling(jobId) {
       }
 
       if (result?.status === "COMPLETED") {
-        console.log("[GenerationUI] Job completed, resetting active state");
+        console.log("[GenerationUI] Job completed, immediately rendering clips");
         await consumeCompletedClips(result.clips);
         clearActiveGenerationReference();
         resetGenerationUI();
+        renderGeneratedClips();
       } else if (result?.needsUpload || result?.status === "AWAITING_UPLOAD") {
         clearActiveGenerationReference();
         resetGenerationUI();
@@ -3419,12 +3423,10 @@ function startGenerationPolling(jobId) {
 }
 
 async function consumeCompletedClips(rawClips = []) {
-  const clips = (Array.isArray(rawClips) ? rawClips : []).filter(
-    (clip) => Number(clip.smartScore || clip.score || 0) >= 1
-  );
+  const clips = Array.isArray(rawClips) ? rawClips : [];
 
   if (!clips.length) {
-    updateProgress(0, "No clips generated for this video.");
+    console.warn("[GenerationUI] No clips in completed payload");
     clearActiveGenerationJob();
     setGenerationUIState("idle");
     return;
@@ -3432,6 +3434,7 @@ async function consumeCompletedClips(rawClips = []) {
 
   const formattedClips = clips.map((clip, index) => ({
     ...clip,
+    fileName: clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : `clip_${index + 1}.mp4`),
     filePath: clip.filePath || clip.outputPath || "",
     outputPath: clip.outputPath || clip.filePath || "",
     startTime: clip.startTime || clip.start || secondsToTime(clip.startSec || 0),
@@ -3441,39 +3444,29 @@ async function consumeCompletedClips(rawClips = []) {
         ? Number(clip.duration)
         : Math.max(0, Number(clip.durationSec || 0)),
     hook: clip.hook || clip.title || `Smart Clip #${index + 1}`,
-    smartScore: Number(clip.smartScore || clip.score || 0),
+    smartScore: Number(clip.smartScore || clip.score || 85),
     smartReason: clip.smartReason || formatSmartReason(clip),
     previewText: clip.previewText || clip.text || "",
   }));
 
-  // Deduplicate against existing clips in state
-  const existingKeys = new Set(
-    state.generatedClips.map((c) => `${c.fileName || ""}_${c.startTime}_${c.endTime}`)
-  );
-  const newUniqueClips = formattedClips.filter(
-    (c) => !existingKeys.has(`${c.fileName || ""}_${c.startTime}_${c.endTime}`)
-  );
-
-  if (newUniqueClips.length > 0) {
-    state.generatedClips = [...newUniqueClips, ...state.generatedClips];
-    state.generatedClip = state.generatedClips[0] || null;
-  }
+  state.generatedClips = formattedClips;
+  state.generatedClip = formattedClips[0] || null;
 
   upsertCurrentProjectToAllProjects();
-
-  for (let i = 0; i < newUniqueClips.length; i++) {
-    await loadCaptionsForClip(newUniqueClips[i], i);
-  }
 
   renderGeneratedClips();
   persistStudioSession();
   clearActiveGenerationJob();
   setGenerationUIState("idle");
 
-  await animateProgressTo(
-    100,
-    `Generated ${newUniqueClips.length || clips.length} smart clip${(newUniqueClips.length || clips.length) > 1 ? "s" : ""} ✓`
-  );
+  const resultsSection = document.querySelector(".created-clips-strip");
+  if (resultsSection) {
+    resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  for (let i = 0; i < formattedClips.length; i++) {
+    loadCaptionsForClip(formattedClips[i], i).catch(() => {});
+  }
 }
 
 async function handleUploadForSmartClips(input, suggestions) {

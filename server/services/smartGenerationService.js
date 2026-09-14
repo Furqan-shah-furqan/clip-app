@@ -495,7 +495,7 @@ async function runSmartGeneration({
   } = payload || {};
 
   const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
-  const safeMaxClips = Math.max(1, Math.min(10, Number(maxClips) || 3));
+  const safeMaxClips = Math.max(1, Math.min(12, Number(maxClips) || 3));
   const safeMinScore = Math.max(1, Math.min(100, Number(minScore) || 50));
 
   if (normalizedSourceType === "youtube" && (!sourceUrl || !isValidYouTubeUrl(sourceUrl))) {

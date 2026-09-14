@@ -392,13 +392,14 @@ router.post("/smart-generate", async (req, res) => {
           inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
           sourceUrl: resolvedRemoteUrl,
           segments: Array.isArray(segments) ? segments : null,
-          maxClips: Number(maxClips) || 3,
+          maxClips: Number(maxClips) || 6,
           minScore: Number(minScore) || 50,
           clipLengthSec: Number(clipLengthSec) || 45,
           minDurationSec: Number(minDurationSec) || 25,
           maxDurationSec: Number(maxDurationSec) || 90,
           aspectRatio: aspectRatio || "9:16",
           videoDurationSec: Number(videoDurationSec) || 0,
+          metadata: req.body?.metadata || (videoDurationSec ? { duration: Number(videoDurationSec) } : null),
         },
       },
     });
@@ -439,6 +440,51 @@ router.post("/smart-generate", async (req, res) => {
       error: "Failed to queue smart clip generation",
       details: error.message,
     });
+  }
+});
+
+router.get("/status/:jobId", async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (!jobId || typeof jobId !== "string") {
+      return res.status(400).json({ error: "Valid job ID is required" });
+    }
+
+    const job = await prisma.generationJob.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job) {
+      return res.status(404).json({ error: "Generation job not found" });
+    }
+
+    const resultClips = job.resultJson?.clips || [];
+    const suggestions = job.suggestionsJson || [];
+
+    return res.json({
+      success: true,
+      status: job.status.toLowerCase(),
+      progress: job.progress,
+      stage: job.stage || "",
+      message: job.stage || "",
+      clips: resultClips,
+      suggestions,
+      job: {
+        id: job.id,
+        status: job.status,
+        progress: job.progress,
+        stage: job.stage || "",
+        message: job.stage || "",
+        clips: resultClips,
+        suggestions,
+        error: job.errorMessage || null,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+      },
+    });
+  } catch (error) {
+    console.error("[GET /status/:jobId] Error:", error);
+    return res.status(500).json({ error: "Failed to fetch status" });
   }
 });
 
@@ -484,6 +530,11 @@ router.get("/generation-jobs/:jobId", async (req, res) => {
 
     return res.json({
       success: true,
+      status: job.status.toLowerCase(),
+      progress: job.progress,
+      stage: job.stage || "",
+      message: job.stage || "",
+      clips: resultClips,
       job: {
         id: job.id,
         status: job.status,

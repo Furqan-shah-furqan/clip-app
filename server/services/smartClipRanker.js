@@ -205,11 +205,10 @@ function windowsOverlap(a, b) {
 
 function getDynamicClipQuota(durationInSeconds) {
   const minutes = Math.floor(Number(durationInSeconds || 0) / 60);
-  if (minutes < 15) return 3;               // Short videos (< 15 min): 3 clips
-  if (minutes < 35) return 4;               // 15 - 35 min: 4 clips
-  if (minutes < 75) return 6;               // 35 - 75 min (~1 hour): 6 clips minimum
-  if (minutes < 110) return 8;              // 75 - 110 min: 8-9 clips
-  return Math.min(12, Math.max(10, Math.floor(minutes / 10))); // 110+ min (2 hours): 10 to 12 clips
+  if (minutes < 20) return 3;               // < 20 min
+  if (minutes < 45) return 4;               // 20 - 45 min
+  if (minutes < 85) return 6;               // 45 - 85 min (~1hr to 1h15m): 6 to 7 clips
+  return Math.min(12, Math.max(8, Math.floor(minutes / 10))); // 85m+ (2hr): 10 to 12 clips
 }
 
 function findSmartClipMoments(segments = [], options = {}) {
@@ -239,21 +238,21 @@ function findSmartClipMoments(segments = [], options = {}) {
   const minDurationSec = clampNumber(
     options.minDurationSec,
     20,
-    70,
-    30,
+    60,
+    35,
   );
   const maxDurationSec = clampNumber(
     options.maxDurationSec,
     35,
-    100,
-    75,
+    90,
+    65,
   );
 
   const candidates = [];
   const totalDuration = Math.max(effectiveDuration, transcriptDuration);
 
-  // 1. Sliding candidate windows: slide candidate windows (30s to 75s duration) every 25 seconds across full transcript
-  const stepSec = 25;
+  // 1. Dense candidate generation: slide candidate windows (lengths 35s to 65s) every 20 seconds across full transcript
+  const stepSec = 20;
   const maxStartSec = Math.max(0, totalDuration - minDurationSec);
 
   for (let windowStart = 0; windowStart <= maxStartSec; windowStart += stepSec) {
@@ -337,15 +336,15 @@ function findSmartClipMoments(segments = [], options = {}) {
     }
   }
 
-  // 3. Sort all candidate moments by score descending
+  // 3. Sort all candidate moments by score descending (no hard score filters)
   const sorted = candidates.sort(
     (a, b) => b.score - a.score || a.startSec - b.startSec,
   );
 
-  // 4. Deduplicate overlapping moments (max 45% overlap)
+  // 4. Deduplicate overlapping moments only if overlap > 60% (0.60)
   const selected = [];
   for (const candidate of sorted) {
-    if (selected.some((existing) => windowsOverlap(existing, candidate) > 0.45)) {
+    if (selected.some((existing) => windowsOverlap(existing, candidate) > 0.60)) {
       continue;
     }
     selected.push(candidate);
@@ -365,7 +364,17 @@ function findSmartClipMoments(segments = [], options = {}) {
     }
   }
 
-  // 6. Return top candidates sliced to target quota
+  // 6. If still below quota, include any remaining unique candidate
+  if (selected.length < quota) {
+    for (const candidate of sorted) {
+      if (!selected.includes(candidate)) {
+        selected.push(candidate);
+        if (selected.length >= quota) break;
+      }
+    }
+  }
+
+  // 7. Return top candidates sliced to target quota
   const rankedMoments = selected.sort((a, b) => b.score - a.score);
   return rankedMoments.slice(0, quota);
 }
