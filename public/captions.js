@@ -4195,27 +4195,13 @@ async function init() {
 
   const isMock = isPlaceholderOrMockCaptions(initialSegments, session.clip);
 
-  if (session.clip && (!initialSegments.length || isMock)) {
-    const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
-    if (statusLabel) statusLabel.textContent = "Transcribing Audio with Whisper AI...";
-    try {
-      const serverSegments = await fetchServerCaptions(session.clip);
-      if (serverSegments && serverSegments.length) {
-        console.log("Real audio transcription loaded:", serverSegments.length, "segments");
-        initialSegments = serverSegments;
-        if (statusLabel) statusLabel.textContent = `Audio Transcribed (${serverSegments.length} Segments)`;
-      }
-    } catch (err) {
-      console.warn("Could not fetch server captions during init:", err);
-    }
-  }
-
-  // 2. If still empty, generate fallback so editor is never blank
-  if (!initialSegments.length) {
+  // 2. If still empty or mock, show fallback IMMEDIATELY so editor is never blank
+  if (!initialSegments.length || isMock) {
     const clipDur = Number(captionVideo?.duration || session.clip?.duration || 30);
     initialSegments = generateSmartCaptionsForClip(session.clip, clipDur);
   }
 
+  // Set segments and start caption sync RIGHT NOW — never block on network
   editorState.segments = normalizeSegments(initialSegments);
   editorState.activeSegmentId = editorState.segments[0]?.id || null;
 
@@ -4225,6 +4211,32 @@ async function init() {
   syncCaptionOverlay();
   startCaptionSync();
   updateLivePreview();
+
+  // 3. Fire Whisper transcription in the BACKGROUND — updates editor when ready
+  if (session.clip && isMock) {
+    const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
+    if (statusLabel) statusLabel.textContent = "Transcribing Audio with Whisper AI...";
+
+    fetchServerCaptions(session.clip)
+      .then((serverSegments) => {
+        if (serverSegments && serverSegments.length) {
+          console.log("Real audio transcription loaded:", serverSegments.length, "segments");
+          editorState.segments = normalizeSegments(serverSegments);
+          editorState.activeSegmentId = editorState.segments[0]?.id || null;
+          persistCaptions();
+          renderTimeline();
+          syncCaptionOverlay();
+          updateLivePreview();
+          if (statusLabel) statusLabel.textContent = `Audio Transcribed (${serverSegments.length} Segments)`;
+        } else {
+          if (statusLabel) statusLabel.textContent = "Ready";
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch server captions during init:", err);
+        if (statusLabel) statusLabel.textContent = "Ready";
+      });
+  }
 }
 
 window.renderAnimatedCaption = renderAnimatedCaption;
