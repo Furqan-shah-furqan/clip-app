@@ -3,10 +3,71 @@ import PresetsGallery from "./PresetsGallery";
 import { DEFAULT_PRESET } from "../../constants/captionPresets";
 
 /**
+ * Reliable Hex / RGB to RGBA converter to avoid invalid CSS syntax.
+ */
+function getRgba(hex = "#000000", opacity = 100) {
+  if (typeof hex !== "string") {
+    return `rgba(0, 0, 0, ${Math.max(0, Math.min(1, opacity / 100))})`;
+  }
+  if (hex === "transparent") return "transparent";
+
+  // If already an rgb / rgba string
+  if (hex.startsWith("rgba") || hex.startsWith("rgb")) {
+    const match = hex.match(/[\d.]+/g);
+    if (match && match.length >= 3) {
+      const r = parseInt(match[0], 10) || 0;
+      const g = parseInt(match[1], 10) || 0;
+      const b = parseInt(match[2], 10) || 0;
+      return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, opacity / 100))})`;
+    }
+  }
+
+  const clean = hex.replace("#", "");
+  let r = 0;
+  let g = 0;
+  let b = 0;
+
+  if (clean.length === 3) {
+    r = parseInt(clean[0] + clean[0], 16) || 0;
+    g = parseInt(clean[1] + clean[1], 16) || 0;
+    b = parseInt(clean[2] + clean[2], 16) || 0;
+  } else {
+    r = parseInt(clean.substring(0, 2), 16) || 0;
+    g = parseInt(clean.substring(2, 4), 16) || 0;
+    b = parseInt(clean.substring(4, 6), 16) || 0;
+  }
+
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, opacity / 100))})`;
+}
+
+/**
+ * Helper to parse time strings ("00:00:10.500", "01:23", "12.5") or numbers into seconds.
+ */
+function parseTimeToSeconds(val) {
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  if (!val || typeof val !== "string") return 0;
+  const parts = val.trim().split(":");
+  if (parts.length === 3) {
+    return (
+      (parseFloat(parts[0]) || 0) * 3600 +
+      (parseFloat(parts[1]) || 0) * 60 +
+      (parseFloat(parts[2]) || 0)
+    );
+  }
+  if (parts.length === 2) {
+    return (parseFloat(parts[0]) || 0) * 60 + (parseFloat(parts[1]) || 0);
+  }
+  return parseFloat(val) || 0;
+}
+
+/**
  * CaptionStudio Component
  * Full-featured Caption Studio matching ClipFlow Studio's layout.
- * Includes Phone Mockup Preview with 3-Layer "Behind the Person" Subject Segmentation,
- * Typography & Cadence Controls, Colors & Outline Sliders, and PresetsGallery integration.
+ * Features:
+ *  - Expanded Phone Mockup (aspect 9/19.5, min-height 780px matching 2-row controls grid)
+ *  - Real-time Cadence Word Slicing (Whisper word-level timestamps, zero ghosting)
+ *  - Direct styleState bindings for Background Color, BG Opacity, Box Padding, Neon Glow
+ *  - 3-Layer Subject Segmentation ("Behind the Person") with MediaPipe Selfie Segmentation
  */
 export default function CaptionStudio({
   clip = {
@@ -34,22 +95,61 @@ export default function CaptionStudio({
     }
   }, []);
 
-  // Top-level slider & style states (synced with preset engine)
-  const [fontFamily, setFontFamily] = useState(DEFAULT_PRESET.style.fontFamily);
-  const [fontSize, setFontSize] = useState(DEFAULT_PRESET.style.fontSize);
-  const [fontWeight, setFontWeight] = useState(DEFAULT_PRESET.style.fontWeight || "900");
-  const [textColor, setTextColor] = useState(DEFAULT_PRESET.style.textColor);
-  const [highlightColor, setHighlightColor] = useState(DEFAULT_PRESET.style.highlightColor);
-  const [outlineStroke, setOutlineStroke] = useState(DEFAULT_PRESET.style.strokeWidth || 0);
-  const [outlineColor, setOutlineColor] = useState(DEFAULT_PRESET.style.strokeColor || "#000000");
-  const [bgColor, setBgColor] = useState(DEFAULT_PRESET.style.bgColor);
-  const [bgOpacity, setBgOpacity] = useState(DEFAULT_PRESET.style.bgOpacity);
-  const [neonGlow, setNeonGlow] = useState(DEFAULT_PRESET.style.shadowBlur);
-  const [wordAnimation, setWordAnimation] = useState(DEFAULT_PRESET.style.wordAnimation);
-  const [wordsInRow, setWordsInRow] = useState(DEFAULT_PRESET.style.wordsInRow);
-  const [letterSpacing, setLetterSpacing] = useState(DEFAULT_PRESET.style.letterSpacing || 0);
-  const [lineSpacing, setLineSpacing] = useState(DEFAULT_PRESET.style.lineSpacing || 1.3);
-  const [textTransform, setTextTransform] = useState(DEFAULT_PRESET.style.textTransform || "uppercase");
+  // ── Unified Style State (Directly Bound to Preview & Sliders) ────────
+  const [styleState, setStyleState] = useState(() => {
+    const s = DEFAULT_PRESET.style || {};
+    let initialBg = s.bgColor || "#000000";
+    let initialOpacity = s.bgOpacity !== undefined ? s.bgOpacity : 85;
+
+    if (typeof initialBg === "string" && initialBg.startsWith("rgba")) {
+      const match = initialBg.match(/[\d.]+/g);
+      if (match && match.length >= 4) {
+        const r = parseInt(match[0], 10).toString(16).padStart(2, "0");
+        const g = parseInt(match[1], 10).toString(16).padStart(2, "0");
+        const b = parseInt(match[2], 10).toString(16).padStart(2, "0");
+        initialBg = `#${r}${g}${b}`;
+        initialOpacity = Math.round(parseFloat(match[3]) * 100);
+      }
+    } else if (initialBg === "transparent") {
+      initialOpacity = 0;
+      initialBg = "#000000";
+    }
+
+    return {
+      fontFamily: s.fontFamily || "Montserrat",
+      fontSize: s.fontSize || 28,
+      fontWeight: s.fontWeight || "900",
+      letterSpacing: s.letterSpacing !== undefined ? s.letterSpacing : 0,
+      lineSpacing: s.lineSpacing || 1.2,
+      letterCase: "ALL CAPS",
+      wordsInRow: s.wordsInRow || "2 Words",
+      textColor: s.textColor || "#FFFFFF",
+      highlightColor: s.highlightColor || "#22C55E",
+      backgroundColor: initialBg.startsWith("#") ? initialBg : "#000000",
+      bgOpacity: initialOpacity,
+      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 10,
+      neonGlow: s.shadowBlur || 0,
+      strokeWidth: s.strokeWidth || 0,
+      strokeColor: s.strokeColor || "#000000",
+      textShadow: true,
+      shadowOffsetX: 0,
+      shadowOffsetY: 4,
+      shadowBlur: 12,
+      posX: 50,
+      posY: 82,
+      rotateAngle: 0,
+      wordAnimation: s.wordAnimation || "pop",
+      behindPerson: Boolean(DEFAULT_PRESET.behindPerson),
+    };
+  });
+
+  // State updater helper to mutate styleState and trigger re-render
+  const updateStyle = (key, value) => {
+    setStyleState((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
 
   // Presets Gallery Drawer State
   const [isPresetsGalleryOpen, setIsPresetsGalleryOpen] = useState(false);
@@ -60,32 +160,46 @@ export default function CaptionStudio({
   // Export Loading State
   const [isExporting, setIsExporting] = useState(false);
 
-  // Position & Tilt state
-  const [posX, setPosX] = useState(50);
-  const [posY, setPosY] = useState(82);
-  const [rotateAngle, setRotateAngle] = useState(0);
-
-  // Video & Subject Segmentation Layering Refs
+  // Video playback & Realtime sync state
+  const [currentTime, setCurrentTime] = useState(0);
   const videoRef = useRef(null);
   const segmentationCanvasRef = useRef(null);
   const segmentationPipelineRef = useRef(null);
-  const [isSegmentationReady, setIsSegmentationReady] = useState(false);
 
-  // Check if active preset is "Behind the Person"
+  // Check if "Behind the Person" subject segmentation layer is active
   const isBehindPerson = useMemo(() => {
     return Boolean(
+      styleState.behindPerson ||
       activePresetStyle?.behindPerson ||
       activePreset?.startsWith("btp-") ||
       activePresetStyle?.category === "Behind the Person"
     );
-  }, [activePresetStyle, activePreset]);
+  }, [styleState.behindPerson, activePresetStyle, activePreset]);
 
-  // Initialize and synchronize MediaPipe Selfie Segmentation when "Behind the Person" is active
+  // Real-time animation frame loop to read videoRef.current.currentTime continuously
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    let animId;
+    const tick = () => {
+      if (video && !video.paused && !video.ended) {
+        setCurrentTime(video.currentTime);
+      }
+      animId = requestAnimationFrame(tick);
+    };
+    animId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [clip.videoUrl]);
+
+  // MediaPipe Selfie Segmentation for "Behind the Person" Layer 3
   useEffect(() => {
     const video = videoRef.current;
     const canvas = segmentationCanvasRef.current;
 
-    // Performance & Fallback: Pause loop and hide Layer 3 canvas when NOT "Behind the Person"
     if (!isBehindPerson || !video || !canvas) {
       if (segmentationPipelineRef.current) {
         segmentationPipelineRef.current.stop();
@@ -105,7 +219,6 @@ export default function CaptionStudio({
 
     const initSegmentation = async () => {
       try {
-        // 1. Dynamically load @mediapipe/selfie_segmentation via CDN script if not yet loaded
         if (!window.SelfieSegmentation) {
           await new Promise((resolve, reject) => {
             const scriptId = "mediapipe-selfie-segmentation-script";
@@ -130,16 +243,13 @@ export default function CaptionStudio({
 
         if (!isActive || !window.SelfieSegmentation) return;
 
-        // 2. Initialize the MediaPipe SelfieSegmentation model
         segmenter = new window.SelfieSegmentation({
           locateFile: (file) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`,
         });
 
-        // 1 = landscape/full-body model
         segmenter.setOptions({ modelSelection: 1 });
 
-        // 3. Segmentation onResults Callback: Composite Layer 3 Speaker Cutout
         segmenter.onResults((results) => {
           isProcessing = false;
           if (!isActive || !canvas || !video) return;
@@ -155,25 +265,22 @@ export default function CaptionStudio({
             canvas.height = height;
           }
 
-          // Step A: Clear Layer 3 canvas
+          // Clear Layer 3 canvas
           ctx.clearRect(0, 0, width, height);
 
-          // Step B: Draw the segmentation mask
+          // Draw the segmentation mask
           ctx.drawImage(results.segmentationMask, 0, 0, width, height);
 
-          // Step C: Set composite operation to source-in (keeps only pixels inside mask)
+          // Keep only pixels inside mask
           ctx.globalCompositeOperation = "source-in";
 
-          // Step D: Draw the video frame over the mask
+          // Draw video frame over the mask
           ctx.drawImage(results.image, 0, 0, width, height);
 
-          // Step E: Reset composite operation to source-over
+          // Reset composite operation
           ctx.globalCompositeOperation = "source-over";
         });
 
-        setIsSegmentationReady(true);
-
-        // Frame sender helper for seeked/loaded/paused updates
         const sendCurrentFrame = async () => {
           if (!isActive || !video || !segmenter || isProcessing) return;
           if (video.readyState < 2) return;
@@ -185,7 +292,6 @@ export default function CaptionStudio({
           }
         };
 
-        // Step 3: Segmentation Render Loop with requestAnimationFrame
         const renderLoop = async () => {
           if (!isActive) return;
 
@@ -228,10 +334,7 @@ export default function CaptionStudio({
           },
         };
       } catch (err) {
-        console.warn(
-          "[BehindThePerson] MediaPipe Segmentation fallback active:",
-          err
-        );
+        console.warn("[BehindThePerson] MediaPipe Segmentation fallback:", err);
       }
     };
 
@@ -251,7 +354,231 @@ export default function CaptionStudio({
     };
   }, [isBehindPerson, clip.videoUrl]);
 
-  // Preset Application Handler: Completely overrides active typography, layout, shadows & background
+  // ── Normalized Transcript Segments & Word Timestamps ───────────────────
+  const transcriptSegments = useMemo(() => {
+    const rawSegments = clip.transcript || clip.segments || clip.subtitles || null;
+    const clipStartSec = parseTimeToSeconds(clip.start || 0);
+
+    if (Array.isArray(rawSegments) && rawSegments.length > 0) {
+      const firstSegStart = parseTimeToSeconds(rawSegments[0].start || 0);
+      const isAbsoluteTimestamps = firstSegStart >= clipStartSec - 2 && clipStartSec > 2;
+
+      return rawSegments.map((seg, sIdx) => {
+        let segStart = parseTimeToSeconds(seg.start);
+        let segEnd = parseTimeToSeconds(seg.end);
+
+        if (isAbsoluteTimestamps) {
+          segStart = Math.max(0, segStart - clipStartSec);
+          segEnd = Math.max(segStart + 0.3, segEnd - clipStartSec);
+        }
+
+        const text = (seg.text || seg.content || "").trim();
+        let words = [];
+
+        if (Array.isArray(seg.words) && seg.words.length > 0) {
+          words = seg.words
+            .map((w) => {
+              let wStart = parseTimeToSeconds(w.start);
+              let wEnd = parseTimeToSeconds(w.end);
+              if (isAbsoluteTimestamps) {
+                wStart = Math.max(0, wStart - clipStartSec);
+                wEnd = Math.max(wStart + 0.1, wEnd - clipStartSec);
+              }
+              return {
+                word: (w.word || w.text || "").trim(),
+                start: wStart,
+                end: wEnd,
+              };
+            })
+            .filter((w) => Boolean(w.word));
+        } else {
+          const wordTokens = text.split(/\s+/).filter(Boolean);
+          const dur = Math.max(0.3, segEnd - segStart);
+          const wDur = dur / Math.max(1, wordTokens.length);
+          words = wordTokens.map((w, wIdx) => ({
+            word: w,
+            start: segStart + wIdx * wDur,
+            end: segStart + (wIdx + 1) * wDur,
+          }));
+        }
+
+        return {
+          id: seg.id || `seg-${sIdx}`,
+          start: segStart,
+          end: segEnd,
+          text,
+          words,
+        };
+      });
+    }
+
+    // Synthesize realistic transcript segments from previewText / text / title
+    const rawText = (clip.previewText || clip.text || clip.title || "THIS IS HOW YOU GO VIRAL").trim();
+    const allWords = rawText.split(/\s+/).filter(Boolean);
+    if (allWords.length === 0) return [];
+
+    const segments = [];
+    const wordsPerSeg = 4;
+    const wordDuration = 0.38;
+    const pauseBetweenSeg = 0.35;
+    let curTime = 0.3;
+
+    for (let i = 0; i < allWords.length; i += wordsPerSeg) {
+      const chunk = allWords.slice(i, i + wordsPerSeg);
+      const segStart = curTime;
+      const segWords = chunk.map((w, idx) => {
+        const wStart = segStart + idx * wordDuration;
+        const wEnd = wStart + wordDuration;
+        return { word: w, start: wStart, end: wEnd };
+      });
+      const segEnd = segStart + chunk.length * wordDuration;
+      curTime = segEnd + pauseBetweenSeg;
+
+      segments.push({
+        id: `syn-seg-${i}`,
+        start: segStart,
+        end: segEnd,
+        text: chunk.join(" "),
+        words: segWords,
+      });
+    }
+
+    return segments;
+  }, [clip]);
+
+  // ── Cadence Word Slicing (Single Element, Real-time Sync, Zero Ghosting) ──
+  const activeCaption = useMemo(() => {
+    if (!transcriptSegments || transcriptSegments.length === 0) return null;
+
+    const isVideoPaused = !videoRef.current || videoRef.current.paused;
+    const isAtZero = currentTime <= 0.05;
+
+    // When paused at 0.0s (initial editor load), provide preview words so user can style captions
+    if (isVideoPaused && isAtZero) {
+      const firstSeg = transcriptSegments[0];
+      if (!firstSeg || !firstSeg.words || firstSeg.words.length === 0) return null;
+
+      const cadence = styleState.wordsInRow || "2 Words";
+      let previewWords = [];
+
+      if (cadence === "1 Word") {
+        previewWords = [{ text: firstSeg.words[0].word, isCurrent: true }];
+      } else if (cadence === "2 Words") {
+        previewWords = firstSeg.words.slice(0, 2).map((w, idx) => ({
+          text: w.word,
+          isCurrent: idx === 0,
+        }));
+      } else if (cadence === "3 Words") {
+        previewWords = firstSeg.words.slice(0, 3).map((w, idx) => ({
+          text: w.word,
+          isCurrent: idx === 0,
+        }));
+      } else if (cadence === "4 Words") {
+        previewWords = firstSeg.words.slice(0, 4).map((w, idx) => ({
+          text: w.word,
+          isCurrent: idx === 0,
+        }));
+      } else {
+        previewWords = firstSeg.words.map((w, idx) => ({
+          text: w.word,
+          isCurrent: idx === 0,
+        }));
+      }
+
+      return { words: previewWords };
+    }
+
+    // During active playback or seeking: find active transcript segment
+    const activeSeg = transcriptSegments.find(
+      (seg) => currentTime >= seg.start && currentTime <= seg.end
+    );
+
+    // If no segment is currently active, render nothing (do not leave previous words stuck)
+    if (!activeSeg || !activeSeg.words || activeSeg.words.length === 0) {
+      return null;
+    }
+
+    const cadence = styleState.wordsInRow || "2 Words";
+    const segWords = activeSeg.words;
+
+    // Cadence: 1 Word
+    if (cadence === "1 Word") {
+      const activeWord = segWords.find(
+        (w) => currentTime >= w.start && currentTime <= w.end
+      );
+      if (!activeWord) return null;
+      return {
+        words: [{ text: activeWord.word, isCurrent: true }],
+      };
+    }
+
+    // Cadence: 2 Words
+    if (cadence === "2 Words") {
+      for (let i = 0; i < segWords.length; i += 2) {
+        const pair = segWords.slice(i, i + 2);
+        const pairStart = pair[0].start;
+        const pairEnd = pair[pair.length - 1].end;
+
+        if (currentTime >= pairStart && currentTime <= pairEnd) {
+          return {
+            words: pair.map((w) => ({
+              text: w.word,
+              isCurrent: currentTime >= w.start && currentTime <= w.end,
+            })),
+          };
+        }
+      }
+      return null;
+    }
+
+    // Cadence: 3 Words
+    if (cadence === "3 Words") {
+      for (let i = 0; i < segWords.length; i += 3) {
+        const triplet = segWords.slice(i, i + 3);
+        const tripStart = triplet[0].start;
+        const tripEnd = triplet[triplet.length - 1].end;
+
+        if (currentTime >= tripStart && currentTime <= tripEnd) {
+          return {
+            words: triplet.map((w) => ({
+              text: w.word,
+              isCurrent: currentTime >= w.start && currentTime <= w.end,
+            })),
+          };
+        }
+      }
+      return null;
+    }
+
+    // Cadence: 4 Words
+    if (cadence === "4 Words") {
+      for (let i = 0; i < segWords.length; i += 4) {
+        const quad = segWords.slice(i, i + 4);
+        const quadStart = quad[0].start;
+        const quadEnd = quad[quad.length - 1].end;
+
+        if (currentTime >= quadStart && currentTime <= quadEnd) {
+          return {
+            words: quad.map((w) => ({
+              text: w.word,
+              isCurrent: currentTime >= w.start && currentTime <= w.end,
+            })),
+          };
+        }
+      }
+      return null;
+    }
+
+    // Cadence: Auto / Full segment
+    return {
+      words: segWords.map((w) => ({
+        text: w.word,
+        isCurrent: currentTime >= w.start && currentTime <= w.end,
+      })),
+    };
+  }, [transcriptSegments, currentTime, styleState.wordsInRow]);
+
+  // Preset Selection Handler
   const handleApplyPreset = (preset) => {
     if (!preset?.style) return;
 
@@ -263,29 +590,49 @@ export default function CaptionStudio({
       preset.id?.startsWith("btp-")
     );
 
-    // Synchronize all individual control variables immediately
-    setFontFamily(s.fontFamily || "Montserrat");
-    setFontSize(isBtp ? Math.max(s.fontSize || 54, 52) : (s.fontSize || 29));
-    setFontWeight("900");
-    setTextColor(s.textColor || "#FFFFFF");
-    setHighlightColor(s.highlightColor || "#22C55E");
-    setOutlineStroke(0); // Zero outline stroke to eliminate glyph hollowing
-    setOutlineColor(s.strokeColor || "#000000");
-    setBgColor(s.bgColor || "transparent");
-    setBgOpacity(s.bgOpacity !== undefined ? s.bgOpacity : 70);
-    setNeonGlow(s.shadowBlur || 0);
-    setWordAnimation(s.wordAnimation || "pop");
-    setWordsInRow(s.wordsInRow || "Auto");
-    setLetterSpacing(s.letterSpacing !== undefined ? s.letterSpacing : 0);
-    setLineSpacing(s.lineSpacing || 1.3);
-    setTextTransform("uppercase");
+    let parsedBg = s.bgColor || "#000000";
+    let parsedOpacity = s.bgOpacity !== undefined ? s.bgOpacity : 85;
 
-    // Position Behind the Person text around vertical 35-50%
-    if (isBtp) {
-      setPosY(42);
+    if (typeof parsedBg === "string" && parsedBg.startsWith("rgba")) {
+      const match = parsedBg.match(/[\d.]+/g);
+      if (match && match.length >= 4) {
+        const r = parseInt(match[0], 10).toString(16).padStart(2, "0");
+        const g = parseInt(match[1], 10).toString(16).padStart(2, "0");
+        const b = parseInt(match[2], 10).toString(16).padStart(2, "0");
+        parsedBg = `#${r}${g}${b}`;
+        parsedOpacity = Math.round(parseFloat(match[3]) * 100);
+      }
+    } else if (parsedBg === "transparent") {
+      parsedOpacity = 0;
+      parsedBg = "#000000";
     }
 
-    // Override active preset state
+    setStyleState((prev) => ({
+      ...prev,
+      fontFamily: s.fontFamily || "Montserrat",
+      fontSize: isBtp ? Math.max(s.fontSize || 54, 52) : (s.fontSize || 28),
+      fontWeight: "900",
+      letterSpacing: s.letterSpacing !== undefined ? s.letterSpacing : 0,
+      lineSpacing: s.lineSpacing || 1.2,
+      letterCase:
+        s.textTransform === "uppercase" || !s.textTransform
+          ? "ALL CAPS"
+          : s.textTransform === "capitalize"
+          ? "Title Case"
+          : "Normal Case",
+      wordsInRow: s.wordsInRow || "2 Words",
+      textColor: s.textColor || "#FFFFFF",
+      highlightColor: s.highlightColor || "#22C55E",
+      backgroundColor: parsedBg.startsWith("#") ? parsedBg : "#000000",
+      bgOpacity: parsedOpacity,
+      boxPadding: s.bgPadding !== undefined ? s.bgPadding : 10,
+      neonGlow: s.shadowBlur || 0,
+      strokeWidth: 0,
+      strokeColor: s.strokeColor || "#000000",
+      behindPerson: isBtp,
+      posY: isBtp ? 42 : prev.posY,
+    }));
+
     setActivePreset(preset.id);
     setActivePresetStyle({
       ...s,
@@ -293,131 +640,10 @@ export default function CaptionStudio({
       behindPerson: isBtp,
     });
     setActivePresetAssConfig(preset.assConfig);
-
-    // Close drawer smoothly
     setIsPresetsGalleryOpen(false);
   };
 
-  // Live computed caption style for zero-latency, anti-aliased phone mockup rendering
-  const liveCaptionStyle = useMemo(() => {
-    const s = activePresetStyle || {};
-
-    const computedFontFamily = fontFamily || s.fontFamily || "'Montserrat', sans-serif";
-    // For "Behind the Person" presets: font-size: 52px+, font-weight: 900, uppercase, centered around 35-50%
-    const computedFontSize = isBehindPerson
-      ? Math.max(fontSize || s.fontSize || 54, 52)
-      : (fontSize || s.fontSize || 29);
-    const computedFontWeight = isBehindPerson ? "900" : (fontWeight || s.fontWeight || "900");
-    const computedFontStyle = s.fontStyle || "normal";
-    const computedTextTransform = isBehindPerson ? "uppercase" : (textTransform || s.textTransform || "uppercase");
-    const computedLetterSpacing = letterSpacing !== undefined ? letterSpacing : (s.letterSpacing !== undefined ? s.letterSpacing : 0);
-    const computedLineHeight = lineSpacing || s.lineSpacing || 1.3;
-    const computedTextColor = textColor || s.textColor || "#FFFFFF";
-    const computedBgColor = bgColor !== undefined && bgColor !== null ? bgColor : (s.bgColor || "transparent");
-
-    // Position Behind the Person centered around vertical 35-50%
-    const computedPosY = isBehindPerson
-      ? (posY >= 35 && posY <= 50 ? posY : 42)
-      : posY;
-
-    // Background styling & pill padding
-    const computedPadding = s.bgPadding
-      ? `${Math.min(s.bgPadding, 16)}px ${Math.min(s.bgPadding + 6, 22)}px`
-      : (computedBgColor && computedBgColor !== "transparent" ? "8px 16px" : "0px");
-    const computedBorderRadius = `${s.borderRadius !== undefined ? s.borderRadius : (computedBgColor && computedBgColor !== "transparent" ? 8 : 0)}px`;
-
-    // Drop shadow: Clean diffuse drop shadow (replaces destructive text strokes)
-    const computedFilter = (s.filter && s.filter !== "none")
-      ? s.filter
-      : "drop-shadow(0 4px 10px rgba(0,0,0,0.8))";
-
-    // Text Shadow & Glow
-    const computedTextShadow = s.textShadow && s.textShadow !== "none"
-      ? s.textShadow
-      : neonGlow
-      ? `0 0 ${neonGlow}px ${s.shadowColor || highlightColor || "#00FFCC"}`
-      : "none";
-
-    return {
-      fontFamily: computedFontFamily,
-      fontSize: `${computedFontSize}px`,
-      fontWeight: computedFontWeight,
-      fontStyle: computedFontStyle,
-      textTransform: computedTextTransform,
-      color: computedTextColor,
-      backgroundColor: computedBgColor,
-      padding: computedPadding,
-      borderRadius: computedBorderRadius,
-      letterSpacing: `${computedLetterSpacing}px`,
-      lineHeight: computedLineHeight,
-      WebkitFontSmoothing: "antialiased",
-      MozOsxFontSmoothing: "grayscale",
-      textRendering: "optimizeLegibility",
-      // ZERO -webkit-text-stroke: Completely eliminated to prevent hollowing of letters A, M, D
-      WebkitTextStroke: "none",
-      textShadow: computedTextShadow,
-      boxShadow: s.boxShadow || "none",
-      backdropFilter: s.backdropFilter || "none",
-      filter: computedFilter,
-      transform: `translate(-50%, -50%) rotate(${rotateAngle}deg)`,
-      left: `${posX}%`,
-      top: `${computedPosY}%`,
-      position: "absolute",
-      textAlign: "center",
-      userSelect: "none",
-      pointerEvents: "none",
-      maxWidth: "90%",
-      wordBreak: "break-word",
-      zIndex: 2, // Layer 2: z-index 2 (Between Layer 1 video at z-index 1 and Layer 3 canvas at z-index 3)
-      transition: "font-size 0.1s ease, color 0.1s ease, background-color 0.1s ease, transform 0.1s ease",
-    };
-  }, [
-    fontFamily,
-    fontSize,
-    fontWeight,
-    textTransform,
-    textColor,
-    bgColor,
-    neonGlow,
-    letterSpacing,
-    lineSpacing,
-    rotateAngle,
-    posX,
-    posY,
-    activePresetStyle,
-    highlightColor,
-    isBehindPerson,
-  ]);
-
-  // Split preview text into words for authentic active-highlight rendering
-  const renderedWords = useMemo(() => {
-    const rawText = clip.previewText || "THIS IS HOW YOU GO VIRAL";
-    const words = rawText.trim().split(/\s+/);
-    if (words.length === 0) return [];
-
-    const activeHlColor = highlightColor || activePresetStyle?.highlightColor || "#22C55E";
-    const baseTextColor = textColor || activePresetStyle?.textColor || "#FFFFFF";
-
-    return words.map((word, idx) => {
-      // Highlight the first word (or primary punch word)
-      const isHighlighted = idx === 0 && activeHlColor;
-      return (
-        <span
-          key={`${word}-${idx}`}
-          style={{
-            color: isHighlighted ? activeHlColor : baseTextColor,
-            display: "inline-block",
-            margin: "0 3px",
-            transition: "color 0.15s ease",
-          }}
-        >
-          {word}
-        </span>
-      );
-    });
-  }, [clip.previewText, highlightColor, textColor, activePresetStyle]);
-
-  // Headless Export Handler (Preserves Locked Backend Payload)
+  // Export Captioned Video Handler
   const handleExportCaptionedVideo = async () => {
     try {
       setIsExporting(true);
@@ -428,22 +654,26 @@ export default function CaptionStudio({
         clipEnd: clip.end || "00:00:30",
         captionStyle: {
           ...activePresetStyle,
-          fontFamily,
-          fontSize,
-          fontWeight,
-          textColor,
-          highlightColor,
-          strokeWidth: outlineStroke,
-          strokeColor: outlineColor,
-          bgColor,
-          bgOpacity,
-          shadowBlur: neonGlow,
-          wordAnimation,
-          wordsInRow,
-          letterSpacing,
-          lineSpacing,
-          textTransform,
+          fontFamily: styleState.fontFamily,
+          fontSize: styleState.fontSize,
+          fontWeight: styleState.fontWeight,
+          textColor: styleState.textColor,
+          highlightColor: styleState.highlightColor,
+          strokeWidth: styleState.strokeWidth,
+          strokeColor: styleState.strokeColor,
+          bgColor: styleState.backgroundColor,
+          bgOpacity: styleState.bgOpacity,
+          bgPadding: styleState.boxPadding,
+          shadowBlur: styleState.neonGlow,
+          wordAnimation: styleState.wordAnimation,
+          wordsInRow: styleState.wordsInRow,
+          letterSpacing: styleState.letterSpacing,
+          lineSpacing: styleState.lineSpacing,
+          textTransform: styleState.letterCase === "ALL CAPS" ? "uppercase" : "none",
           behindPerson: isBehindPerson,
+          positionX: styleState.posX,
+          positionY: styleState.posY,
+          rotateAngle: styleState.rotateAngle,
         },
         assConfig: activePresetAssConfig,
       };
@@ -470,25 +700,94 @@ export default function CaptionStudio({
     }
   };
 
+  // Vertical placement adjustment for "Behind the Person"
+  const computedPosY = isBehindPerson
+    ? styleState.posY >= 35 && styleState.posY <= 50
+      ? styleState.posY
+      : 42
+    : styleState.posY;
+
   return (
-    <div style={csStyles.container}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        backgroundColor: "#07080C",
+        color: "#FFFFFF",
+        fontFamily: "Inter, -apple-system, sans-serif",
+      }}
+    >
       {/* ── Topbar ── */}
-      <header style={csStyles.topbar}>
-        <div style={csStyles.topbarLeft}>
-          <button type="button" onClick={onBack} style={csStyles.backBtn}>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 28px",
+          backgroundColor: "#0B0D13",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <button
+            type="button"
+            onClick={onBack}
+            style={{
+              padding: "8px 14px",
+              backgroundColor: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              color: "#E2E8F0",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+            }}
+          >
             ← Back
           </button>
-          <div style={csStyles.titleBlock}>
-            <span style={csStyles.kicker}>Caption Studio</span>
-            <h2 style={csStyles.clipTitle}>{clip.title || "Selected Clip"}</h2>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span
+              style={{
+                fontSize: "10px",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#00E5FF",
+                fontWeight: "700",
+              }}
+            >
+              Caption Studio
+            </span>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: "16px",
+                fontWeight: "700",
+                color: "#FFFFFF",
+              }}
+            >
+              {clip.title || "Selected Clip"}
+            </h2>
           </div>
         </div>
 
-        <div style={csStyles.topbarRight}>
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <button
             type="button"
             onClick={() => setIsPresetsGalleryOpen(true)}
-            style={csStyles.openPresetsTopBtn}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 16px",
+              backgroundColor: "rgba(0, 229, 255, 0.1)",
+              border: "1px solid rgba(0, 229, 255, 0.3)",
+              color: "#00E5FF",
+              borderRadius: "8px",
+              fontWeight: "700",
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
           >
             <span style={{ fontSize: "15px" }}>⚡</span>
             <span>Browse 160+ Presets</span>
@@ -497,321 +796,657 @@ export default function CaptionStudio({
             type="button"
             onClick={handleExportCaptionedVideo}
             disabled={isExporting}
-            style={csStyles.exportTopBtn}
+            style={{
+              padding: "8px 18px",
+              backgroundColor: "#00E5FF",
+              border: "none",
+              color: "#000000",
+              borderRadius: "8px",
+              fontWeight: "800",
+              fontSize: "13px",
+              cursor: "pointer",
+            }}
           >
             {isExporting ? "Exporting..." : "Download Video"}
           </button>
         </div>
       </header>
 
-      {/* ── Main Work Area ── */}
-      <main style={csStyles.workspace}>
-        {/* LEFT: Phone Mockup Live Preview with 3-Layer Composition */}
-        <section style={csStyles.previewPanel}>
-          <div style={csStyles.phoneFrame}>
-            <div style={csStyles.phoneScreen}>
-              {/* Badge indicator when Behind the Person layer is active */}
-              {isBehindPerson && (
-                <div style={csStyles.behindPersonBadge}>
-                  <span>👤</span>
-                  <span>BEHIND SUBJECT</span>
-                </div>
-              )}
-
-              {/* Layer 1 (Bottom): Base Video Element */}
-              {clip.videoUrl ? (
-                <video
-                  ref={videoRef}
-                  src={clip.videoUrl}
-                  style={csStyles.videoElement}
-                  controls
-                  playsInline
-                  crossOrigin="anonymous"
-                />
-              ) : (
-                <div style={csStyles.videoPlaceholder}>
-                  <span style={{ fontSize: "32px", opacity: 0.6 }}>🎬</span>
-                  <span style={{ fontSize: "12px", color: "#64748B", marginTop: "8px" }}>
-                    Live Clip Preview
-                  </span>
-                </div>
-              )}
-
-              {/* Layer 2 (Middle): Caption Overlay */}
-              <div style={liveCaptionStyle}>
-                {renderedWords}
-              </div>
-
-              {/* Layer 3 (Top): Real-time MediaPipe Subject Segmentation Canvas */}
-              <canvas
-                ref={segmentationCanvasRef}
+      {/* ── Main Workspace: 12-Column Grid Layout with Aligned Height ── */}
+      <main
+        className="flex-1 w-full max-w-[1440px] mx-auto p-4 sm:p-6"
+        style={{
+          flex: 1,
+          width: "100%",
+          maxWidth: "1440px",
+          margin: "0 auto",
+          padding: "24px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch min-h-[780px]"
+          style={{
+            display: "grid",
+            gap: "24px",
+            minHeight: "780px",
+            alignItems: "stretch",
+          }}
+        >
+          {/* ── Left Column: Phone Mockup Live Preview (fills vertical height) ── */}
+          <section
+            className="lg:col-span-4 h-full flex flex-col items-center justify-center"
+            style={{
+              gridColumn: "span 4 / span 4",
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div
+              className="h-full w-full max-w-[340px] aspect-[9/19.5] rounded-[48px] border-[10px] border-[#1C1F26] bg-black shadow-2xl relative overflow-hidden flex flex-col"
+              style={{
+                height: "100%",
+                width: "100%",
+                maxWidth: "340px",
+                aspectRatio: "9 / 19.5",
+                borderRadius: "48px",
+                border: "10px solid #1C1F26",
+                backgroundColor: "#000000",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.8)",
+                position: "relative",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Dynamic Island Speaker Notch */}
+              <div
                 style={{
-                  ...csStyles.subjectCanvas,
-                  display: isBehindPerson ? "block" : "none",
+                  position: "absolute",
+                  top: "12px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "90px",
+                  height: "18px",
+                  backgroundColor: "#1C1F26",
+                  borderRadius: "9999px",
+                  zIndex: 30,
+                  pointerEvents: "none",
                 }}
               />
-            </div>
-          </div>
-        </section>
 
-        {/* RIGHT: Controls Grid */}
-        <section style={csStyles.controlsPanel}>
-          {/* Card 1: Typography & Cadence */}
-          <div style={csStyles.card}>
-            <div style={csStyles.cardHeader}>
-              <span style={csStyles.cardIcon}>🔤</span>
-              <h4 style={csStyles.cardTitle}>Typography &amp; Cadence</h4>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Font Family</label>
-                <select
-                  value={fontFamily}
-                  onChange={(e) => setFontFamily(e.target.value)}
-                  style={csStyles.selectInput}
-                >
-                  <option value="Montserrat">Montserrat (Modern Viral)</option>
-                  <option value="Inter">Inter (Ultra Clean)</option>
-                  <option value="Archivo Black">Archivo Black (Chunky Impact)</option>
-                  <option value="Bebas Neue">Bebas Neue (Tall Display)</option>
-                  <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
-                  <option value="Cinzel">Cinzel (Classical Heritage)</option>
-                  <option value="Syne">Syne (Geometric Kinetic)</option>
-                  <option value="Poppins">Poppins (Geometric Rounded)</option>
-                </select>
-              </div>
-
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Font Size</label>
-                  <span style={csStyles.valBadge}>{fontSize}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="16"
-                  max="64"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Letter Spacing</label>
-                  <span style={csStyles.valBadge}>{letterSpacing}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="-2"
-                  max="10"
-                  step="0.5"
-                  value={letterSpacing}
-                  onChange={(e) => setLetterSpacing(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Line Spacing</label>
-                  <span style={csStyles.valBadge}>{lineSpacing}x</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="2"
-                  step="0.05"
-                  value={lineSpacing}
-                  onChange={(e) => setLineSpacing(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Letter Case</label>
-                <select
-                  value={textTransform}
-                  onChange={(e) => setTextTransform(e.target.value)}
-                  style={csStyles.selectInput}
-                >
-                  <option value="uppercase">ALL CAPS (Viral Punch)</option>
-                  <option value="capitalize">Title Case (Editorial)</option>
-                  <option value="none">Normal Case</option>
-                  <option value="lowercase">lower case</option>
-                </select>
-              </div>
-
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Words in a Row</label>
-                <select
-                  value={wordsInRow}
-                  onChange={(e) => setWordsInRow(e.target.value)}
-                  style={csStyles.selectInput}
-                >
-                  <option value="Auto">Auto Wrap</option>
-                  <option value="1 Word">1 Word (Velocity Punch)</option>
-                  <option value="2 Words">2 Words (Balanced)</option>
-                  <option value="3 Words">3 Words (Paced Stack)</option>
-                  <option value="4 Words">4 Words (Narrative)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          {/* Card 2: Colors & Outlines */}
-          <div style={csStyles.card}>
-            <div style={csStyles.cardHeader}>
-              <span style={csStyles.cardIcon}>🎨</span>
-              <h4 style={csStyles.cardTitle}>Colors &amp; Outlines</h4>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Text Color</label>
-                <input
-                  type="color"
-                  value={textColor}
-                  onChange={(e) => setTextColor(e.target.value)}
-                  style={csStyles.colorPicker}
-                />
-              </div>
-
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Active Highlight Color</label>
-                <input
-                  type="color"
-                  value={highlightColor}
-                  onChange={(e) => setHighlightColor(e.target.value)}
-                  style={csStyles.colorPicker}
-                />
-              </div>
-
-              <div style={csStyles.formField}>
-                <label style={csStyles.label}>Background Color</label>
-                <input
-                  type="color"
-                  value={bgColor.startsWith("#") ? bgColor : "#000000"}
-                  onChange={(e) => setBgColor(e.target.value)}
-                  style={csStyles.colorPicker}
-                />
-              </div>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Outline Stroke (0 = Off)</label>
-                  <span style={csStyles.valBadge}>{outlineStroke}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="6"
-                  step="0.5"
-                  value={outlineStroke}
-                  onChange={(e) => setOutlineStroke(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Outer Glow / Shadow</label>
-                  <span style={csStyles.valBadge}>{neonGlow}px</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="30"
-                  value={neonGlow}
-                  onChange={(e) => setNeonGlow(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 3: Position & Tilt */}
-          <div style={csStyles.card}>
-            <div style={csStyles.cardHeader}>
-              <span style={csStyles.cardIcon}>📍</span>
-              <h4 style={csStyles.cardTitle}>Position &amp; Tilt</h4>
-            </div>
-
-            <div style={csStyles.formRow}>
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Vertical Position (Y)</label>
-                  <span style={csStyles.valBadge}>{posY}%</span>
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="90"
-                  value={posY}
-                  onChange={(e) => setPosY(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-
-              <div style={csStyles.formField}>
-                <div style={csStyles.labelWithVal}>
-                  <label style={csStyles.label}>Tilt Angle</label>
-                  <span style={csStyles.valBadge}>{rotateAngle}°</span>
-                </div>
-                <input
-                  type="range"
-                  min="-15"
-                  max="15"
-                  value={rotateAngle}
-                  onChange={(e) => setRotateAngle(Number(e.target.value))}
-                  style={csStyles.rangeInput}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Card 4: Presets & Export Actions */}
-          <div style={{ ...csStyles.card, ...csStyles.presetsCard }}>
-            <div style={csStyles.cardHeader}>
-              <span style={csStyles.cardIcon}>⚡</span>
-              <div>
-                <h4 style={csStyles.cardTitle}>Presets &amp; Export</h4>
-                <span style={{ fontSize: "11px", color: "#64748B" }}>
-                  1-Click Styles modeled after Moonshot &amp; Submagic
-                </span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsPresetsGalleryOpen(true)}
-              style={csStyles.browsePresetsBtn}
-            >
-              <span>✦</span>
-              <span>Browse Presets Library (160+ Styles)</span>
-              <span style={csStyles.valBadge}>160 STYLES</span>
-            </button>
-
-            <div style={{ marginTop: "16px" }}>
-              <button
-                type="button"
-                onClick={handleExportCaptionedVideo}
-                disabled={isExporting}
-                style={csStyles.exportHeroBtn}
+              {/* Inner Screen Area */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#000000",
+                }}
               >
-                <span>🚀</span>
-                <span>{isExporting ? "Exporting Video..." : "Download Video With Captions"}</span>
-              </button>
+                {/* Behind Subject Badge */}
+                {isBehindPerson && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "16px",
+                      left: "16px",
+                      zIndex: 25,
+                      padding: "4px 8px",
+                      backgroundColor: "rgba(34, 197, 94, 0.25)",
+                      border: "1px solid rgba(34, 197, 94, 0.5)",
+                      borderRadius: "6px",
+                      color: "#4ADE80",
+                      fontSize: "10px",
+                      fontWeight: "800",
+                      letterSpacing: "0.05em",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                      pointerEvents: "none",
+                      backdropFilter: "blur(6px)",
+                    }}
+                  >
+                    <span>👤</span>
+                    <span>BEHIND SUBJECT</span>
+                  </div>
+                )}
+
+                {/* Layer 1 (Bottom): Video Element or Fallback Placeholder */}
+                {clip.videoUrl ? (
+                  <video
+                    ref={videoRef}
+                    src={clip.videoUrl}
+                    className="w-full h-full object-cover"
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "cover",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      zIndex: 1,
+                    }}
+                    controls
+                    playsInline
+                    crossOrigin="anonymous"
+                    onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                    onSeeked={(e) => setCurrentTime(e.target.currentTime)}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "#0F1118",
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      zIndex: 1,
+                    }}
+                  >
+                    <span style={{ fontSize: "36px", opacity: 0.7 }}>🎬</span>
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        color: "#64748B",
+                        marginTop: "8px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      Live Clip Preview
+                    </span>
+                  </div>
+                )}
+
+                {/* Layer 2 (Middle): Strictly ONE Subtitle Render Element */}
+                {activeCaption && (
+                  <div
+                    className="caption-container"
+                    style={{
+                      position: "absolute",
+                      left: `${styleState.posX}%`,
+                      top: `${computedPosY}%`,
+                      transform: `translate(-50%, -50%) rotate(${styleState.rotateAngle || 0}deg)`,
+                      textAlign: "center",
+                      maxWidth: "90%",
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      zIndex: 2,
+                      transition: "transform 0.1s ease",
+                    }}
+                  >
+                    <span
+                      className="caption-pill"
+                      style={{
+                        fontFamily: styleState.fontFamily || "Montserrat",
+                        fontSize: `${styleState.fontSize || 24}px`,
+                        letterSpacing: `${styleState.letterSpacing || 0}px`,
+                        lineHeight: styleState.lineSpacing || 1.2,
+                        textTransform:
+                          styleState.letterCase === "ALL CAPS" ? "uppercase" : "none",
+                        color: styleState.textColor || "#FFFFFF",
+
+                        // Background Pill Styling:
+                        backgroundColor:
+                          styleState.bgOpacity > 0
+                            ? getRgba(styleState.backgroundColor, styleState.bgOpacity)
+                            : "transparent",
+                        padding:
+                          styleState.bgOpacity > 0
+                            ? `${styleState.boxPadding || 8}px ${(styleState.boxPadding || 8) * 1.5}px`
+                            : "0px",
+                        borderRadius: "10px",
+
+                        // Neon Glow:
+                        textShadow:
+                          styleState.neonGlow > 0
+                            ? `0 0 ${styleState.neonGlow}px ${styleState.textColor}, 0 0 ${styleState.neonGlow * 2}px ${styleState.textColor}`
+                            : styleState.textShadow
+                            ? `${styleState.shadowOffsetX || 0}px ${styleState.shadowOffsetY || 4}px ${styleState.shadowBlur || 12}px rgba(0,0,0,0.8)`
+                            : "none",
+
+                        // Outline Stroke:
+                        WebkitTextStroke:
+                          styleState.strokeWidth > 0
+                            ? `${styleState.strokeWidth}px ${styleState.strokeColor || "#000000"}`
+                            : "none",
+
+                        display: "inline-block",
+                        boxSizing: "border-box",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        fontWeight: styleState.fontWeight || "900",
+                        transition:
+                          "background-color 0.15s ease, padding 0.15s ease, text-shadow 0.15s ease",
+                      }}
+                    >
+                      {activeCaption.words.map((w, idx) => (
+                        <span
+                          key={`${w.text}-${idx}`}
+                          style={{
+                            color:
+                              w.isCurrent && styleState.highlightColor
+                                ? styleState.highlightColor
+                                : styleState.textColor || "#FFFFFF",
+                            display: "inline-block",
+                            margin: "0 4px",
+                            transform:
+                              w.isCurrent && styleState.wordAnimation === "pop"
+                                ? "scale(1.08)"
+                                : "scale(1)",
+                            transition: "transform 0.1s ease, color 0.15s ease",
+                          }}
+                        >
+                          {w.text}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                )}
+
+                {/* Layer 3 (Top): Real-time MediaPipe Subject Segmentation Canvas */}
+                <canvas
+                  ref={segmentationCanvasRef}
+                  className="w-full h-full object-cover"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    pointerEvents: "none",
+                    zIndex: 3,
+                    display: isBehindPerson ? "block" : "none",
+                  }}
+                />
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+
+          {/* ── Right Column: 2-Row Controls Grid ── */}
+          <section
+            className="lg:col-span-8 h-full flex flex-col justify-between gap-5"
+            style={{
+              gridColumn: "span 8 / span 8",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+            }}
+          >
+            <div
+              className="grid grid-cols-1 md:grid-cols-2 gap-5 h-full"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "20px",
+                height: "100%",
+              }}
+            >
+              {/* Card 1: Typography & Cadence */}
+              <div style={csStyles.card}>
+                <div style={csStyles.cardHeader}>
+                  <span style={csStyles.cardIcon}>🔤</span>
+                  <h4 style={csStyles.cardTitle}>Typography &amp; Cadence</h4>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Font Family</label>
+                    <select
+                      value={styleState.fontFamily}
+                      onChange={(e) => updateStyle("fontFamily", e.target.value)}
+                      style={csStyles.selectInput}
+                    >
+                      <option value="Montserrat">Montserrat (Modern Viral)</option>
+                      <option value="Inter">Inter (Ultra Clean)</option>
+                      <option value="Archivo Black">Archivo Black (Chunky Impact)</option>
+                      <option value="Bebas Neue">Bebas Neue (Tall Display)</option>
+                      <option value="Playfair Display">Playfair Display (Luxury Serif)</option>
+                      <option value="Cinzel">Cinzel (Classical Heritage)</option>
+                      <option value="Syne">Syne (Geometric Kinetic)</option>
+                      <option value="Poppins">Poppins (Geometric Rounded)</option>
+                    </select>
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Font Size</label>
+                      <span style={csStyles.valBadge}>{styleState.fontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="16"
+                      max="64"
+                      value={styleState.fontSize}
+                      onChange={(e) => updateStyle("fontSize", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Letter Spacing</label>
+                      <span style={csStyles.valBadge}>{styleState.letterSpacing}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-2"
+                      max="10"
+                      step="0.5"
+                      value={styleState.letterSpacing}
+                      onChange={(e) =>
+                        updateStyle("letterSpacing", Number(e.target.value))
+                      }
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Line Spacing</label>
+                      <span style={csStyles.valBadge}>{styleState.lineSpacing}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="2"
+                      step="0.05"
+                      value={styleState.lineSpacing}
+                      onChange={(e) =>
+                        updateStyle("lineSpacing", Number(e.target.value))
+                      }
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Letter Case</label>
+                    <select
+                      value={styleState.letterCase}
+                      onChange={(e) => updateStyle("letterCase", e.target.value)}
+                      style={csStyles.selectInput}
+                    >
+                      <option value="ALL CAPS">ALL CAPS (Viral Punch)</option>
+                      <option value="Title Case">Title Case (Editorial)</option>
+                      <option value="Normal Case">Normal Case</option>
+                      <option value="lower case">lower case</option>
+                    </select>
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Words in a Row</label>
+                    <select
+                      value={styleState.wordsInRow}
+                      onChange={(e) => updateStyle("wordsInRow", e.target.value)}
+                      style={csStyles.selectInput}
+                    >
+                      <option value="Auto">Auto Wrap</option>
+                      <option value="1 Word">1 Word (Velocity Punch)</option>
+                      <option value="2 Words">2 Words (Balanced)</option>
+                      <option value="3 Words">3 Words (Paced Stack)</option>
+                      <option value="4 Words">4 Words (Narrative)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Colors, Background & Glow */}
+              <div style={csStyles.card}>
+                <div style={csStyles.cardHeader}>
+                  <span style={csStyles.cardIcon}>🎨</span>
+                  <h4 style={csStyles.cardTitle}>Colors &amp; Outlines</h4>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Text Color</label>
+                    <input
+                      type="color"
+                      value={styleState.textColor}
+                      onChange={(e) => updateStyle("textColor", e.target.value)}
+                      style={csStyles.colorPicker}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Highlight Color</label>
+                    <input
+                      type="color"
+                      value={styleState.highlightColor}
+                      onChange={(e) => updateStyle("highlightColor", e.target.value)}
+                      style={csStyles.colorPicker}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Background</label>
+                    <input
+                      type="color"
+                      value={
+                        styleState.backgroundColor?.startsWith("#")
+                          ? styleState.backgroundColor
+                          : "#000000"
+                      }
+                      onChange={(e) => updateStyle("backgroundColor", e.target.value)}
+                      style={csStyles.colorPicker}
+                    />
+                  </div>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>BG Opacity</label>
+                      <span style={csStyles.valBadge}>{styleState.bgOpacity}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={styleState.bgOpacity}
+                      onChange={(e) => updateStyle("bgOpacity", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Box Padding</label>
+                      <span style={csStyles.valBadge}>{styleState.boxPadding}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="24"
+                      value={styleState.boxPadding}
+                      onChange={(e) => updateStyle("boxPadding", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Neon Glow</label>
+                      <span style={csStyles.valBadge}>{styleState.neonGlow}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="40"
+                      value={styleState.neonGlow}
+                      onChange={(e) => updateStyle("neonGlow", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Outline Stroke</label>
+                      <span style={csStyles.valBadge}>{styleState.strokeWidth}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="6"
+                      step="0.5"
+                      value={styleState.strokeWidth}
+                      onChange={(e) =>
+                        updateStyle("strokeWidth", Number(e.target.value))
+                      }
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Position & Tilt */}
+              <div style={csStyles.card}>
+                <div style={csStyles.cardHeader}>
+                  <span style={csStyles.cardIcon}>📍</span>
+                  <h4 style={csStyles.cardTitle}>Position &amp; Tilt</h4>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Vertical Position (Y)</label>
+                      <span style={csStyles.valBadge}>{styleState.posY}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="90"
+                      value={styleState.posY}
+                      onChange={(e) => updateStyle("posY", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Horizontal Position (X)</label>
+                      <span style={csStyles.valBadge}>{styleState.posX}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="90"
+                      value={styleState.posX}
+                      onChange={(e) => updateStyle("posX", Number(e.target.value))}
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+                </div>
+
+                <div style={csStyles.formRow}>
+                  <div style={csStyles.formField}>
+                    <div style={csStyles.labelWithVal}>
+                      <label style={csStyles.label}>Tilt Angle</label>
+                      <span style={csStyles.valBadge}>{styleState.rotateAngle}°</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="-15"
+                      max="15"
+                      value={styleState.rotateAngle}
+                      onChange={(e) =>
+                        updateStyle("rotateAngle", Number(e.target.value))
+                      }
+                      style={csStyles.rangeInput}
+                    />
+                  </div>
+
+                  <div style={csStyles.formField}>
+                    <label style={csStyles.label}>Behind Speaker Effect</label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateStyle("behindPerson", !styleState.behindPerson)
+                      }
+                      style={{
+                        padding: "8px 12px",
+                        backgroundColor: isBehindPerson
+                          ? "rgba(34, 197, 94, 0.2)"
+                          : "rgba(255, 255, 255, 0.05)",
+                        border: isBehindPerson
+                          ? "1px solid rgba(34, 197, 94, 0.5)"
+                          : "1px solid rgba(255, 255, 255, 0.12)",
+                        color: isBehindPerson ? "#4ADE80" : "#94A3B8",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span>👤</span>
+                      <span>{isBehindPerson ? "Active (Behind Person)" : "Disabled (Over Subject)"}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 4: Presets & Export Actions */}
+              <div style={{ ...csStyles.card, ...csStyles.presetsCard }}>
+                <div style={csStyles.cardHeader}>
+                  <span style={csStyles.cardIcon}>⚡</span>
+                  <div>
+                    <h4 style={csStyles.cardTitle}>Presets &amp; Export</h4>
+                    <span style={{ fontSize: "11px", color: "#64748B" }}>
+                      1-Click Styles modeled after Moonshot &amp; Submagic
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPresetsGalleryOpen(true)}
+                  style={csStyles.browsePresetsBtn}
+                >
+                  <span>✦</span>
+                  <span>Browse Presets Library (160+ Styles)</span>
+                  <span style={csStyles.valBadge}>160 STYLES</span>
+                </button>
+
+                <div style={{ marginTop: "16px" }}>
+                  <button
+                    type="button"
+                    onClick={handleExportCaptionedVideo}
+                    disabled={isExporting}
+                    style={csStyles.exportHeroBtn}
+                  >
+                    <span>🚀</span>
+                    <span>
+                      {isExporting ? "Exporting Video..." : "Download Video With Captions"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </main>
 
       {/* ── Presets Gallery Modal Drawer ── */}
@@ -826,177 +1461,14 @@ export default function CaptionStudio({
 }
 
 const csStyles = {
-  container: {
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "100vh",
-    backgroundColor: "#07080C",
-    color: "#FFFFFF",
-    fontFamily: "Inter, -apple-system, sans-serif",
-  },
-  topbar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "16px 28px",
-    backgroundColor: "#0B0D13",
-    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-  },
-  topbarLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: "16px",
-  },
-  backBtn: {
-    padding: "8px 14px",
-    backgroundColor: "rgba(255, 255, 255, 0.06)",
-    border: "1px solid rgba(255, 255, 255, 0.12)",
-    color: "#E2E8F0",
-    borderRadius: "8px",
-    fontSize: "13px",
-    fontWeight: "600",
-    cursor: "pointer",
-  },
-  titleBlock: {
-    display: "flex",
-    flexDirection: "column",
-  },
-  kicker: {
-    fontSize: "10px",
-    letterSpacing: "0.08em",
-    textTransform: "uppercase",
-    color: "#00E5FF",
-    fontWeight: "700",
-  },
-  clipTitle: {
-    margin: 0,
-    fontSize: "16px",
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  topbarRight: {
-    display: "flex",
-    gap: "12px",
-    alignItems: "center",
-  },
-  openPresetsTopBtn: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "8px 16px",
-    backgroundColor: "rgba(0, 229, 255, 0.1)",
-    border: "1px solid rgba(0, 229, 255, 0.3)",
-    color: "#00E5FF",
-    borderRadius: "8px",
-    fontWeight: "700",
-    fontSize: "13px",
-    cursor: "pointer",
-  },
-  exportTopBtn: {
-    padding: "8px 18px",
-    backgroundColor: "#00E5FF",
-    border: "none",
-    color: "#000000",
-    borderRadius: "8px",
-    fontWeight: "800",
-    fontSize: "13px",
-    cursor: "pointer",
-  },
-  workspace: {
-    flex: 1,
-    display: "flex",
-    padding: "24px",
-    gap: "28px",
-    maxWidth: "1400px",
-    margin: "0 auto",
-    width: "100%",
-    boxSizing: "border-box",
-  },
-  previewPanel: {
-    flex: "0 0 340px",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  phoneFrame: {
-    width: "280px",
-    height: "560px",
-    backgroundColor: "#000000",
-    borderRadius: "36px",
-    border: "4px solid rgba(255, 255, 255, 0.15)",
-    boxShadow: "0 24px 64px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08)",
-    position: "relative",
-    overflow: "hidden",
-  },
-  phoneScreen: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-    backgroundColor: "#0B0D13",
-    overflow: "hidden",
-  },
-  videoElement: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    zIndex: 1,
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
-  subjectCanvas: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    pointerEvents: "none",
-    zIndex: 3,
-  },
-  behindPersonBadge: {
-    position: "absolute",
-    top: "14px",
-    left: "14px",
-    zIndex: 20,
-    padding: "3px 8px",
-    backgroundColor: "rgba(34, 197, 94, 0.2)",
-    border: "1px solid rgba(34, 197, 94, 0.4)",
-    borderRadius: "6px",
-    color: "#4ADE80",
-    fontSize: "10px",
-    fontWeight: "800",
-    letterSpacing: "0.05em",
-    display: "flex",
-    alignItems: "center",
-    gap: "5px",
-    pointerEvents: "none",
-    backdropFilter: "blur(6px)",
-  },
-  videoPlaceholder: {
-    width: "100%",
-    height: "100%",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#11141E",
-    zIndex: 1,
-    position: "absolute",
-    top: 0,
-    left: 0,
-  },
-  controlsPanel: {
-    flex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: "20px",
-  },
   card: {
     backgroundColor: "#0E1119",
     border: "1px solid rgba(255, 255, 255, 0.08)",
     borderRadius: "14px",
     padding: "20px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
   },
   presetsCard: {
     backgroundColor: "rgba(14, 17, 25, 0.95)",
