@@ -203,9 +203,21 @@ function windowsOverlap(a, b) {
   return shortest > 0 ? overlap / shortest : 0;
 }
 
+function getDynamicClipQuota(durationInSeconds) {
+  const minutes = Math.floor(Number(durationInSeconds || 0) / 60);
+  if (minutes < 15) return 3;           // < 15 min: 3 clips
+  if (minutes < 35) return 4;           // 15 - 35 min: 4 clips
+  if (minutes < 65) return 6;           // 35 - 65 min: 5 to 6 clips
+  if (minutes < 100) return 7;          // 65 - 100 min: 7 clips
+  return Math.min(10, Math.floor(minutes / 12)); // 100+ min: 8 to 10 clips
+}
+
 function findSmartClipMoments(segments = [], options = {}) {
   const normalized = normalizeSegments(segments);
-  const maxClips = Math.round(clampNumber(options.maxClips, 1, 10, 5));
+  const videoDurationSec = Number(options.videoDurationSec) || 
+    (normalized.length > 0 ? Number(normalized[normalized.length - 1].end || 0) : 0);
+  const dynamicQuota = videoDurationSec > 0 ? getDynamicClipQuota(videoDurationSec) : null;
+  const maxClips = dynamicQuota || Math.round(clampNumber(options.maxClips, 1, 10, 5));
   const preferredDurationSec = clampNumber(
     options.preferredDurationSec,
     25,
@@ -274,4 +286,4 @@ function findSmartClipMoments(segments = [], options = {}) {
   return selected.sort((a, b) => b.score - a.score);
 }
 
-module.exports = { findSmartClipMoments, normalizeSegments };
+module.exports = { findSmartClipMoments, normalizeSegments, getDynamicClipQuota };

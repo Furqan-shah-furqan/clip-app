@@ -502,6 +502,8 @@ async function smartGenerateClip({
   }
 }
 
+const { getDynamicClipQuota } = require("./smartClipRanker");
+
 module.exports = {
   smartGenerateClip,
   downloadTrimmedClipViaRapidApi,
@@ -511,4 +513,5 @@ module.exports = {
   terminateJobProcess,
   extractYouTubeId,
   isYouTubeUrl,
+  getDynamicClipQuota,
 };

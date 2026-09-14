@@ -5043,46 +5043,419 @@ body.home-page.theme-light .opus-import-action span {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PROGRESS CARD — Thumbnail Background · Title Above Bar · Bottom Bar
-   White card in dark theme · Black card in light theme
+   65/35 STEPPED PROGRESS CARD (FRONTEND)
+   Container width: max-w-5xl, rounded-3xl, bg-[#121316]
+   Left (65%): Stepped 5-segment track, tooltip bubble, tip banner
+   Right (35%): Media preview with thumbnail, badges, truncated title
    ═══════════════════════════════════════════════════════════ */
-.modern-progress-card {
-  display: none !important;
+.stepped-progress-card {
+  display: none;
   width: 100% !important;
-  margin: 0 !important;
-  min-height: 0 !important;
-  height: 0 !important;
-  padding: 0 !important;
-  border-radius: 20px !important;
-  /* White card fallback in dark theme (before thumbnail loads) */
-  background-color: #ffffff !important;
-  background-size: cover !important;
-  background-position: center !important;
-  background-repeat: no-repeat !important;
-  border: none !important;
-  outline: none !important;
-  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.45) !important;
+  max-width: 1024px !important;
+  margin: 18px auto !important;
+  border-radius: 24px !important;
+  background-color: #121316 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 24px !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+  box-sizing: border-box !important;
   position: relative !important;
-  overflow: hidden !important;
+  overflow: visible !important;
+  transition: all 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .stepped-progress-card {
+    padding: 32px !important;
+  }
+}
+
+.stepped-progress-card.is-active {
+  display: block !important;
+  animation: steppedCardFadeIn 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.stepped-progress-card.is-hidden {
+  display: none !important;
+}
+
+@keyframes steppedCardFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.stepped-card-layout {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 32px !important;
+  align-items: stretch !important;
+}
+
+@media (min-width: 768px) {
+  .stepped-card-layout {
+    flex-direction: row !important;
+    gap: 32px !important;
+  }
+}
+
+/* Left Column (65% Width — Stepped Progress UI) */
+.stepped-left-col {
+  display: flex !important;
   flex-direction: column !important;
   justify-content: space-between !important;
-  box-sizing: border-box !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
 }
 
-.modern-progress-card.is-active {
+@media (min-width: 768px) {
+  .stepped-left-col {
+    width: 65% !important;
+    flex: none !important;
+  }
+}
+
+.stepped-header-row {
   display: flex !important;
-  min-height: 180px !important;
-  height: auto !important;
-  margin-top: 14px !important;
-  animation: mpSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  margin-bottom: 24px !important;
 }
 
-.modern-progress-card.is-hidden {
-  display: none !important;
-  min-height: 0 !important;
-  height: 0 !important;
+.stepped-headline {
   margin: 0 !important;
-  padding: 0 !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1.2 !important;
+}
+
+@media (min-width: 768px) {
+  .stepped-headline {
+    font-size: 1.5rem !important;
+  }
+}
+
+.stepped-percent-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  border: 1px solid rgba(16, 185, 129, 0.25) !important;
+  color: #34d399 !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  padding: 4px 12px !important;
+  border-radius: 9999px !important;
+}
+
+.stepped-badge-pulse {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: #34d399 !important;
+  animation: steppedPulse 1.6s infinite ease-in-out !important;
+}
+
+@keyframes steppedPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+/* Stepped Track Area */
+.stepped-track-wrapper {
+  position: relative !important;
+  padding-top: 40px !important;
+  padding-bottom: 8px !important;
+}
+
+/* Status Tooltip Bubble (Above Active Step) */
+.stepped-tooltip-container {
+  position: absolute !important;
+  top: 0 !important;
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  z-index: 10 !important;
+  pointer-events: none !important;
+}
+
+.stepped-tooltip-bubble {
+  background: #1A1D23 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  font-size: 0.75rem !important;
+  color: #ffffff !important;
+  padding: 6px 14px !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 20px -3px rgba(0, 0, 0, 0.5) !important;
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  white-space: nowrap !important;
+}
+
+.stepped-tooltip-bubble::after {
+  content: '' !important;
+  position: absolute !important;
+  top: 100% !important;
+  left: 24px !important;
+  border: 4px solid transparent !important;
+  border-top-color: #1A1D23 !important;
+}
+
+.tooltip-dot-ping {
+  width: 6px !important;
+  height: 6px !important;
+  border-radius: 50% !important;
+  background: #34d399 !important;
+  animation: steppedPing 1.2s infinite ease-in-out !important;
+}
+
+@keyframes steppedPing {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.8); opacity: 0.8; }
+}
+
+/* Segmented Pill Track */
+.segmented-pill-track {
+  width: 100% !important;
+  display: flex !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  height: 40px !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.4) !important;
+}
+
+.pill-segment {
+  flex: 1 1 0% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.3s ease !important;
+  border-right: 1px solid #0E1013 !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.pill-segment:last-child {
+  border-right: none !important;
+}
+
+.pill-segment.is-completed {
+  background: #10b981 !important;
+  color: #ffffff !important;
+}
+
+.pill-segment.is-completed svg {
+  width: 16px !important;
+  height: 16px !important;
+  stroke: #ffffff !important;
+}
+
+.pill-segment.is-active {
+  background: rgba(16, 185, 129, 0.20) !important;
+  color: #34d399 !important;
+  animation: pillPulse 2s infinite ease-in-out !important;
+}
+
+@keyframes pillPulse {
+  0%, 100% { background: rgba(16, 185, 129, 0.20); }
+  50% { background: rgba(16, 185, 129, 0.35); }
+}
+
+.pill-ping-indicator {
+  position: relative !important;
+  display: flex !important;
+  width: 10px !important;
+  height: 10px !important;
+}
+
+.pill-ping-dot {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  background: #10b981 !important;
+  box-shadow: 0 0 8px #10b981 !important;
+}
+
+.pill-segment.is-pending {
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.pill-num {
+  font-family: monospace !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  opacity: 0.45 !important;
+}
+
+/* Bottom Labels Grid */
+.stepped-labels-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 4px !important;
+  text-align: center !important;
+  margin-top: 12px !important;
+}
+
+.stepped-label-item {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  padding: 0 4px !important;
+}
+
+.step-num {
+  font-family: monospace !important;
+  font-size: 0.65rem !important;
+  margin-bottom: 2px !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  transition: color 0.3s !important;
+}
+
+.step-name {
+  font-size: 0.68rem !important;
+  line-height: 1.2 !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  transition: color 0.3s, font-weight 0.3s !important;
+}
+
+.stepped-label-item.is-completed .step-num {
+  color: #34d399 !important;
+  font-weight: 700 !important;
+}
+
+.stepped-label-item.is-completed .step-name {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-weight: 500 !important;
+}
+
+.stepped-label-item.is-active .step-num {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.stepped-label-item.is-active .step-name {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Tip Banner (Footer) */
+.stepped-tip-banner {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-radius: 12px !important;
+  padding: 10px 16px !important;
+  font-size: 0.75rem !important;
+  color: #9ca3af !important;
+  margin-top: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.tip-plus-icon {
+  color: #34d399 !important;
+  font-weight: 700 !important;
+  font-size: 0.95rem !important;
+}
+
+/* Right Column (35% Width — Media Preview) */
+.stepped-right-col {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+}
+
+@media (min-width: 768px) {
+  .stepped-right-col {
+    width: 35% !important;
+    flex: none !important;
+  }
+}
+
+.stepped-thumb-frame {
+  position: relative !important;
+  width: 100% !important;
+  aspect-ratio: 16 / 9 !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(0, 0, 0, 0.4) !important;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6) !important;
+}
+
+.stepped-thumb-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.stepped-thumb-placeholder {
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  font-size: 0.75rem !important;
+  gap: 6px !important;
+  background: #0c0d10 !important;
+}
+
+.badge-source {
+  position: absolute !important;
+  top: 10px !important;
+  left: 10px !important;
+  background: rgba(0, 0, 0, 0.6) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  letter-spacing: 0.05em !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.badge-duration {
+  position: absolute !important;
+  bottom: 10px !important;
+  right: 10px !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  font-size: 11px !important;
+  font-family: monospace !important;
+  color: #ffffff !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.stepped-title-box {
+  margin-top: 12px !important;
+}
+
+.stepped-video-title {
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #ffffff !important;
+  display: -webkit-box !important;
+  -webkit-line-clamp: 2 !important;
+  -webkit-box-orient: vertical !important;
+  overflow: hidden !important;
+  line-height: 1.35 !important;
 }
 
 /* Light theme: black card */

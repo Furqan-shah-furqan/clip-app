@@ -11,7 +11,7 @@ const {
 } = require("../utils/paths");
 const { smartGenerateClip } = require("./smartClipService");
 const { getPythonCandidates } = require("../utils/pythonRuntime");
-const { findSmartClipMoments } = require("./smartClipRanker");
+const { findSmartClipMoments, getDynamicClipQuota } = require("./smartClipRanker");
 const {
   isValidYouTubeUrl,
   extractYouTubeId,
@@ -558,24 +558,34 @@ async function runSmartGeneration({
 
     // Viral moment selection & ranking
     onProgress(30, "Analyzing content & finding viral moments...");
+    const maxTranscriptEnd = Array.isArray(transcriptSegments) && transcriptSegments.length
+      ? Number(transcriptSegments[transcriptSegments.length - 1].end || 0)
+      : 0;
+    const effectiveVideoDuration = Number(videoDurationSec) || maxTranscriptEnd || 0;
+    const dynamicQuota = getDynamicClipQuota(effectiveVideoDuration);
+    const targetClipCount = dynamicQuota || safeMaxClips;
+    console.log(
+      `[SmartGenerationService][Job ${generationJobId}] Video duration: ${Math.round(effectiveVideoDuration)}s (${Math.floor(effectiveVideoDuration / 60)} min) -> Dynamic Clip Quota: ${targetClipCount} clips`
+    );
+
     const allSuggestions = findSmartClipMoments(transcriptSegments, {
-      maxClips: Math.max(safeMaxClips * 3, 10),
+      maxClips: Math.max(targetClipCount * 3, 10),
       preferredDurationSec: Number(clipLengthSec) || 45,
       minDurationSec: Number(minDurationSec) || 25,
       maxDurationSec: Number(maxDurationSec) || 90,
-      videoDurationSec: Number(videoDurationSec) || 0,
+      videoDurationSec: effectiveVideoDuration,
     });
 
     suggestions = allSuggestions
       .filter((item) => Number(item.score || 0) >= safeMinScore)
-      .slice(0, safeMaxClips);
+      .slice(0, targetClipCount);
 
     // Fallback 1: if no clips pass minScore, take best available
     if (!suggestions.length && allSuggestions.length > 0) {
       console.log(
-        `[SmartClip][Job ${generationJobId}] No clips scored ${safeMinScore}+. Falling back to top ${safeMaxClips} best clips.`
+        `[SmartClip][Job ${generationJobId}] No clips scored ${safeMinScore}+. Falling back to top ${targetClipCount} best clips.`
       );
-      suggestions = allSuggestions.slice(0, safeMaxClips);
+      suggestions = allSuggestions.slice(0, targetClipCount);
     }
 
   // Fallback 2: transcript grouping or time windows
@@ -608,7 +618,7 @@ async function runSmartGeneration({
       };
 
       for (const seg of transcriptSegments) {
-        if (suggestions.length >= safeMaxClips) break;
+        if (suggestions.length >= targetClipCount) break;
         if (used.has(seg)) continue;
         if (groupStart === null || seg.start - groupEnd > 5) {
           pushGroup();
@@ -625,8 +635,8 @@ async function runSmartGeneration({
     }
 
     if (!suggestions.length && videoDur > 0) {
-      for (let i = 0; i < safeMaxClips; i++) {
-        const startSec = Math.max(0, Math.floor((videoDur / (safeMaxClips + 1)) * (i + 1)) - Math.floor(clipDuration / 2));
+      for (let i = 0; i < targetClipCount; i++) {
+        const startSec = Math.max(0, Math.floor((videoDur / (targetClipCount + 1)) * (i + 1)) - Math.floor(clipDuration / 2));
         const endSec = Math.min(videoDur, startSec + clipDuration);
         if (endSec <= startSec) continue;
         suggestions.push({

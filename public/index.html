@@ -143,38 +143,110 @@
                 </button>
               </div>
 
-              <!-- ─── SLEEK MODERN PROGRESS CARD WITH EMBEDDED METADATA ─── -->
-              <div class="modern-progress-card is-hidden" id="modernProgressCard" style="display: none;">
-                <div class="mp-header">
-                  <div class="mp-header-left">
-                    <span class="mp-sparkle">✦</span>
-                    <span class="mp-title" id="mpTitle">Project Progress</span>
-                    <span class="mp-badge" id="mpBadge">AI Video Engine</span>
+              <!-- ─── 65/35 STEPPED PROGRESS CARD (FRONTEND) ─── -->
+              <div class="stepped-progress-card is-hidden" id="modernProgressCard" style="display: none;">
+                <div class="stepped-card-layout">
+                  
+                  <!-- Left Column (65% Width — Stepped Progress UI) -->
+                  <div class="stepped-left-col">
+                    <div class="stepped-main-content">
+                      <!-- Header: Title & Real-time percentage badge -->
+                      <div class="stepped-header-row">
+                        <h2 class="stepped-headline">Creating your viral clips...</h2>
+                        <div class="stepped-percent-badge">
+                          <span class="stepped-badge-pulse"></span>
+                          <span id="progressPercent">0%</span>
+                        </div>
+                      </div>
+
+                      <!-- Stepped Track Area -->
+                      <div class="stepped-track-wrapper">
+                        <!-- Status Tooltip Bubble (Above Active Step) -->
+                        <div class="stepped-tooltip-container" id="steppedTooltipWrap" style="left: 0%;">
+                          <div class="stepped-tooltip-bubble" id="steppedTooltipBubble">
+                            <span class="tooltip-dot-ping"></span>
+                            <span id="progressLabel">Analyzing video...</span>
+                          </div>
+                        </div>
+
+                        <!-- Segmented Pill Track (5 segments) -->
+                        <div class="segmented-pill-track" id="segmentedPillTrack">
+                          <div class="pill-segment is-active" id="pillSeg1" title="Analyze Video">
+                            <span class="pill-ping-indicator"><span class="pill-ping-dot"></span></span>
+                          </div>
+                          <div class="pill-segment is-pending" id="pillSeg2" title="Extract Audio & Script">
+                            <span class="pill-num">02</span>
+                          </div>
+                          <div class="pill-segment is-pending" id="pillSeg3" title="Score Viral Hooks">
+                            <span class="pill-num">03</span>
+                          </div>
+                          <div class="pill-segment is-pending" id="pillSeg4" title="Trim & Polish Clips">
+                            <span class="pill-num">04</span>
+                          </div>
+                          <div class="pill-segment is-pending" id="pillSeg5" title="Ready in Studio">
+                            <span class="pill-num">05</span>
+                          </div>
+                        </div>
+
+                        <!-- Bottom Labels: Step numbers and stage names -->
+                        <div class="stepped-labels-grid">
+                          <div class="stepped-label-item is-active" id="stepLabel1">
+                            <span class="step-num">01</span>
+                            <span class="step-name">Analyze Video</span>
+                          </div>
+                          <div class="stepped-label-item" id="stepLabel2">
+                            <span class="step-num">02</span>
+                            <span class="step-name">Extract Audio &amp; Script</span>
+                          </div>
+                          <div class="stepped-label-item" id="stepLabel3">
+                            <span class="step-num">03</span>
+                            <span class="step-name">Score Viral Hooks</span>
+                          </div>
+                          <div class="stepped-label-item" id="stepLabel4">
+                            <span class="step-num">04</span>
+                            <span class="step-name">Trim &amp; Polish Clips</span>
+                          </div>
+                          <div class="stepped-label-item" id="stepLabel5">
+                            <span class="step-num">05</span>
+                            <span class="step-name">Ready in Studio</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Tip Banner (Footer) -->
+                    <div class="stepped-tip-banner">
+                      <span class="tip-plus-icon">+</span>
+                      <span><strong>Tip:</strong> High-scoring moments (80+) get prioritized first in your editor.</span>
+                    </div>
                   </div>
-                  <div class="mp-header-right">
-                    <span class="mp-eta" id="progressEta" style="display: none;">ETA 0m</span>
-                    <span class="mp-percent" id="progressPercent">0%</span>
+
+                  <!-- Right Column (35% Width — Media Preview) -->
+                  <div class="stepped-right-col">
+                    <div class="stepped-thumb-frame">
+                      <img id="ytThumb" src="" alt="Video Preview" class="stepped-thumb-img" style="display: none;" />
+                      <div class="stepped-thumb-placeholder" id="steppedThumbPlaceholder">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                        </svg>
+                        <span>No preview available</span>
+                      </div>
+                      <span class="badge-source">SOURCE</span>
+                      <span class="badge-duration" id="ytDuration">00:00</span>
+                    </div>
+                    <div class="stepped-title-box">
+                      <h3 class="stepped-video-title" id="mpVideoTitle">Loading video...</h3>
+                    </div>
                   </div>
+
                 </div>
 
-                <!-- Hidden metadata holders (thumbnail becomes card bg, title shown below) -->
+                <!-- Hidden compatibility hooks -->
                 <div style="display:none;">
-                  <img id="ytThumb" src="" alt="thumbnail" />
                   <span id="ytTitle"></span>
-                  <span id="ytDuration"></span>
                   <div id="ytInfoPreview"></div>
-                </div>
-
-                <!-- Spacer to push title+bar to bottom -->
-                <div class="mp-spacer"></div>
-
-                <!-- Video title above progress bar -->
-                <div class="mp-video-title" id="mpVideoTitle"></div>
-
-                <!-- Progress bar at the bottom -->
-                <div class="mp-track" style="display: none;">
-                  <div class="mp-fill" id="progressFill" style="width: 0%;"></div>
-                  <div class="mp-status-pill" id="progressLabel"></div>
+                  <span id="progressEta"></span>
+                  <div id="progressFill" style="width: 0%;"></div>
                 </div>
               </div>
             </div>
