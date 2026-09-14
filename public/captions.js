@@ -1224,43 +1224,15 @@ function dedupeCaptionSegments(segments = []) {
   return output;
 }
 
-function ensureSegmentWords(s) {
-  if (Array.isArray(s.words) && s.words.length > 0) {
-    return s.words
-      .map((w) => ({
-        word: String(w.word || w.text || "").trim(),
-        start: clamp(Number(w.start) || Number(s.start) || 0, 0, Number.MAX_SAFE_INTEGER),
-        end: clamp(Number(w.end) || Number(s.end) || 0, 0, Number.MAX_SAFE_INTEGER),
-      }))
-      .filter((w) => Boolean(w.word));
-  }
-  const textWords = String(s.text || "").trim().split(/\s+/).filter(Boolean);
-  if (!textWords.length) return [];
-  const sStart = clamp(Number(s.start) || 0, 0, Number.MAX_SAFE_INTEGER);
-  const sEnd = clamp(Number(s.end) || sStart + 1, sStart + 0.3, Number.MAX_SAFE_INTEGER);
-  const dur = Math.max(0.3, sEnd - sStart);
-  const wDur = dur / textWords.length;
-  return textWords.map((w, i) => ({
-    word: w,
-    start: Math.round((sStart + i * wDur) * 100) / 100,
-    end: Math.round((sStart + (i + 1) * wDur) * 100) / 100,
-  }));
-}
-
 function normalizeSegments(segments = []) {
   const normalized = segments
-    .map((s) => {
-      const segStart = clamp(Number(s.start) || 0, 0, Number.MAX_SAFE_INTEGER);
-      const segEnd = clamp(Number(s.end) || 0, 0, Number.MAX_SAFE_INTEGER);
-      const segText = collapseRepeatedCaptionText(s.text || "");
-      return {
-        id: s.id || uniqueId(),
-        start: segStart,
-        end: segEnd,
-        text: segText,
-        words: ensureSegmentWords({ ...s, start: segStart, end: segEnd, text: segText }),
-      };
-    })
+    .map((s) => ({
+      id: s.id || uniqueId(),
+      start: clamp(Number(s.start) || 0, 0, Number.MAX_SAFE_INTEGER),
+      end: clamp(Number(s.end) || 0, 0, Number.MAX_SAFE_INTEGER),
+      text: collapseRepeatedCaptionText(s.text || ""),
+      words: Array.isArray(s.words) ? s.words : undefined,
+    }))
     .filter((s) => s.text && s.end > s.start)
     .map((s) => ({ ...s, end: s.end > s.start ? s.end : s.start + 1.5 }))
     .sort((a, b) => a.start - b.start);
@@ -1398,33 +1370,6 @@ function buildSegmentsFromWords(words = []) {
 
 function isPlaceholderOrMockCaptions(segments, clip) {
   if (!Array.isArray(segments) || !segments.length) return true;
-
-  // 1. Total word count check: a real transcript for a video clip has dozens of words
-  const totalWords = segments.reduce((count, s) => {
-    const wCount = Array.isArray(s.words) && s.words.length
-      ? s.words.length
-      : String(s.text || "").trim().split(/\s+/).filter(Boolean).length;
-    return count + wCount;
-  }, 0);
-  if (totalWords < 15) return true;
-
-  // 2. Platform metadata & scrape noise check (e.g. "Instagram TikTok 3 46")
-  const noisePatterns = [
-    /\binstagram\b/i,
-    /\btiktok\b/i,
-    /\byoutube\b/i,
-    /\bshorts\b/i,
-    /\breels\b/i,
-    /\bsubscribe\b/i,
-    /^\s*\d+\s+\d+\s*$/,
-    /\b\d+\s+\d+\s+why\b/i,
-  ];
-  const hasNoise = segments.some((s) => {
-    const t = String(s.text || "");
-    return noisePatterns.some((np) => np.test(t));
-  });
-  if (hasNoise) return true;
-
   const mockPhrases = [
     "welcome to this video",
     "today we'll explore",
@@ -1631,76 +1576,43 @@ function getTrackUrlCandidates(clip = {}, payload = null) {
   return Array.from(candidates);
 }
 
-function cleanTitleOrHook(raw = "") {
-  return String(raw || "")
-    .replace(/\b(instagram|tiktok|youtube|shorts|reels|clip|full episode|part \d+)\b/gi, "")
-    .replace(/\b\d+\s+\d+\b/g, "")
-    .replace(/#\w+/g, "")
-    .replace(/[|•–—]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function generateSmartCaptionsForClip(clip = {}, duration = 30) {
-  const dur = Math.max(8, Number(duration) || 30);
-  const rawInput =
-    clip.transcript ||
-    clip.text ||
-    clip.previewText ||
-    clip.description ||
+  const dur = Math.max(5, Number(duration) || 30);
+  const rawText =
     clip.hook ||
+    clip.description ||
     clip.title ||
-    "";
+    clip.text ||
+    clip.transcript ||
+    clip.summary ||
+    "Robert Greene reveals that true mastery begins when you turn your focus inward. When you work on yourself, everything starts to make sense. Stop chasing opportunities and start creating them.";
 
-  const cleaned = cleanTitleOrHook(rawInput);
-  let words = cleaned.split(/\s+/).filter(Boolean);
-
-  // If text is too short (just a video title/hook like "Why do people choose to drink?"),
-  // synthesize a contextual spoken dialogue matching the topic across the duration
-  if (words.length < 18) {
-    const topic = cleaned.toLowerCase();
-    let expandedSpeech = "";
-    if (topic.includes("drink") || topic.includes("alcohol") || topic.includes("beer") || topic.includes("wine")) {
-      expandedSpeech =
-        "Why do people choose to drink? In reality, it comes down to psychological habits and social rituals that dictate human behavior. We often use substances to alter our mental state or escape daily stress, but the brain quickly adapts and creates chemical dependency. True presence and emotional control begin when you observe the impulse without immediately reacting to it. Understanding these neurological reward pathways gives you complete power over your habits.";
-    } else if (topic.includes("money") || topic.includes("rich") || topic.includes("wealth") || topic.includes("business")) {
-      expandedSpeech =
-        "The real secret to building lasting wealth begins with emotional discipline and extreme patience. Most people chase fast returns and immediate gratification, but sustainable success is built on leverage, compounding, and strategic focus. Master your instincts and you master the financial outcome. Build systems that work even when you are resting.";
-    } else if (topic.includes("fitness") || topic.includes("gym") || topic.includes("workout") || topic.includes("diet") || topic.includes("health")) {
-      expandedSpeech =
-        "Your physical potential is defined by your daily discipline and relentless commitment. Showing up on the hardest days is what builds real strength and mental resilience. Train your mindset first, embrace the uncomfortable struggle, and your body will always adapt to the standard you demand.";
-    } else {
-      expandedSpeech =
-        "The secret to true mastery begins when you turn your focus completely inward. When you eliminate daily distractions and stay locked on the essential vision, every single piece starts to connect. Real consistency is what separates the dreamers from the achievers. Take full ownership of every decision and move with relentless momentum.";
-    }
-
-    if (cleaned && cleaned.length > 5 && !expandedSpeech.toLowerCase().includes(cleaned.toLowerCase())) {
-      expandedSpeech = `${cleaned}. ${expandedSpeech}`;
-    }
-    words = expandedSpeech.split(/\s+/).filter(Boolean);
+  const words = String(rawText).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) {
+    return generateFallbackCaptions(dur);
   }
 
-  // Calculate high-cadence word timestamps across the clip duration (approx 0.35s per word)
-  const durationPerWord = dur / Math.max(1, words.length);
-  const wordsWithTimes = words.map((w, i) => ({
-    word: w,
-    start: Math.round(i * durationPerWord * 100) / 100,
-    end: Math.round((i + 1) * durationPerWord * 100) / 100,
-  }));
+  const chunks = [];
+  const wordsPerChunk = 5;
+  for (let i = 0; i < words.length; i += wordsPerChunk) {
+    chunks.push(words.slice(i, i + wordsPerChunk).join(" "));
+  }
 
-  // Chunk into natural 2-word spoken segments for high-velocity real-time caption sync
-  const wordsPerSeg = 2;
+  const timePerChunk = Math.max(1.4, (dur - 1) / chunks.length);
   const segments = [];
-  for (let i = 0; i < wordsWithTimes.length; i += wordsPerSeg) {
-    const chunk = wordsWithTimes.slice(i, i + wordsPerSeg);
-    segments.push({
-      id: uniqueId(),
-      start: chunk[0].start,
-      end: chunk[chunk.length - 1].end,
-      text: chunk.map((c) => c.word).join(" "),
-      words: chunk,
-    });
-  }
+
+  chunks.forEach((chunkText, i) => {
+    const start = Math.round((0.5 + i * timePerChunk) * 100) / 100;
+    const end = Math.round(Math.min(dur - 0.2, start + timePerChunk - 0.2) * 100) / 100;
+    if (end > start) {
+      segments.push({
+        id: uniqueId(),
+        start,
+        end,
+        text: chunkText,
+      });
+    }
+  });
 
   return segments.length ? segments : generateFallbackCaptions(dur);
 }
@@ -3970,49 +3882,22 @@ function bindControls() {
     const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
     if (statusLabel) statusLabel.textContent = "Transcribing with Whisper AI...";
 
-    const clipDur = Number(captionVideo?.duration || editorState.clip?.duration || 30);
-
     try {
-      let serverSegments = await fetchServerCaptions(editorState.clip);
-      if (!serverSegments || !serverSegments.length || isPlaceholderOrMockCaptions(serverSegments, editorState.clip)) {
-        console.log("Server transcription empty or title-trap. Synthesizing high-cadence spoken captions...");
-        serverSegments = generateSmartCaptionsForClip(editorState.clip, clipDur);
+      const serverSegments = await fetchServerCaptions(editorState.clip);
+      if (serverSegments && serverSegments.length) {
+        editorState.segments = normalizeSegments(serverSegments);
+        editorState.activeSegmentId = editorState.segments[0]?.id || null;
+        persistCaptions();
+        renderTimeline();
+        syncCaptionOverlay();
+        updateLivePreview();
+        if (statusLabel) statusLabel.textContent = `Whisper AI Synced (${serverSegments.length} Segments)`;
+      } else {
+        if (statusLabel) statusLabel.textContent = "No new audio captions detected";
       }
-      editorState.segments = normalizeSegments(serverSegments);
-      editorState.activeSegmentId = editorState.segments[0]?.id || null;
-      persistCaptions();
-      renderTimeline();
-      applyStyleToOverlay();
-      syncCaptionOverlay();
-      updateLivePreview();
-      const totalWords = editorState.segments.reduce((acc, s) => {
-        return (
-          acc +
-          (Array.isArray(s.words) && s.words.length
-            ? s.words.length
-            : String(s.text || "").trim().split(/\s+/).filter(Boolean).length)
-        );
-      }, 0);
-      if (statusLabel) statusLabel.textContent = `● Live Audio Parity (${totalWords} Words Synced)`;
     } catch (err) {
       console.error("Manual audio sync error:", err);
-      const fallbackSegs = generateSmartCaptionsForClip(editorState.clip, clipDur);
-      editorState.segments = normalizeSegments(fallbackSegs);
-      editorState.activeSegmentId = editorState.segments[0]?.id || null;
-      persistCaptions();
-      renderTimeline();
-      applyStyleToOverlay();
-      syncCaptionOverlay();
-      updateLivePreview();
-      const totalWords = editorState.segments.reduce((acc, s) => {
-        return (
-          acc +
-          (Array.isArray(s.words) && s.words.length
-            ? s.words.length
-            : String(s.text || "").trim().split(/\s+/).filter(Boolean).length)
-        );
-      }, 0);
-      if (statusLabel) statusLabel.textContent = `● Live Audio Parity (${totalWords} Words Synced)`;
+      if (statusLabel) statusLabel.textContent = "Audio sync failed — check server";
     } finally {
       syncAudioCaptionsBtn.innerHTML = origHtml;
       syncAudioCaptionsBtn.disabled = false;
@@ -4296,55 +4181,43 @@ async function init() {
     }
   }
 
-  function generateWordTimestamps(text, totalDuration) {
-    const wordsArray = String(text || "").trim().split(/\s+/).filter(Boolean);
-    if (!wordsArray.length || !totalDuration) return [];
-    const durationPerWord = totalDuration / wordsArray.length;
-    return wordsArray.map((w, i) => ({
-      word: w,
-      start: Math.round(i * durationPerWord * 100) / 100,
-      end: Math.round((i + 1) * durationPerWord * 100) / 100,
-    }));
-  }
-
-  // 1. Instant Caption Data Resolution:
+  // 1. Try saved captions or embedded payload
   let initialSegments = normalizeSegments(session.captions || []);
 
-  if (!initialSegments.length || isPlaceholderOrMockCaptions(initialSegments, session.clip)) {
+  if (!initialSegments.length) {
     initialSegments = extractSegmentsFromPayload(
       session.clip?.captions ||
         session.clip?.segments ||
         session.clip?.subtitleSegments ||
-        session.clip?.words ||
         session.clip?.transcript,
     );
   }
 
-  const clipDur = Number(captionVideo?.duration || session.clip?.duration || 30);
+  const isMock = isPlaceholderOrMockCaptions(initialSegments, session.clip);
 
-  // If still empty or mock/title-trap detected, synthesize high-cadence spoken captions
-  if (!initialSegments.length || isPlaceholderOrMockCaptions(initialSegments, session.clip)) {
+  if (session.clip && (!initialSegments.length || isMock)) {
+    const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
+    if (statusLabel) statusLabel.textContent = "Transcribing Audio with Whisper AI...";
+    try {
+      const serverSegments = await fetchServerCaptions(session.clip);
+      if (serverSegments && serverSegments.length) {
+        console.log("Real audio transcription loaded:", serverSegments.length, "segments");
+        initialSegments = serverSegments;
+        if (statusLabel) statusLabel.textContent = `Audio Transcribed (${serverSegments.length} Segments)`;
+      }
+    } catch (err) {
+      console.warn("Could not fetch server captions during init:", err);
+    }
+  }
+
+  // 2. If still empty, generate fallback so editor is never blank
+  if (!initialSegments.length) {
+    const clipDur = Number(captionVideo?.duration || session.clip?.duration || 30);
     initialSegments = generateSmartCaptionsForClip(session.clip, clipDur);
   }
 
   editorState.segments = normalizeSegments(initialSegments);
   editorState.activeSegmentId = editorState.segments[0]?.id || null;
-
-  // Calculate total words synced for live header status
-  const totalWords = editorState.segments.reduce((acc, s) => {
-    return (
-      acc +
-      (Array.isArray(s.words) && s.words.length
-        ? s.words.length
-        : String(s.text || "").trim().split(/\s+/).filter(Boolean).length)
-    );
-  }, 0);
-
-  // Update header status pill to "● Live Audio Parity"
-  const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
-  if (statusLabel) {
-    statusLabel.textContent = `● Live Audio Parity (${totalWords} Words Synced)`;
-  }
 
   applyStyleToOverlay();
   persistCaptions();

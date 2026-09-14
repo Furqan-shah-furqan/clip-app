@@ -26,37 +26,7 @@ function hexToRgba(hex = "#000000", opacityPercent = 100) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function cleanTitleOrHook(raw = "") {
-  return String(raw || "")
-    .replace(/\b(instagram|tiktok|youtube|shorts|reels|clip|full episode|part \d+)\b/gi, "")
-    .replace(/\b\d+\s+\d+\b/g, "")
-    .replace(/#\w+/g, "")
-    .replace(/[|•–—]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
-function synthesizeSmartSpeechDialogue(cleanedTopic = "") {
-  const topic = String(cleanedTopic || "").toLowerCase();
-  let expandedSpeech = "";
-  if (topic.includes("drink") || topic.includes("alcohol") || topic.includes("beer") || topic.includes("wine")) {
-    expandedSpeech =
-      "Why do people choose to drink? In reality, it comes down to psychological habits and social rituals that dictate human behavior. We often use substances to alter our mental state or escape daily stress, but the brain quickly adapts and creates chemical dependency. True presence and emotional control begin when you observe the impulse without immediately reacting to it. Understanding these neurological reward pathways gives you complete power over your habits.";
-  } else if (topic.includes("money") || topic.includes("rich") || topic.includes("wealth") || topic.includes("business")) {
-    expandedSpeech =
-      "The real secret to building lasting wealth begins with emotional discipline and extreme patience. Most people chase fast returns and immediate gratification, but sustainable success is built on leverage, compounding, and strategic focus. Master your instincts and you master the financial outcome. Build systems that work even when you are resting.";
-  } else if (topic.includes("fitness") || topic.includes("gym") || topic.includes("workout") || topic.includes("diet") || topic.includes("health")) {
-    expandedSpeech =
-      "Your physical potential is defined by your daily discipline and relentless commitment. Showing up on the hardest days is what builds real strength and mental resilience. Train your mindset first, embrace the uncomfortable struggle, and your body will always adapt to the standard you demand.";
-  } else {
-    expandedSpeech =
-      "The secret to true mastery begins when you turn your focus completely inward. When you eliminate daily distractions and stay locked on the essential vision, every single piece starts to connect. Real consistency is what separates the dreamers from the achievers. Take full ownership of every decision and move with relentless momentum.";
-  }
-  if (cleanedTopic && cleanedTopic.length > 5 && !expandedSpeech.toLowerCase().includes(cleanedTopic.toLowerCase())) {
-    expandedSpeech = `${cleanedTopic}. ${expandedSpeech}`;
-  }
-  return expandedSpeech;
-}
 
 /**
  * Generates evenly distributed word timestamps across the clip's duration.
@@ -325,20 +295,14 @@ export default function CaptionStudio({
         }
       });
 
-      const isStubOrNoise =
-        extractedWords.length < 15 ||
-        extractedWords.some((w) =>
-          /\b(instagram|tiktok|youtube|shorts|reels|subscribe|\d+\s+\d+)\b/i.test(w.word)
-        );
-
-      if (extractedWords.length > 0 && !isStubOrNoise) {
+      if (extractedWords.length > 0) {
         setWords(extractedWords);
         setStatus(`● Live Audio Parity (${extractedWords.length} Words Synced)`);
         return;
       }
     }
 
-    // 3. Fallback Word Generation: synthesize rich spoken dialogue matching video topic
+    // 3. Fallback Word Generation: distribute raw text across clip duration
     const rawText = (
       (typeof activeClip?.transcript === "string" ? activeClip.transcript : null) ||
       activeClip?.text ||
@@ -349,9 +313,7 @@ export default function CaptionStudio({
       "ROBERTS GREENE REVEALS THAT TRUE MASTERY BEGINS WHEN YOU TURN YOUR FOCUS INWARD"
     ).trim();
 
-    const cleanedTopic = cleanTitleOrHook(rawText);
-    const spokenText = synthesizeSmartSpeechDialogue(cleanedTopic);
-    const generated = generateWordTimestamps(spokenText, clipDur);
+    const generated = generateWordTimestamps(rawText, clipDur);
     setWords(generated);
     setStatus(`● Live Audio Parity (${generated.length} Words Synced)`);
   }, [clip]);
