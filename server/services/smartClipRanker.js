@@ -205,19 +205,31 @@ function windowsOverlap(a, b) {
 
 function getDynamicClipQuota(durationInSeconds) {
   const minutes = Math.floor(Number(durationInSeconds || 0) / 60);
-  if (minutes < 15) return 3;           // < 15 min: 3 clips
-  if (minutes < 35) return 4;           // 15 - 35 min: 4 clips
-  if (minutes < 65) return 6;           // 35 - 65 min: 5 to 6 clips
-  if (minutes < 100) return 7;          // 65 - 100 min: 7 clips
-  return Math.min(10, Math.floor(minutes / 12)); // 100+ min: 8 to 10 clips
+  if (minutes < 15) return 3;               // Short videos (< 15 min): 3 clips
+  if (minutes < 35) return 4;               // 15 - 35 min: 4 clips
+  if (minutes < 75) return 6;               // 35 - 75 min (~1 hour): 6 clips minimum
+  if (minutes < 110) return 8;              // 75 - 110 min: 8-9 clips
+  return Math.min(12, Math.max(10, Math.floor(minutes / 10))); // 110+ min (2 hours): 10 to 12 clips
 }
 
 function findSmartClipMoments(segments = [], options = {}) {
   const normalized = normalizeSegments(segments);
-  const videoDurationSec = Number(options.videoDurationSec) || 
-    (normalized.length > 0 ? Number(normalized[normalized.length - 1].end || 0) : 0);
-  const dynamicQuota = videoDurationSec > 0 ? getDynamicClipQuota(videoDurationSec) : null;
-  const maxClips = dynamicQuota || Math.round(clampNumber(options.maxClips, 1, 10, 5));
+  if (!normalized.length) return [];
+
+  // Robust duration fallback from options metadata, videoDurationSec, or last transcript segment
+  const transcriptDuration = Math.ceil(
+    normalized[normalized.length - 1].end || normalized[normalized.length - 1].start || 0
+  );
+  const effectiveDuration =
+    Number(options.metadata?.duration || options.videoDurationSec) ||
+    transcriptDuration ||
+    0;
+
+  const quota =
+    options.quota ||
+    (effectiveDuration > 0 ? getDynamicClipQuota(effectiveDuration) : null) ||
+    Math.round(clampNumber(options.maxClips, 1, 12, 6));
+
   const preferredDurationSec = clampNumber(
     options.preferredDurationSec,
     25,
@@ -228,62 +240,134 @@ function findSmartClipMoments(segments = [], options = {}) {
     options.minDurationSec,
     20,
     70,
-    Math.max(25, preferredDurationSec - 12),
+    30,
   );
   const maxDurationSec = clampNumber(
     options.maxDurationSec,
     35,
     100,
-    Math.min(90, preferredDurationSec + 25),
+    75,
   );
-  if (!normalized.length) return [];
+
   const candidates = [];
+  const totalDuration = Math.max(effectiveDuration, transcriptDuration);
+
+  // 1. Sliding candidate windows: slide candidate windows (30s to 75s duration) every 25 seconds across full transcript
+  const stepSec = 25;
+  const maxStartSec = Math.max(0, totalDuration - minDurationSec);
+
+  for (let windowStart = 0; windowStart <= maxStartSec; windowStart += stepSec) {
+    const textParts = [];
+    let startActual = null;
+    let endActual = null;
+
+    for (let i = 0; i < normalized.length; i++) {
+      const seg = normalized[i];
+      if (seg.end < windowStart) continue;
+      if (startActual === null) {
+        startActual = seg.start;
+      }
+      if (seg.start > windowStart + maxDurationSec) break;
+
+      textParts.push(seg.text);
+      endActual = seg.end;
+      const currentDur = endActual - startActual;
+
+      if (currentDur >= minDurationSec && currentDur <= maxDurationSec) {
+        const text = normalizeText(textParts.join(" "));
+        if (text.length > 20) {
+          const scored = scoreWindow({ text, startSec: startActual, endSec: endActual });
+          const durationPenalty = Math.abs(currentDur - preferredDurationSec) * 0.15;
+          const finalScore = Math.round(
+            clampNumber(scored.score - durationPenalty, 1, 100, scored.score),
+          );
+          candidates.push({
+            startSec: Math.max(0, startActual),
+            endSec: endActual,
+            start: secondsToTime(startActual),
+            end: secondsToTime(endActual),
+            durationSec: Math.round(currentDur),
+            score: finalScore,
+            title: getTitleFromText(text),
+            reason: scored.signals.slice(0, 3).join(" + "),
+            signals: scored.signals,
+            previewText: text.slice(0, 260),
+            text,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Also check natural segment-by-segment windowing for fine-grained speaker boundaries
   for (let i = 0; i < normalized.length; i += 1) {
     const startSeg = normalized[i];
     const textParts = [];
     let endSec = startSeg.end;
     for (let j = i; j < normalized.length; j += 1) {
       const seg = normalized[j];
-      if (j > i && seg.start - endSec > 2.75) break;
+      if (j > i && seg.start - endSec > 3.0) break;
       textParts.push(seg.text);
       endSec = Math.max(endSec, seg.end);
       const duration = endSec - startSeg.start;
-      if (duration >= minDurationSec) {
+      if (duration >= minDurationSec && duration <= maxDurationSec) {
         const text = normalizeText(textParts.join(" "));
-        const scored = scoreWindow({ text, startSec: startSeg.start, endSec });
-        const durationPenalty =
-          Math.abs(duration - preferredDurationSec) * 0.22;
-        const finalScore = Math.round(
-          clampNumber(scored.score - durationPenalty, 1, 100, scored.score),
-        );
-        candidates.push({
-          startSec: Math.max(0, startSeg.start),
-          endSec,
-          start: secondsToTime(startSeg.start),
-          end: secondsToTime(endSec),
-          durationSec: Math.round(duration),
-          score: finalScore,
-          title: getTitleFromText(text),
-          reason: scored.signals.slice(0, 3).join(" + "),
-          signals: scored.signals,
-          previewText: text.slice(0, 260),
-          text,
-        });
+        if (text.length > 20) {
+          const scored = scoreWindow({ text, startSeg: startSeg.start, startSec: startSeg.start, endSec });
+          const durationPenalty = Math.abs(duration - preferredDurationSec) * 0.15;
+          const finalScore = Math.round(
+            clampNumber(scored.score - durationPenalty, 1, 100, scored.score),
+          );
+          candidates.push({
+            startSec: Math.max(0, startSeg.start),
+            endSec,
+            start: secondsToTime(startSeg.start),
+            end: secondsToTime(endSec),
+            durationSec: Math.round(duration),
+            score: finalScore,
+            title: getTitleFromText(text),
+            reason: scored.signals.slice(0, 3).join(" + "),
+            signals: scored.signals,
+            previewText: text.slice(0, 260),
+            text,
+          });
+        }
       }
-      if (duration >= maxDurationSec) break;
+      if (duration > maxDurationSec) break;
     }
   }
+
+  // 3. Sort all candidate moments by score descending
   const sorted = candidates.sort(
     (a, b) => b.score - a.score || a.startSec - b.startSec,
   );
+
+  // 4. Deduplicate overlapping moments (max 45% overlap)
   const selected = [];
   for (const candidate of sorted) {
-    if (selected.some((existing) => windowsOverlap(existing, candidate) > 0.48))
+    if (selected.some((existing) => windowsOverlap(existing, candidate) > 0.45)) {
       continue;
+    }
     selected.push(candidate);
-    if (selected.length >= maxClips) break;
+    if (selected.length >= quota) break;
   }
-  return selected.sort((a, b) => b.score - a.score);
+
+  // 5. Always fulfill quota: if deduplication reduced candidate count below quota, pick next best non-identical
+  if (selected.length < quota) {
+    for (const candidate of sorted) {
+      if (selected.some((existing) => windowsOverlap(existing, candidate) > 0.85)) {
+        continue;
+      }
+      if (!selected.includes(candidate)) {
+        selected.push(candidate);
+        if (selected.length >= quota) break;
+      }
+    }
+  }
+
+  // 6. Return top candidates sliced to target quota
+  const rankedMoments = selected.sort((a, b) => b.score - a.score);
+  return rankedMoments.slice(0, quota);
 }
 
 module.exports = { findSmartClipMoments, normalizeSegments, getDynamicClipQuota };

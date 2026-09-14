@@ -559,9 +559,10 @@ async function runSmartGeneration({
     // Viral moment selection & ranking
     onProgress(30, "Analyzing content & finding viral moments...");
     const maxTranscriptEnd = Array.isArray(transcriptSegments) && transcriptSegments.length
-      ? Number(transcriptSegments[transcriptSegments.length - 1].end || 0)
+      ? Math.ceil(transcriptSegments[transcriptSegments.length - 1].end || transcriptSegments[transcriptSegments.length - 1].start || 0)
       : 0;
-    const effectiveVideoDuration = Number(videoDurationSec) || maxTranscriptEnd || 0;
+    const effectiveVideoDuration =
+      Number(payload.metadata?.duration || videoDurationSec) || maxTranscriptEnd || 0;
     const dynamicQuota = getDynamicClipQuota(effectiveVideoDuration);
     const targetClipCount = dynamicQuota || safeMaxClips;
     console.log(
@@ -569,24 +570,18 @@ async function runSmartGeneration({
     );
 
     const allSuggestions = findSmartClipMoments(transcriptSegments, {
-      maxClips: Math.max(targetClipCount * 3, 10),
+      maxClips: targetClipCount,
+      quota: targetClipCount,
       preferredDurationSec: Number(clipLengthSec) || 45,
       minDurationSec: Number(minDurationSec) || 25,
       maxDurationSec: Number(maxDurationSec) || 90,
       videoDurationSec: effectiveVideoDuration,
+      metadata: payload.metadata,
     });
 
-    suggestions = allSuggestions
-      .filter((item) => Number(item.score || 0) >= safeMinScore)
-      .slice(0, targetClipCount);
-
-    // Fallback 1: if no clips pass minScore, take best available
-    if (!suggestions.length && allSuggestions.length > 0) {
-      console.log(
-        `[SmartClip][Job ${generationJobId}] No clips scored ${safeMinScore}+. Falling back to top ${targetClipCount} best clips.`
-      );
-      suggestions = allSuggestions.slice(0, targetClipCount);
-    }
+    // Guaranteed quota fulfillment: moments are already sorted by score descending.
+    // NEVER filter out moments with score >= 80 if it drops final count below quota.
+    suggestions = allSuggestions.slice(0, targetClipCount);
 
   // Fallback 2: transcript grouping or time windows
   if (!suggestions.length) {

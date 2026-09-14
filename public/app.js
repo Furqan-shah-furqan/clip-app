@@ -492,19 +492,20 @@ function renderGenerationControls(mode = "idle") {
 }
 
 function hideGenerationProgress() {
+  const heroCard = document.getElementById("heroInputCard");
+  if (heroCard) {
+    heroCard.style.display = "block";
+  }
   const mpCard = document.getElementById("modernProgressCard");
   if (mpCard) {
     mpCard.classList.remove("is-active");
     mpCard.classList.add("is-hidden");
     mpCard.style.display = "none";
     mpCard.style.backgroundImage = "";
-    const mpTrackEl = mpCard.querySelector(".mp-track");
-    if (mpTrackEl) mpTrackEl.style.display = "none";
   }
   const mpVideoTitle = document.getElementById("mpVideoTitle");
   if (mpVideoTitle) {
     mpVideoTitle.textContent = "";
-    mpVideoTitle.style.display = "none";
   }
   if (progressFill) progressFill.style.width = "0%";
   if (progressPercent) progressPercent.textContent = "0%";
@@ -517,6 +518,10 @@ function hideGenerationProgress() {
 }
 
 function showGenerationProgress(job = {}) {
+  const heroCard = document.getElementById("heroInputCard");
+  if (heroCard) {
+    heroCard.style.display = "none";
+  }
   const mpCard = document.getElementById("modernProgressCard");
   if (mpCard) {
     mpCard.classList.remove("is-hidden");
@@ -844,47 +849,63 @@ function updateSteppedProgressUI(p, label) {
 
   // Determine active step 1 to 5
   let activeStep = 1;
-  if (p >= 100 || s.includes("completed")) activeStep = 5;
-  else if (p >= 95 || s.includes("finalizing") || s.includes("ready")) activeStep = 5;
-  else if (p >= 45 || s.includes("trimming") || s.includes("clipping") || s.includes("downloading")) activeStep = 4;
+  if (p >= 100 || s.includes("completed") || s.includes("ready in studio")) activeStep = 5;
+  else if (p >= 90 || s.includes("finalizing") || s.includes("ready")) activeStep = 5;
+  else if (p >= 45 || s.includes("trimming") || s.includes("clipping") || s.includes("downloading") || s.includes("moment")) activeStep = 4;
   else if (p >= 25 || s.includes("analyzing") || s.includes("viral") || s.includes("hooks") || s.includes("moments")) activeStep = 3;
-  else if (p >= 10 || s.includes("transcript") || s.includes("audio") || s.includes("script")) activeStep = 2;
+  else if (p >= 10 || s.includes("transcript") || s.includes("audio") || s.includes("script") || s.includes("extracting")) activeStep = 2;
 
-  // Position tooltip over active step (step 1: 0%, step 2: 20%, step 3: 40%, step 4: 60%, step 5: 80%)
-  const tooltipWrap = document.getElementById("steppedTooltipWrap");
-  if (tooltipWrap) {
-    const leftPos = Math.min(80, Math.max(0, (activeStep - 1) * 20));
-    tooltipWrap.style.left = `calc(${leftPos}% + 4px)`;
+  // 1. Update SVG Circular Progress Ring
+  const progressRingCircle = document.getElementById("progressRingCircle");
+  if (progressRingCircle) {
+    const radius = 28;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (p / 100) * circumference;
+    progressRingCircle.style.strokeDashoffset = offset;
   }
 
-  // Update segments 1 to 5
+  // 2. Update Connecting Horizontal Line Fill
+  const lpcLineFill = document.getElementById("lpcLineFill");
+  if (lpcLineFill) {
+    const fillPercent = Math.min(100, Math.max(0, ((activeStep - 1) / 4) * 100));
+    lpcLineFill.style.width = `${fillPercent}%`;
+  }
+
+  // 3. Update 5 Connected Nodes
   for (let step = 1; step <= 5; step++) {
-    const seg = document.getElementById(`pillSeg${step}`);
-    const labelCol = document.getElementById(`stepLabel${step}`);
-    if (!seg) continue;
+    const node = document.getElementById(`pillSeg${step}`);
+    if (!node) continue;
 
     const isCompleted = step < activeStep || p >= 100;
     const isActive = step === activeStep && p < 100;
 
-    seg.className = "pill-segment";
-    if (labelCol) labelCol.className = "stepped-label-item";
+    node.className = "lpc-node";
+    const circle = node.querySelector(".lpc-node-circle") || node;
 
     if (isCompleted) {
-      seg.classList.add("is-completed");
-      seg.innerHTML = `
-        <svg class="pill-check-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+      node.classList.add("is-completed");
+      circle.innerHTML = `
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
           <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
         </svg>
       `;
-      if (labelCol) labelCol.classList.add("is-completed");
     } else if (isActive) {
-      seg.classList.add("is-active");
-      seg.innerHTML = `<span class="pill-ping-indicator"><span class="pill-ping-dot"></span></span>`;
-      if (labelCol) labelCol.classList.add("is-active");
+      node.classList.add("is-active");
+      circle.innerHTML = `<span class="lpc-node-dot"></span><span class="lpc-node-num">${step}</span>`;
     } else {
-      seg.classList.add("is-pending");
-      seg.innerHTML = `<span class="pill-num">0${step}</span>`;
-      if (labelCol) labelCol.classList.add("is-pending");
+      node.classList.add("is-pending");
+      circle.innerHTML = `<span class="lpc-node-num">${step}</span>`;
+    }
+  }
+
+  // 4. Update Live Dynamic Count Status Pill
+  const momentMatch = s.match(/moment\s+(\d+)\s+of\s+(\d+)/i) || s.match(/clip\s+(\d+)\s+of\s+(\d+)/i);
+  if (progressLabel) {
+    if (momentMatch) {
+      progressLabel.textContent = `• Downloading & clipping moment ${momentMatch[1]} of ${momentMatch[2]}...`;
+    } else if (label) {
+      const clean = String(label).trim();
+      progressLabel.textContent = clean.startsWith("•") ? clean : `• ${clean}`;
     }
   }
 }
@@ -1940,6 +1961,20 @@ function scheduleYoutubeAutoFetch() {
 }
 
 setYoutubeFetchButtonHidden();
+const clearUrlBtn = document.getElementById("clearUrlBtn");
+if (clearUrlBtn && ytUrlInput) {
+  const syncClearBtn = () => {
+    clearUrlBtn.style.display = ytUrlInput.value.trim() ? "flex" : "none";
+  };
+  ytUrlInput.addEventListener("input", syncClearBtn);
+  ytUrlInput.addEventListener("change", syncClearBtn);
+  clearUrlBtn.addEventListener("click", () => {
+    ytUrlInput.value = "";
+    clearUrlBtn.style.display = "none";
+    ytUrlInput.focus();
+    renderGenerationControls("idle");
+  });
+}
 ytUrlInput?.addEventListener("input", scheduleYoutubeAutoFetch);
 ytUrlInput?.addEventListener("paste", () => {
   setTimeout(scheduleYoutubeAutoFetch, 0);
