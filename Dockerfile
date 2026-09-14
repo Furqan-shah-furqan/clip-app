@@ -43,7 +43,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHON_PATH="/app/.venv/bin/python"
 
 # 4. Pre-download default Whisper AI model to container cache to eliminate runtime cold-start
-RUN /app/.venv/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')" || true
+RUN /app/.venv/bin/python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8', cpu_threads=1)"
 
 # 5. Install Node.js production dependencies
 COPY package*.json ./

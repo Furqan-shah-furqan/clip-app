@@ -865,10 +865,6 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
     let activeGroup = wordGroups.find((g) => currentTime >= g.start && currentTime < g.end);
     if (activeGroup) return activeGroup.text;
 
-    // 2. Micro boundary window (bridge microscopic gaps between word speech timestamps)
-    activeGroup = wordGroups.find((g) => currentTime >= g.start - 0.04 && currentTime <= g.end + 0.06);
-    if (activeGroup) return activeGroup.text;
-
     // 3. Fallback to latest spoken group within segment
     const prevGroup = [...wordGroups].reverse().find((g) => currentTime >= g.start);
     return prevGroup ? prevGroup.text : wordGroups[0].text;
@@ -889,13 +885,30 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
  * For wordappend: returns progressively more words as video plays through segment.
  */
 function getWordAppendText(seg, currentTime) {
+  if (Array.isArray(seg.words) && seg.words.length) {
+    return seg.words.filter(w => currentTime >= Number(w.start)).map(w => w.word).join(" ");
+  }
   const words = seg.text.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "";
-  const duration = Math.max(0.05, seg.end - seg.start);
-  const elapsed = Math.max(0, currentTime - seg.start);
-  const progress = Math.min(elapsed / duration, 0.99999);
-  const wordCount = Math.max(1, Math.ceil(progress * words.length));
-  return words.slice(0, wordCount).join(" ");
+  const progress = Math.min(Math.max(0, currentTime - seg.start) / Math.max(0.05, seg.end - seg.start), 0.99999);
+  return words.slice(0, Math.max(1, Math.ceil(progress * words.length))).join(" ");
+}
+
+function getActiveDisplayWordIndex(seg, time, style = {}) {
+  if (!seg) return 0;
+  const timed = Array.isArray(seg.words) && seg.words.length > 0;
+  const words = timed ? seg.words : String(seg.text || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return 0;
+  let index = 0;
+  if (timed) {
+    for (let i = 0; i < words.length; i++) {
+      if (time >= Number(words[i].start)) index = i;
+    }
+  } else {
+    const progress = Math.max(0, time - seg.start) / Math.max(0.05, seg.end - seg.start);
+    index = Math.min(words.length - 1, Math.floor(progress * words.length));
+  }
+  const groupSize = Number(style.wordsPerRow) || (style.animationStyle === "oneword" ? 1 : style.animationStyle === "twoword" ? 2 : 0);
+  return groupSize > 0 ? index % groupSize : index;
 }
 
 /**
@@ -981,6 +994,15 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
     }
 
     if (animation === "wordappend") {
+      if (Array.isArray(seg.words) && seg.words.length) {
+        seg.words.forEach((word, i) => {
+          const subStart = Number(word.start);
+          const subEnd = i + 1 < seg.words.length ? Number(seg.words[i + 1].start) : end;
+          if (subEnd > subStart) expanded.push({ ...seg, start: subStart, end: subEnd,
+            id: `${seg.id || "seg"}-append-${i}`, text: seg.words.slice(0, i + 1).map(w => w.word).join(" ") });
+        });
+        continue;
+      }
       const revealWindow = Math.min(duration * 0.55, Math.max(0.35, words.length * 0.09));
       const timePerWord = revealWindow / words.length;
 
@@ -1123,6 +1145,7 @@ function persistCaptions() {
       // dumb progress-based word switching (bad timing, wrong highlights).
       words: Array.isArray(s.words) && s.words.length > 0 ? s.words : undefined,
     })),
+    captionSchemaVersion: editorState.captionSchemaVersion,
     captionStyle: { ...editorState.style },
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
@@ -1200,7 +1223,7 @@ function dedupeCaptionSegments(segments = []) {
   const output = [];
 
   for (const seg of segments) {
-    const text = collapseRepeatedCaptionText(seg.text);
+    const text = normalizeCaptionText(seg.text);
     if (!text) continue;
 
     const candidate = { ...seg, text };
@@ -1213,12 +1236,8 @@ function dedupeCaptionSegments(segments = []) {
         (Number(existing.start) || 0) - candidate.start,
       );
       const endDelta = Math.abs((Number(existing.end) || 0) - candidate.end);
-      const overlaps =
-        candidate.start < existing.end && candidate.end > existing.start;
-      const nearTouching = Math.abs(candidate.start - existing.end) <= 0.35;
-
       return (
-        (startDelta <= 0.25 && endDelta <= 0.45) || overlaps || nearTouching
+        (startDelta <= 0.25 && endDelta <= 0.45)
       );
     });
 
@@ -1234,7 +1253,7 @@ function normalizeSegments(segments = []) {
       id: s.id || uniqueId(),
       start: clamp(Number(s.start) || 0, 0, Number.MAX_SAFE_INTEGER),
       end: clamp(Number(s.end) || 0, 0, Number.MAX_SAFE_INTEGER),
-      text: collapseRepeatedCaptionText(s.text || ""),
+      text: normalizeCaptionText(s.text || ""),
       words: Array.isArray(s.words) ? s.words : undefined,
     }))
     .filter((s) => s.text && s.end > s.start)
@@ -1326,227 +1345,82 @@ function extractSegmentsFromPayload(payload) {
 }
 
 function buildSegmentsFromWords(words = []) {
-  if (!Array.isArray(words) || !words.length) return [];
   const segments = [];
-  let chunk = [],
-    chunkStart = null,
-    chunkEnd = null;
+  let chunk = [];
   const flush = () => {
-    if (!chunk.length || chunkStart === null || chunkEnd === null) return;
-    segments.push({
-      id: uniqueId(),
-      start: chunkStart,
-      end: Math.max(chunkEnd, chunkStart + 0.5),
-      text: chunk
-        .join(" ")
-        .replace(/\s+([,.;!?])/g, "$1")
-        .trim(),
-    });
+    if (!chunk.length) return;
+    segments.push({ id: uniqueId(), start: chunk[0].start, end: chunk[chunk.length - 1].end,
+      text: chunk.map(w => w.word).join(" "), words: chunk });
     chunk = [];
-    chunkStart = null;
-    chunkEnd = null;
   };
-  words.forEach((item, idx) => {
-    const text = String(
-      item?.text || item?.word || item?.token || item?.value || "",
-    ).trim();
-    const start = Number(
-      item?.start ?? item?.startTime ?? item?.from ?? item?.offset,
-    );
-    const end = Number(
-      item?.end ?? item?.endTime ?? item?.to ?? item?.offsetEnd ?? start,
-    );
-    if (!text || !Number.isFinite(start)) return;
-    if (chunkStart === null) chunkStart = start;
-    const prevEnd = chunkEnd;
-    chunk.push(text);
-    chunkEnd = Number.isFinite(end) ? end : start + 0.4;
-    const shouldFlush =
-      /[.!?]$/.test(text) ||
-      chunk.length >= 5 ||
-      (prevEnd !== null && start - prevEnd > 0.45) ||
-      idx === words.length - 1;
-    if (shouldFlush) flush();
-  });
+  for (const item of words) {
+    const word = String(item?.word || item?.text || item?.token || "").trim();
+    const start = Number(item?.start ?? item?.startTime ?? item?.from ?? item?.offset);
+    const end = Number(item?.end ?? item?.endTime ?? item?.to ?? item?.offsetEnd);
+    if (!word || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    if (chunk.length && start - chunk[chunk.length - 1].end > 0.45) flush();
+    chunk.push({ word, start, end });
+    if (chunk.length >= 5 || /[.!?]$/.test(word)) flush();
+  }
   flush();
   return normalizeSegments(segments);
 }
 
 function isPlaceholderOrMockCaptions(segments, clip) {
   if (!Array.isArray(segments) || !segments.length) return true;
-  const mockPhrases = [
-    "welcome to this video",
-    "today we'll explore",
-    "let's dive right in",
-    "this is a powerful moment",
-    "here is where the key insight",
-    "a compelling story",
-    "robert greene reveals",
-    "robert greene",
-    "true mastery begins",
-    "notice how this works",
-    "that's the main idea",
-    "now let's continue",
-    "pay attention to this",
-    "and that's it for now",
-    "a powerful mindset shift",
-    "mindset shift",
-  ];
-  const hookText = String(clip?.hook || "").trim().toLowerCase();
-  const titleText = String(clip?.title || "").trim().toLowerCase();
-
-  // If combined text matches hook or title exactly or stripped of spaces
-  const combined = segments
-    .map((s) => String(s.text || "").trim().toLowerCase())
-    .join(" ");
-  const combinedCompact = combined.replace(/[^a-z0-9]/g, "");
-
-  if (hookText) {
-    const hookCompact = hookText.replace(/[^a-z0-9]/g, "");
-    if (combined === hookText || (hookCompact && combinedCompact === hookCompact)) {
-      return true;
-    }
-  }
-  if (titleText) {
-    const titleCompact = titleText.replace(/[^a-z0-9]/g, "");
-    if (combined === titleText || (titleCompact && combinedCompact === titleCompact)) {
-      return true;
-    }
-  }
-
-  // Check if every segment text is merely words from the hook or title
-  const hookWords = new Set(
-    (hookText + " " + titleText)
-      .toLowerCase()
-      .split(/\s+/)
-      .map((w) => w.replace(/[^a-z0-9]/g, ""))
-      .filter(Boolean)
-  );
-  if (hookWords.size > 0 && segments.length <= 8) {
-    const allAreHookWords = segments.every((s) => {
-      const clean = String(s.text || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-      return !clean || hookWords.has(clean);
-    });
-    if (allAreHookWords) return true;
-  }
-
-  // Any mock phrase match
-  const hasMockPhrase = segments.some((s) => {
-    const txt = String(s.text || "").trim().toLowerCase();
-    return mockPhrases.some((m) => txt.includes(m));
-  });
-  if (hasMockPhrase) return true;
-
-  // Real Whisper transcriptions have word-level data (words array) and more segments
-  const hasWordTimestamps = segments.some(
-    (s) => Array.isArray(s.words) && s.words.length > 0
-  );
-  if (!hasWordTimestamps && segments.length <= 4) {
-    return true;
-  }
-
-  return false;
+  const combined = segments.map(s => normalizeCaptionCompareText(s.text)).join(" ");
+  const metadata = [clip?.hook, clip?.description, clip?.title, clip?.summary];
+  if (metadata.some(value => value && normalizeCaptionCompareText(value) === combined)) return true;
+  // Exact legacy demo strings only; never reject real speech just for being short.
+  return segments.some(s => /^(welcome to this video\.|today we'll explore something new\.|robert greene reveals that true mastery begins)/i.test(s.text || ""));
 }
 
 async function fetchServerCaptions(clip) {
-  console.log("Fetching captions for clip:", clip);
+  const inputPaths = getClipPathCandidates(clip);
+  const data = await ClipCaptionClient.generate({ inputPath: inputPaths[0], inputPaths });
+  return extractSegmentsFromPayload(data);
+}
 
-  const embedded = extractSegmentsFromPayload(
-    clip?.captions ||
-      clip?.segments ||
-      clip?.subtitleSegments ||
-      clip?.transcript,
-  );
-  if (embedded.length && !isPlaceholderOrMockCaptions(embedded, clip)) {
-    console.log("Using real embedded captions:", embedded.length);
-    return embedded;
+// Do not overwrite edits made while a background transcription was running.
+async function syncAudioTranscript() {
+  const clip = editorState.clip;
+  const before = JSON.stringify(editorState.segments);
+  const segments = await fetchServerCaptions(clip);
+  if (editorState.clip !== clip || JSON.stringify(editorState.segments) !== before) {
+    throw new Error("Transcript ready, but captions changed while syncing. Click Sync Audio again to replace them.");
   }
-
-  const controller = new AbortController();
-  // 60-second timeout for Whisper AI speech transcription
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-  try {
-    const sourceUrl = getClipSource(clip);
-    const pathCandidates = getClipPathCandidates(clip);
-
-    const payload = {
-      inputPath:
-        pathCandidates[0] || clip.filePath || clip.inputPath || clip.sourcePath,
-      url: sourceUrl,
-      previewUrl: clip.previewUrl || "",
-      downloadUrl: clip.downloadUrl || "",
-    };
-
-    console.log(
-      "Requesting captions from:",
-      `${API_BASE}/captions/preview`,
-      payload,
-    );
-
-    const response = await fetch(`${API_BASE}/captions/preview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Caption API error:", response.status, errorText);
-      throw new Error(`API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log("Caption API response:", data);
-
-    let segments = extractSegmentsFromPayload(data);
-    if (segments.length) return segments;
-
-    const trackUrls = getTrackUrlCandidates(clip, data);
-    for (const trackUrl of trackUrls) {
-      console.log("Fetching track from URL:", trackUrl);
-      const trackResp = await fetch(trackUrl, { signal: controller.signal });
-      if (trackResp.ok) {
-        const contentType = trackResp.headers.get("content-type") || "";
-        if (contentType.includes("application/json")) {
-          const trackData = await trackResp.json();
-          segments = extractSegmentsFromPayload(trackData);
-        } else {
-          const text = await trackResp.text();
-          if (text.includes("-->")) segments = parseVTT(text);
-        }
-        if (segments.length) return segments;
-      }
-    }
-
-    console.warn("No captions found in response, using fallback");
-    return [];
-  } catch (error) {
-    console.error("Failed to fetch captions:", error);
-    return [];
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  editorState.segments = normalizeSegments(segments);
+  editorState.captionSchemaVersion = 2;
+  clip.captionSchemaVersion = 2;
+  editorState.activeSegmentId = editorState.segments[0]?.id || null;
+  persistCaptions();
+  renderTimeline();
+  syncCaptionOverlay();
+  updateLivePreview();
+  return segments;
 }
 
 function getClipPathCandidates(clip = {}) {
   const candidates = new Set();
   [
-    clip.filePath,
-    clip.inputPath,
-    clip.sourcePath,
+    clip.outputPath,
     clip.clipPath,
+    clip.localPath,
+    clip.filePath,
     clip.relativePath,
     clip.storagePath,
-    clip.outputPath,
-    clip.localPath,
     getClipSource(clip),
     clip.previewUrl,
     clip.downloadUrl,
+    clip.storageUrl,
   ].forEach((v) => {
     if (typeof v === "string" && v.trim()) candidates.add(v.trim());
   });
+  if (!candidates.size) {
+    [clip.inputPath, clip.sourcePath].forEach(v => {
+      if (typeof v === "string" && v.trim()) candidates.add(v.trim());
+    });
+  }
   return Array.from(candidates);
 }
 
@@ -1578,88 +1452,6 @@ function getTrackUrlCandidates(clip = {}, payload = null) {
     if (typeof v === "string" && v.trim()) candidates.add(v.trim());
   });
   return Array.from(candidates);
-}
-
-function generateSmartCaptionsForClip(clip = {}, duration = 30) {
-  const dur = Math.max(5, Number(duration) || 30);
-  const rawText =
-    clip.hook ||
-    clip.description ||
-    clip.title ||
-    clip.text ||
-    clip.transcript ||
-    clip.summary ||
-    "Robert Greene reveals that true mastery begins when you turn your focus inward. When you work on yourself, everything starts to make sense. Stop chasing opportunities and start creating them.";
-
-  const words = String(rawText).trim().split(/\s+/).filter(Boolean);
-  if (!words.length) {
-    return generateFallbackCaptions(dur);
-  }
-
-  const chunks = [];
-  const wordsPerChunk = 5;
-  for (let i = 0; i < words.length; i += wordsPerChunk) {
-    chunks.push(words.slice(i, i + wordsPerChunk));
-  }
-
-  const timePerChunk = Math.max(1.4, (dur - 1) / chunks.length);
-  const segments = [];
-
-  chunks.forEach((chunkWords, i) => {
-    const start = Math.round((0.5 + i * timePerChunk) * 100) / 100;
-    const end = Math.round(Math.min(dur - 0.2, start + timePerChunk - 0.2) * 100) / 100;
-    if (end > start) {
-      const chunkDur = end - start;
-      const timePerWord = chunkDur / chunkWords.length;
-      // ✅ FIX 2: Attach synthetic word-level timestamps to fallback segments.
-      // This lets getWordGroupText use real timing even before Whisper completes,
-      // so word-by-word captions switch at correct moments, not just % progress.
-      const wordTimestamps = chunkWords.map((word, wi) => ({
-        word,
-        start: Math.round((start + wi * timePerWord) * 1000) / 1000,
-        end: Math.round((start + (wi + 1) * timePerWord) * 1000) / 1000,
-      }));
-      segments.push({
-        id: uniqueId(),
-        start,
-        end,
-        text: chunkWords.join(" "),
-        words: wordTimestamps,
-      });
-    }
-  });
-
-  return segments.length ? segments : generateFallbackCaptions(dur);
-}
-
-function generateFallbackCaptions(duration = 30) {
-  const phrases = [
-    "Welcome to this video.",
-    "Today we'll explore something new.",
-    "Let's dive right in.",
-    "This is the key point.",
-    "Notice how this works.",
-    "That's the main idea.",
-    "Now let's continue.",
-    "Here's another example.",
-    "Pay attention to this.",
-    "And that's it for now.",
-  ];
-  const segments = [];
-  let t = 0.8;
-  let i = 0;
-  while (t < duration - 0.5 && segments.length < 20) {
-    const dur = 2 + Math.random() * 2;
-    segments.push({
-      id: uniqueId(),
-      start: Math.round(t * 100) / 100,
-      end: Math.round(Math.min(duration, t + dur) * 100) / 100,
-      text: phrases[i % phrases.length],
-    });
-    t += dur + 0.3;
-    i++;
-  }
-  return segments;
 }
 
 // ─── REALTIME CAPTIONS ENGINE ────────────────────────────
@@ -1957,6 +1749,8 @@ function renderTimeline() {
         const seg = editorState.segments.find((s) => s.id === ta.dataset.id);
         if (seg) {
           seg.text = ta.value;
+          // Edited wording no longer matches the recognized word alignment.
+          seg.words = undefined;
           _lastRenderedSegId = null;
           _lastRenderedText = null;
           persistCaptions();
@@ -2685,52 +2479,7 @@ function syncCaptionOverlay() {
   captionOverlay.style.visibility = hasText ? "visible" : "hidden";
   captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
-  let activeWordIndex = 0;
-  if (activeSegment && activeSegment.end > activeSegment.start) {
-    // ✅ FIX 3: Use real Whisper word timestamps for the active-word highlight index.
-    // Previously this used a dumb (elapsed / duration) fraction which highlights
-    // the wrong word — e.g. if someone pauses mid-sentence, the wrong word lit up.
-    if (Array.isArray(activeSegment.words) && activeSegment.words.length > 0) {
-      // For wordsPerRow / oneword / twoword: displayText is a sub-group of the full segment.
-      // We need to find which word within the display group is active.
-      const displayWords = (displayText || "").trim().split(/\s+/).filter(Boolean);
-      if (displayWords.length > 0) {
-        // Find the first word in the display group within the real word timestamps
-        const firstDisplayWord = displayWords[0].toLowerCase().replace(/[^\w]/g, "");
-        const groupStartInSeg = activeSegment.words.findIndex(
-          (w) => (w.word || "").toLowerCase().replace(/[^\w]/g, "") === firstDisplayWord
-        );
-        const segOffset = groupStartInSeg >= 0 ? groupStartInSeg : 0;
-
-        // Find which word within the display group is currently being spoken
-        const activeInGroup = displayWords.findIndex((_, di) => {
-          const segWordIdx = segOffset + di;
-          const w = activeSegment.words[segWordIdx];
-          if (!w) return false;
-          return currentTime >= w.start && currentTime < (w.end || w.start + 0.4);
-        });
-
-        if (activeInGroup >= 0) {
-          activeWordIndex = activeInGroup;
-        } else {
-          // Past last word in group or between words — highlight the last one spoken
-          const lastSpoken = [...displayWords].reduce((best, _, di) => {
-            const w = activeSegment.words[segOffset + di];
-            return (w && currentTime >= w.start) ? di : best;
-          }, 0);
-          activeWordIndex = lastSpoken;
-        }
-      }
-    } else {
-      // Fallback: progress-based for segments without real word timestamps
-      const dur = activeSegment.end - activeSegment.start;
-      const elapsed = Math.max(0, currentTime - activeSegment.start);
-      const words = (displayText || "").trim().split(/\s+/).filter(Boolean);
-      if (words.length > 0) {
-        activeWordIndex = Math.min(words.length - 1, Math.floor((elapsed / dur) * words.length));
-      }
-    }
-  }
+  const activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
 
   renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
 
@@ -3935,21 +3684,11 @@ function bindControls() {
     if (statusLabel) statusLabel.textContent = "Transcribing with Whisper AI...";
 
     try {
-      const serverSegments = await fetchServerCaptions(editorState.clip);
-      if (serverSegments && serverSegments.length) {
-        editorState.segments = normalizeSegments(serverSegments);
-        editorState.activeSegmentId = editorState.segments[0]?.id || null;
-        persistCaptions();
-        renderTimeline();
-        syncCaptionOverlay();
-        updateLivePreview();
-        if (statusLabel) statusLabel.textContent = `Whisper AI Synced (${serverSegments.length} Segments)`;
-      } else {
-        if (statusLabel) statusLabel.textContent = "No new audio captions detected";
-      }
+      const serverSegments = await syncAudioTranscript();
+      if (statusLabel) statusLabel.textContent = `Audio synced (${serverSegments.length} segments)`;
     } catch (err) {
       console.error("Manual audio sync error:", err);
-      if (statusLabel) statusLabel.textContent = "Audio sync failed — check server";
+      if (statusLabel) statusLabel.textContent = err.message || "Audio sync failed. Click Sync Audio to retry.";
     } finally {
       syncAudioCaptionsBtn.innerHTML = origHtml;
       syncAudioCaptionsBtn.disabled = false;
@@ -4233,62 +3972,31 @@ async function init() {
     }
   }
 
-  // 1. Try saved captions or embedded payload
-  let initialSegments = normalizeSegments(session.captions || []);
-
-  if (!initialSegments.length) {
-    initialSegments = extractSegmentsFromPayload(
-      session.clip?.captions ||
-        session.clip?.segments ||
-        session.clip?.subtitleSegments ||
-        session.clip?.transcript,
-    );
-  }
-
-  const isMock = isPlaceholderOrMockCaptions(initialSegments, session.clip);
-
-  // 2. If still empty or mock, show fallback IMMEDIATELY so editor is never blank
-  if (!initialSegments.length || isMock) {
-    const clipDur = Number(captionVideo?.duration || session.clip?.duration || 30);
-    initialSegments = generateSmartCaptionsForClip(session.clip, clipDur);
-  }
-
-  // Set segments and start caption sync RIGHT NOW — never block on network
-  editorState.segments = normalizeSegments(initialSegments);
+  // Old sessions may contain fabricated title/hook captions with synthetic words.
+  // Revalidate them once, retaining plausible existing text until audio is ready.
+  const savedSegments = normalizeSegments(session.captions || []);
+  const trusted = session.captionSchemaVersion === 2;
+  editorState.captionSchemaVersion = trusted ? 2 : undefined;
+  editorState.segments = trusted || !isPlaceholderOrMockCaptions(savedSegments, session.clip)
+    ? savedSegments : [];
   editorState.activeSegmentId = editorState.segments[0]?.id || null;
-
   applyStyleToOverlay();
-  persistCaptions();
   renderTimeline();
   syncCaptionOverlay();
   startCaptionSync();
   updateLivePreview();
 
-  // 3. Fire Whisper transcription in the BACKGROUND — updates editor when ready
-  if (session.clip && isMock) {
-    const statusLabel = document.getElementById("captionStatusLabel") || document.querySelector(".ce-status-label");
-    if (statusLabel) statusLabel.textContent = "Transcribing Audio with Whisper AI...";
-
-    fetchServerCaptions(session.clip)
-      .then((serverSegments) => {
-        if (serverSegments && serverSegments.length) {
-          console.log("Real audio transcription loaded:", serverSegments.length, "segments");
-          editorState.segments = normalizeSegments(serverSegments);
-          editorState.activeSegmentId = editorState.segments[0]?.id || null;
-          persistCaptions();
-          renderTimeline();
-          syncCaptionOverlay();
-          updateLivePreview();
-          if (statusLabel) statusLabel.textContent = `Audio Transcribed (${serverSegments.length} Segments)`;
-        } else {
-          if (statusLabel) statusLabel.textContent = "Ready";
-        }
-      })
-      .catch((err) => {
-        console.warn("Could not fetch server captions during init:", err);
-        if (statusLabel) statusLabel.textContent = "Ready";
-      });
+  if (session.clip && (!trusted || !editorState.segments.length)) {
+    const statusLabel = document.getElementById("captionStatusLabel");
+    if (statusLabel) statusLabel.textContent = "Transcribing audio — you can continue editing styles…";
+    syncAudioTranscript().then(segments => {
+      if (statusLabel) statusLabel.textContent = `Audio transcribed (${segments.length} segments)`;
+    }).catch(error => {
+      console.error("Caption transcription failed:", error);
+      if (statusLabel) statusLabel.textContent = error.message || "Transcription failed. Click Sync Audio to retry.";
+    });
   }
+
 }
 
 window.renderAnimatedCaption = renderAnimatedCaption;
