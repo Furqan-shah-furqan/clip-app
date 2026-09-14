@@ -763,7 +763,7 @@ function formatWordsIntoRows(text, wordsPerRow = 0) {
 }
 
 function getParityDisplayText(segment, currentTime, style = editorState.style) {
-  if (!segment) return "";
+  if (!isSpeechActive(segment, currentTime)) return "";
 
   const anim = style.animationStyle || "none";
   const wordsPerRow = Number(style.wordsPerRow) || 0;
@@ -781,6 +781,7 @@ function getParityDisplayText(segment, currentTime, style = editorState.style) {
     return getWordAppendText(segment, currentTime);
   }
 
+  if (Array.isArray(segment.words) && segment.words.length) text = getWordAppendText(segment, currentTime);
   return wrapCaptionText(text, getPreviewCharsPerLine(style));
 }
 
@@ -838,53 +839,34 @@ function buildScaledStyleForExport(baseStyle) {
  * For oneword / twoword / wordsPerRow: returns the correct word group text based on
  * current playback position within a segment.
  */
+function isSpeechActive(seg, time) {
+  if (!seg || time < Number(seg.start) || time >= Number(seg.end)) return false;
+  if (!Array.isArray(seg.words) || !seg.words.length) return true;
+  return seg.words.some(w => time >= Number(w.start) && time < Number(w.end));
+}
+
 function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
+  if (!isSpeechActive(seg, currentTime)) return "";
   const groupSize = Math.max(1, Number(wordsPerGroup) || 1);
-  const words = String(seg?.text || "").trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "";
-
-  // 1. Precise word-level timestamps from Whisper AI speech recognition
-  if (Array.isArray(seg.words) && seg.words.length > 0) {
-    const wordGroups = [];
-    for (let i = 0; i < seg.words.length; i += groupSize) {
-      const slice = seg.words.slice(i, i + groupSize);
-      const gStart = Number(slice[0].start);
-      const gEnd = Number(slice[slice.length - 1].end);
-      const gText = slice.map((w) => (w.word || "").trim()).filter(Boolean).join(" ");
-      wordGroups.push({ start: gStart, end: gEnd, text: gText });
-    }
-
-    if (wordGroups.length === 0) return "";
-
-    // If currentTime is at or before the first word of the segment (e.g. paused at start):
-    if (currentTime <= wordGroups[0].start) {
-      return wordGroups[0].text;
-    }
-
-    // 1. Exact active group
-    let activeGroup = wordGroups.find((g) => currentTime >= g.start && currentTime < g.end);
-    if (activeGroup) return activeGroup.text;
-
-    // 3. Fallback to latest spoken group within segment
-    const prevGroup = [...wordGroups].reverse().find((g) => currentTime >= g.start);
-    return prevGroup ? prevGroup.text : wordGroups[0].text;
+  if (Array.isArray(seg.words) && seg.words.length) {
+    const index = seg.words.findIndex(w => currentTime >= Number(w.start) && currentTime < Number(w.end));
+    if (index < 0) return "";
+    const groupStart = Math.floor(index / groupSize) * groupSize;
+    // Reveal only words whose speech has started, even in a two/five-word group.
+    return seg.words.slice(groupStart, index + 1).map(w => w.word).join(" ");
   }
-
-  // 2. Fallback for segments without word timestamps
-  const duration = Math.max(0.05, (Number(seg.end) || 1) - (Number(seg.start) || 0));
-  const elapsed = Math.max(0, currentTime - (Number(seg.start) || 0));
-  const progress = Math.min(elapsed / duration, 0.99999);
-  const totalGroups = Math.ceil(words.length / groupSize);
-  const groupIndex = Math.min(Math.floor(progress * totalGroups), totalGroups - 1);
-  const startIdx = groupIndex * groupSize;
-  const endIdx = Math.min(startIdx + groupSize, words.length);
-  return words.slice(startIdx, endIdx).join(" ");
+  const words = String(seg.text || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  const progress = (currentTime - seg.start) / Math.max(0.05, seg.end - seg.start);
+  const index = Math.min(words.length - 1, Math.floor(progress * words.length));
+  return words.slice(Math.floor(index / groupSize) * groupSize, index + 1).join(" ");
 }
 
 /**
  * For wordappend: returns progressively more words as video plays through segment.
  */
 function getWordAppendText(seg, currentTime) {
+  if (!isSpeechActive(seg, currentTime)) return "";
   if (Array.isArray(seg.words) && seg.words.length) {
     return seg.words.filter(w => currentTime >= Number(w.start)).map(w => w.word).join(" ");
   }
@@ -921,13 +903,27 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
   const numWordsPerRow = Number(wordsPerRow) || 0;
   const splitStyles = ["oneword", "twoword", "typewriter", "wordappend"];
 
-  if (numWordsPerRow <= 0 && !splitStyles.includes(animation)) {
-    return segments;
-  }
-
   const expanded = [];
 
   for (const seg of segments) {
+    // All styles use the same speech windows, including Auto and one-word lines.
+    if (Array.isArray(seg.words) && seg.words.length) {
+      const groupSize = numWordsPerRow > 0 ? numWordsPerRow : animation === "oneword" ? 1 : animation === "twoword" ? 2 : seg.words.length;
+      seg.words.forEach((word, i) => {
+        const groupStart = Math.floor(i / groupSize) * groupSize;
+        const start = Math.max(Number(seg.start), Number(word.start));
+        const end = Math.min(Number(seg.end), Number(word.end));
+        if (end > start) expanded.push({ ...seg, id: `${seg.id || "seg"}-spoken-${i}`,
+          start, end, text: seg.words.slice(groupStart, i + 1).map(w => w.word).join(" "),
+          words: seg.words.slice(groupStart, i + 1),
+        });
+      });
+      continue;
+    }
+    if (numWordsPerRow <= 0 && !splitStyles.includes(animation)) {
+      expanded.push(seg);
+      continue;
+    }
     const words = String(seg.text || "").trim().split(/\s+/).filter(Boolean);
 
     if (words.length <= 1) {
@@ -946,20 +942,16 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
 
       // Use real word-level timestamps when available so silence gaps are preserved in export
       if (Array.isArray(seg.words) && seg.words.length > 0) {
-        for (let i = 0; i < seg.words.length; i += wordsPerGroup) {
-          const slice = seg.words.slice(i, i + wordsPerGroup);
-          const subStart = Math.round(Number(slice[0].start) * 1000) / 1000;
-          const subEnd = Math.round(Number(slice[slice.length - 1].end) * 1000) / 1000;
-          const text = slice.map((w) => w.word).join(" ");
-          if (subEnd > subStart) {
-            expanded.push({
-              ...seg,
-              id: `${seg.id || "seg"}-chunk-${i}`,
-              start: subStart,
-              end: subEnd,
-              text,
-            });
-          }
+        for (let i = 0; i < seg.words.length; i++) {
+          const word = seg.words[i];
+          const groupStart = Math.floor(i / wordsPerGroup) * wordsPerGroup;
+          const subStart = Number(word.start);
+          const subEnd = Number(word.end);
+          if (subEnd > subStart) expanded.push({ ...seg,
+            id: `${seg.id || "seg"}-word-${i}`, start: subStart, end: subEnd,
+            text: seg.words.slice(groupStart, i + 1).map(w => w.word).join(" "),
+            words: seg.words.slice(groupStart, i + 1),
+          });
         }
         continue;
       }
@@ -997,7 +989,7 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
       if (Array.isArray(seg.words) && seg.words.length) {
         seg.words.forEach((word, i) => {
           const subStart = Number(word.start);
-          const subEnd = i + 1 < seg.words.length ? Number(seg.words[i + 1].start) : end;
+          const subEnd = Number(word.end);
           if (subEnd > subStart) expanded.push({ ...seg, start: subStart, end: subEnd,
             id: `${seg.id || "seg"}-append-${i}`, text: seg.words.slice(0, i + 1).map(w => w.word).join(" ") });
         });
@@ -1382,22 +1374,35 @@ async function fetchServerCaptions(clip) {
 }
 
 // Do not overwrite edits made while a background transcription was running.
+function captionContentSignature(segments) {
+  return JSON.stringify(segments.map(({start, end, text, words}) => ({start, end, text, words})));
+}
+
 async function syncAudioTranscript() {
   const clip = editorState.clip;
-  const before = JSON.stringify(editorState.segments);
-  const segments = await fetchServerCaptions(clip);
-  if (editorState.clip !== clip || JSON.stringify(editorState.segments) !== before) {
-    throw new Error("Transcript ready, but captions changed while syncing. Click Sync Audio again to replace them.");
-  }
-  editorState.segments = normalizeSegments(segments);
-  editorState.captionSchemaVersion = 2;
-  clip.captionSchemaVersion = 2;
-  editorState.activeSegmentId = editorState.segments[0]?.id || null;
-  persistCaptions();
-  renderTimeline();
-  syncCaptionOverlay();
-  updateLivePreview();
-  return segments;
+  // Auto sync and the Sync Audio button must share the same application step.
+  if (editorState.captionSync?.clip === clip) return editorState.captionSync.promise;
+  const before = captionContentSignature(editorState.segments);
+  const operation = { clip };
+  operation.promise = (async () => {
+    const segments = await fetchServerCaptions(clip);
+    if (editorState.clip !== clip || captionContentSignature(editorState.segments) !== before) {
+      throw new Error("Captions were edited while syncing. Click Sync Audio again to replace those edits.");
+    }
+    editorState.segments = normalizeSegments(segments);
+    editorState.captionSchemaVersion = 2;
+    clip.captionSchemaVersion = 2;
+    editorState.activeSegmentId = editorState.segments[0]?.id || null;
+    persistCaptions();
+    renderTimeline();
+    syncCaptionOverlay();
+    updateLivePreview();
+    return segments;
+  })().finally(() => {
+    if (editorState.captionSync === operation) editorState.captionSync = null;
+  });
+  editorState.captionSync = operation;
+  return operation.promise;
 }
 
 function getClipPathCandidates(clip = {}) {
@@ -2446,10 +2451,7 @@ function initCaptionDragging() {
 
 function getActiveSegmentByTime(time) {
   const t = Number.isFinite(Number(time)) ? Number(time) : 0;
-  if (t <= 0.05 && editorState.segments.length > 0 && Number(editorState.segments[0].start) <= 1.5) {
-    return editorState.segments[0];
-  }
-  return editorState.segments.find((s) => t >= s.start && t < s.end) || null;
+  return editorState.segments.find(s => isSpeechActive(s, t)) || null;
 }
 
 function syncCaptionOverlay() {
@@ -2457,17 +2459,6 @@ function syncCaptionOverlay() {
 
   const currentTime = safeVideoTime();
   let activeSegment = getActiveSegmentByTime(currentTime);
-
-  // If paused and no active segment at this exact moment, fallback to selected segment or segment 0
-  // so the user can always see and resize the caption box while editing!
-  if (!activeSegment && captionVideo.paused && editorState.segments.length > 0) {
-    if (editorState.activeSegmentId) {
-      activeSegment = editorState.segments.find((s) => s.id === editorState.activeSegmentId);
-    }
-    if (!activeSegment) {
-      activeSegment = editorState.segments[0];
-    }
-  }
 
   const nextSegId = activeSegment?.id || null;
   const displayText = activeSegment
@@ -3205,27 +3196,13 @@ async function regenerateCaptions() {
   }
   showLoadingState("Calling server for captions...");
   try {
-    let serverSegments = await fetchServerCaptions(editorState.clip);
-    if (!serverSegments.length) {
-      console.warn("No captions from server, using fallback");
-      serverSegments = generateFallbackCaptions(
-        captionVideo?.duration || editorState.clip?.duration || 30,
-      );
-    }
-    editorState.segments = normalizeSegments(serverSegments);
-    editorState.activeSegmentId = editorState.segments[0]?.id || null;
-    persistCaptions();
+    await syncAudioTranscript();
     showTimelineList();
-    syncCaptionOverlay();
   } catch (e) {
     console.error("Regenerate failed:", e);
-    editorState.segments = generateFallbackCaptions(
-      captionVideo?.duration || 30,
-    );
-    editorState.activeSegmentId = editorState.segments[0]?.id || null;
-    persistCaptions();
     showTimelineList();
-    syncCaptionOverlay();
+    const statusLabel = document.getElementById("captionStatusLabel");
+    if (statusLabel) statusLabel.textContent = e.message || "Caption sync failed";
   } finally {
     if (regenerateBtn) {
       regenerateBtn.disabled = false;
@@ -3977,8 +3954,8 @@ async function init() {
   const savedSegments = normalizeSegments(session.captions || []);
   const trusted = session.captionSchemaVersion === 2;
   editorState.captionSchemaVersion = trusted ? 2 : undefined;
-  editorState.segments = trusted || !isPlaceholderOrMockCaptions(savedSegments, session.clip)
-    ? savedSegments : [];
+  // Unverified legacy captions may be fabricated metadata; do not display them.
+  editorState.segments = trusted ? savedSegments : [];
   editorState.activeSegmentId = editorState.segments[0]?.id || null;
   applyStyleToOverlay();
   renderTimeline();

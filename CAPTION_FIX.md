@@ -46,3 +46,11 @@ The queue is in memory and only serializes caption work in the Express process. 
 
 Render explicitly does not recommend free instances for production and documents loss of local files on sleep/restart/redeploy: https://render.com/docs/free
 Faster Whisper documents CPU INT8 inference and word timestamps: https://github.com/SYSTRAN/faster-whisper
+
+## Follow-up: speech pauses and overlapping synchronization
+
+The screenshot's “Transcript ready, but captions changed while syncing” could be produced by automatic sync and a manual sync applying the same result twice. Both now share one editor-level operation, while actual text/timing edits remain protected. Unverified legacy text is hidden until transcription succeeds. Regenerate uses the same operation and no longer calls a removed demo fallback.
+
+Timed words are only visible inside their speech intervals, including when paused or seeking. Grouped captions reveal each word at its timestamp instead of displaying the next word early. The same windows drive export for all styles. No arbitrary fixed delay is added, since a screenshot cannot establish the audio offset.
+
+14 regression tests pass, including new tests for simultaneous sync, silence, first-word onset, progressive groups, and export timing. These verify rendering against supplied timestamps, not ASR accuracy. Whisper tiny can still have recognition/alignment errors; validating those needs the original clip audio and its generated word timestamps. No model or hosting configuration is changed in this follow-up.
