@@ -22,7 +22,7 @@ function editorFunctions(names, extra = {}) {
   return context;
 }
 
-const helpers = ['normalizeCaptionText', 'normalizeCaptionCompareText', 'dedupeCaptionSegments', 'normalizeSegments', 'buildSegmentsFromWords', 'getWordGroupText', 'getWordAppendText', 'getActiveDisplayWordIndex', 'expandSegmentsForExport', 'isPlaceholderOrMockCaptions'];
+const helpers = ['normalizeCaptionText', 'normalizeCaptionCompareText', 'dedupeCaptionSegments', 'normalizeSegments', 'buildSegmentsFromWords', 'isSpeechActive', 'getWordGroupText', 'getWordAppendText', 'getActiveDisplayWordIndex', 'expandSegmentsForExport', 'isPlaceholderOrMockCaptions'];
 
 test('single queue deduplicates callers and never runs two transcriptions together', async () => {
   let active = 0, maximum = 0, calls = 0;
@@ -75,14 +75,14 @@ test('highlighting follows timestamps for repeated and Urdu words, including bac
     assert.equal(h.getActiveDisplayWordIndex(seg, 3.2, {wordsPerRow:2}), 1);
     assert.equal(h.getActiveDisplayWordIndex(seg, 2.2, {}), 2);
     assert.equal(h.getActiveDisplayWordIndex(seg, 0.2, {}), 0);
-    assert.equal(h.getWordGroupText(seg,2.2,2), texts.slice(2).join(' '));
+    assert.equal(h.getWordGroupText(seg,2.2,2), texts[2]);
   }
 });
 
 test('append preview and export respect pauses in speech', () => {
   const h = editorFunctions(helpers);
   const seg = {start:0,end:5,text:'first second', words:[{word:'first',start:0,end:1},{word:'second',start:4,end:5}]};
-  assert.equal(h.getWordAppendText(seg,3), 'first');
+  assert.equal(h.getWordAppendText(seg,3), '');
   const events = h.expandSegmentsForExport([seg], 'wordappend');
   assert.equal(events[1].start,4); assert.equal(events[1].text,'first second');
 });
@@ -96,11 +96,11 @@ test('short real transcripts are accepted; legacy metadata fallbacks are detecte
 test('background transcript cannot overwrite edits made while waiting', async () => {
   let resolve;
   const editorState = {clip:{},segments:[]};
-  const h = editorFunctions(['syncAudioTranscript'], {editorState, fetchServerCaptions: () => new Promise(r => {resolve=r;})});
+  const h = editorFunctions(['captionContentSignature', 'syncAudioTranscript'], {editorState, fetchServerCaptions: () => new Promise(r => {resolve=r;})});
   const pending = h.syncAudioTranscript();
   editorState.segments.push({text:'my edit',start:0,end:1});
   resolve([{text:'server',start:0,end:1}]);
-  await assert.rejects(pending,/captions changed/);
+  await assert.rejects(pending,/Captions were edited/);
   assert.equal(editorState.segments[0].text,'my edit');
 });
 
@@ -200,4 +200,46 @@ test('Cloudinary recovery validates the account, streams to disk, and removes pa
     await assert.rejects(restoreCaptionSource(url.replace('clip.mp4','other.mp4')),/download failed/);
     assert.equal(fs.readdirSync(directory).some(name=>name.endsWith('.part')),false);
   } finally {fs.rmSync(directory,{recursive:true,force:true});}
+});
+
+test('simultaneous automatic and manual sync share one result without a false edit conflict', async () => {
+  let resolve, calls = 0, saves = 0;
+  const editorState = {clip:{},segments:[]};
+  const h = editorFunctions(['captionContentSignature','syncAudioTranscript'], {
+    editorState, fetchServerCaptions: () => {calls++; return new Promise(r => {resolve=r;});},
+    normalizeSegments: x => x, persistCaptions: () => saves++, renderTimeline: () => {},
+    syncCaptionOverlay: () => {}, updateLivePreview: () => {},
+  });
+  const first=h.syncAudioTranscript(); const second=h.syncAudioTranscript();
+  resolve([{start:1,end:2,text:'actual audio'}]);
+  await Promise.all([first,second]);
+  assert.equal(calls,1); assert.equal(saves,1);
+  assert.equal(editorState.segments[0].text,'actual audio');
+  assert.equal(editorState.captionSync,null);
+});
+
+test('caption groups hide before speech and through pauses, and never reveal future words', () => {
+  const h=editorFunctions(helpers);
+  const seg={start:0,end:6,text:'organic and natural', words:[
+    {word:'organic',start:1,end:1.6},{word:'and',start:2,end:2.2},{word:'natural',start:4,end:4.8}
+  ]};
+  assert.equal(h.getWordGroupText(seg,0.5,2),'');
+  assert.equal(h.getWordGroupText(seg,1.1,2),'organic');
+  assert.equal(h.getWordGroupText(seg,1.8,2),'');
+  assert.equal(h.getWordGroupText(seg,2.1,2),'organic and');
+  assert.equal(h.getWordGroupText(seg,3,2),'');
+  assert.equal(h.getWordGroupText(seg,4.2,2),'natural');
+  assert.equal(h.getWordGroupText(seg,5,2),'');
+  const events=h.expandSegmentsForExport([seg],'twoword',2);
+  assert.equal(events[0].text,'organic'); assert.equal(events[0].start,1);
+  assert.equal(events[0].end,1.6); assert.equal(events[1].start,2);
+  assert.equal(events[1].text,'organic and');
+});
+
+test('playback and paused seeking select no caption during silence or before the first word', () => {
+  const editorState={segments:[{start:0,end:5,text:'hi',words:[{word:'hi',start:1,end:2}]}]};
+  const h=editorFunctions(['isSpeechActive','getActiveSegmentByTime'],{editorState});
+  assert.equal(h.getActiveSegmentByTime(0),null);
+  assert.equal(h.getActiveSegmentByTime(1.2).text,'hi');
+  assert.equal(h.getActiveSegmentByTime(3),null);
 });
