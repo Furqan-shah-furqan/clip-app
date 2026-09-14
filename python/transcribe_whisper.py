@@ -48,21 +48,16 @@ def main():
         detected_language = None
 
         if WhisperModel is not None:
-            # Resilient compute type fallback for cloud/Render CPUs
-            model = None
-            for compute_type in ["int8", "default", "float32"]:
-                try:
-                    model = WhisperModel(model_size, device="cpu", compute_type=compute_type)
-                    break
-                except Exception:
-                    continue
-
-            if model is None:
-                model = WhisperModel(model_size, device="cpu")
+            # Bound CPU use and do not retry a larger float32 model after failure.
+            model = WhisperModel(
+                model_size, device="cpu", compute_type="int8",
+                cpu_threads=max(1, int(os.environ.get("WHISPER_CPU_THREADS", "2"))),
+                num_workers=1,
+            )
 
             segments, info = model.transcribe(
                 audio_path,
-                beam_size=5,
+                beam_size=max(1, int(os.environ.get("WHISPER_BEAM_SIZE", "5"))),
                 vad_filter=True,
                 vad_parameters=dict(min_silence_duration_ms=400),
                 word_timestamps=True,

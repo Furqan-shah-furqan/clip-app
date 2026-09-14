@@ -1268,40 +1268,18 @@ function syncCaptionsToVideo(video, textEl, overlayEl, clips, clipIndex) {
 
 // Load captions from server for a generated clip
 async function loadCaptionsForClip(clip, clipIndex) {
-  if (state.clipCaptions[clipIndex]) return;
-
+  if (clip.captionSchemaVersion === 2 && state.clipCaptions[clipIndex]?.length) return;
   const inputPath = getCaptionInputPath(clip);
-
-  if (!inputPath) {
-    state.clipCaptions[clipIndex] = generateMockCaptions(clip.duration || 30);
-    return;
-  }
-
+  if (!inputPath) return;
   try {
-    const result = await apiFetch(`${API_BASE}/captions/preview`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inputPath }),
-    });
-
-    if (Array.isArray(result.segments) && result.segments.length) {
-      state.clipCaptions[clipIndex] = result.segments;
-      return;
-    }
-
-    if (result.trackUrl) {
-      const vttText = await fetch(result.trackUrl).then((r) => r.text());
-      const segments = parseVTT(vttText);
-      state.clipCaptions[clipIndex] = segments.length
-        ? segments
-        : generateMockCaptions(clip.duration || 30);
-      return;
-    }
-
-    state.clipCaptions[clipIndex] = generateMockCaptions(clip.duration || 30);
+    const result = await ClipCaptionClient.generate({ inputPath, inputPaths: [clip.outputPath, clip.filePath, clip.previewUrl, clip.downloadUrl, clip.storageUrl].filter(Boolean) });
+    // Ignore a result belonging to a project that has since been replaced.
+    if (state.generatedClips?.[clipIndex] !== clip) return;
+    state.clipCaptions[clipIndex] = result.segments;
+    clip.captionSchemaVersion = 2;
   } catch (error) {
-    console.warn("Caption generation failed:", error);
-    state.clipCaptions[clipIndex] = generateMockCaptions(clip.duration || 30);
+    console.warn("Caption generation failed:", error.message);
+    // Leave empty so opening the editor can retry and show the actual error.
   }
 }
 
@@ -1500,7 +1478,7 @@ async function openClip(index) {
   document.body.style.overflow = "hidden";
 
   // Load & display captions
-  await loadCaptionsForClip(clip, index);
+  loadCaptionsForClip(clip, index).catch(console.warn);
   startModalCaptionLoop(index);
 }
 
@@ -1527,6 +1505,7 @@ function syncActiveClipToCaptionSession(index = 0) {
         clip,
         index,
         captions: state.clipCaptions[index] || clip.captions || [],
+        captionSchemaVersion: clip.captionSchemaVersion,
         captionStyle: state.captionStyle,
         updatedAt: Date.now(),
       }),
