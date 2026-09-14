@@ -283,6 +283,19 @@ router.get("/jobs/:id", (req, res) => {
   return res.json(jobResponse(job));
 });
 
+async function resolveBurnVideo(clip = {}, videoUrl = "") {
+  const candidates = [
+    clip?.outputPath, clip?.filePath, clip?.localPath,
+    videoUrl, clip?.storageUrl, clip?.previewUrl, clip?.downloadUrl,
+  ].filter(value => typeof value === "string" && value.trim());
+  for (const candidate of candidates) {
+    const localPath = resolveInputVideo(candidate);
+    if (localPath) return localPath;
+  }
+  const remoteUrl = candidates.map(allowedCaptionSource).find(Boolean);
+  return remoteUrl ? restoreCaptionSource(remoteUrl) : null;
+}
+
 router.post("/burn", async (req, res) => {
   try {
     const { clip, videoUrl, segments, style } = req.body || {};
@@ -291,20 +304,12 @@ router.post("/burn", async (req, res) => {
       return res.status(400).json({ error: "No caption segments provided" });
     }
 
-    const rawPath =
-      clip?.filePath ||
-      clip?.outputPath ||
-      clip?.localPath ||
-      clip?.downloadUrl ||
-      videoUrl ||
-      "";
-
-    const resolvedPath = resolveInputVideo(rawPath);
+    const resolvedPath = await resolveBurnVideo(clip, videoUrl);
 
     if (!resolvedPath) {
       return res.status(404).json({
         error: "Video file not found for burning captions",
-        details: `Could not resolve: ${rawPath}`,
+        details: "The clip is missing locally and no video URL from the configured Cloudinary account is available.",
       });
     }
     console.log("BURN STYLE fontSize:", style?.fontSize, "animStyle:", style?.animationStyle || style?.sourceAnimationStyle);
