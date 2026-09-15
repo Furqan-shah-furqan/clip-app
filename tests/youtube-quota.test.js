@@ -97,7 +97,9 @@ test('cancellation during source download prevents rendering and allows cleanup'
 });
 
 test('source downloader skips FAST even if YTStream fails, and honors job destination', async () => {
-  const h=loadService('youtubeDownloader');
+  const realRequire=createRequire(path.join(root,'server/services/youtubeDownloader.js'));
+  const h=loadService('youtubeDownloader', {require:name => name === './youtubeInfoDownload'
+    ? {fetchFromYouTubeInfo:async()=>{throw Error('unavailable');}} : realRequire(name)});
   vm.runInContext(`
     var calls=[];
     fetchFromFastDownloader=async()=>{calls.push('FAST');throw Error('must not call FAST');};
@@ -182,5 +184,28 @@ test('generation orchestrator keeps successful clips and cleans fallback source'
     assert.equal(downloads,1);assert.equal(trims,1);assert.equal(renders,4);
     assert.deepEqual(Array.from(result.clips,c=>c.startSec),[91,49,74]);
     assert.equal(fs.existsSync(path.join(workspace.sourceDir,'quota_fallback_source.mp4')),false);
+  } finally {fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test('new provider source is probed for video and audio before use', async()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'info-source-'));
+  const filename=path.join(root,'server/services/youtubeDownloader.js');
+  const realRequire=createRequire(filename);
+  try {
+    const fixture=path.join(dir,'av.mp4');
+    const made=spawnSync('ffmpeg',['-y','-f','lavfi','-i','color=c=blue:s=160x160:d=1',
+      '-f','lavfi','-i','sine=frequency=440:duration=1','-c:v','libx264','-threads','1','-c:a','aac',fixture],{encoding:'utf8'});
+    assert.equal(made.status,0,made.stderr);
+    const h=loadService('youtubeDownloader',{require:name=>name==='./youtubeInfoDownload'
+      ? {fetchFromYouTubeInfo:async()=> 'https://nora82.savenow.to/api/v2/download/test'} : realRequire(name)});
+    h.fixture=fixture;
+    vm.runInContext(`
+      streamRemoteVideoToFile=async(url,dest)=>{fs.copyFileSync(fixture,dest);};
+      fetchFromYtStream=async()=>{throw Error('unexpected fallback');};
+      downloadViaYtDlp=async()=>{throw Error('unexpected local fallback');};
+    `,h);
+    const targetPath=path.join(dir,'source.mp4');
+    assert.equal(await h.module.exports.downloadYouTubeSource({sourceUrl,targetPath,skipFast:true}),targetPath);
+    assert.ok(fs.existsSync(targetPath));
   } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });

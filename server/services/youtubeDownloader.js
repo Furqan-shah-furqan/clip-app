@@ -19,6 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
 const axios = require("axios");
+const { fetchFromYouTubeInfo } = require("./youtubeInfoDownload");
 
 // Safe paths resolution across directory structures
 let rootDir, uploadsDir;
@@ -789,6 +790,26 @@ async function downloadYouTubeSource(input) {
 
   // ── Tier 1: RapidAPI Cloud Downloader ──────────────────────────────────────
   if (rapidApiKey) {
+    // A provider-hosted full MP4 avoids reusing Google CDN URLs obtained on
+    // another server. The per-job session reuses this source for all moments.
+    try {
+      console.log('[RapidAPI][YouTubeInfo] Preparing 720p MP4 source...');
+      const fileUrl = await fetchFromYouTubeInfo(videoId, rapidApiKey);
+      await streamRemoteVideoToFile(fileUrl, targetPath);
+      const ffprobe = process.env.FFPROBE_PATH || getFfmpegPath().replace(/ffmpeg(\.exe)?$/, 'ffprobe$1');
+      const result = await runCommand(ffprobe, ['-v', 'error', '-show_entries',
+        'stream=codec_type', '-of', 'json', targetPath], { timeoutMs: 30000 });
+      const streams = JSON.parse(result.stdout).streams || [];
+      if (!streams.some(s => s.codec_type === 'video') || !streams.some(s => s.codec_type === 'audio')) {
+        throw new Error('Downloaded source must contain both video and audio');
+      }
+      console.log('[RapidAPI][YouTubeInfo] Source downloaded and audio/video verified.');
+      return targetPath;
+    } catch (err) {
+      console.warn(`[RapidAPI][YouTubeInfo] Failed (${err.message}); trying existing providers.`);
+      cleanupFile(targetPath);
+    }
+
     const hostConfig = sanitizeRapidApiHost(process.env.RAPIDAPI_HOST).toLowerCase();
     let streamUrl = null;
 
