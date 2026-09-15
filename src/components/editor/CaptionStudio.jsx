@@ -86,6 +86,13 @@ export default function CaptionStudio({
 }) {
   // Inject Google Fonts directly into head if not already loaded
   useEffect(() => {
+    if (!document.getElementById("clipflow-caption-local-fonts")) {
+      const localFonts = document.createElement("link");
+      localFonts.id = "clipflow-caption-local-fonts";
+      localFonts.rel = "stylesheet";
+      localFonts.href = "/captionFonts.css?v=curated-1";
+      document.head.appendChild(localFonts);
+    }
     const fontLinkId = "clipflow-caption-google-fonts";
     if (!document.getElementById(fontLinkId)) {
       const link = document.createElement("link");
@@ -771,7 +778,7 @@ export default function CaptionStudio({
             }}
           >
             <span style={{ fontSize: "15px" }}>⚡</span>
-            <span>Browse 160+ Presets</span>
+            <span>Browse 24 Presets</span>
           </button>
           <button
             type="button"
@@ -1129,6 +1136,11 @@ export default function CaptionStudio({
                       }
                       style={csStyles.selectInput}
                     >
+                      <option value="Barlow">Barlow</option>
+                      <option value="Barlow Condensed">Barlow Condensed</option>
+                      <option value="Anton">Anton</option>
+                      <option value="Libre Caslon Text">Libre Caslon Text</option>
+                      <option value="Space Mono">Space Mono</option>
                       <option value="Montserrat">Montserrat (Modern Viral)</option>
                       <option value="Inter">Inter (Ultra Clean)</option>
                       <option value="Archivo Black">Archivo Black (Chunky Impact)</option>
@@ -1509,8 +1521,8 @@ export default function CaptionStudio({
                   style={csStyles.browsePresetsBtn}
                 >
                   <span>✦</span>
-                  <span>Browse Presets Library (160+ Styles)</span>
-                  <span style={csStyles.valBadge}>160 STYLES</span>
+                  <span>Browse Presets Library (24 Styles)</span>
+                  <span style={csStyles.valBadge}>24 STYLES</span>
                 </button>
 
                 <div style={{ marginTop: "16px" }}>

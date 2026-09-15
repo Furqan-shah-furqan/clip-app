@@ -7,6 +7,7 @@ const { exportsDir } = require('../utils/paths');
 
 const localBinFfmpeg = path.resolve(__dirname, '../../bin/ffmpeg.exe');
 const localBinFfprobe = path.resolve(__dirname, '../../bin/ffprobe.exe');
+const captionFontsDir = path.resolve(__dirname, '../../public/fonts');
 if (fs.existsSync(localBinFfmpeg)) {
   ffmpeg.setFfmpegPath(localBinFfmpeg);
 }
@@ -252,6 +253,28 @@ function buildAssDialogueText(text, animStyle, durationMs, anchor) {
   return `${tag}${text}`;
 }
 
+function buildCuratedDialogueText(text, style, durationMs, anchor) {
+  const motionMs = Math.max(1, Math.min(180, durationMs, (Number(style.presetDuration) || .12) * 1000));
+  const rise = Math.max(1, Math.round((Number(style.fontSize) || 28) * .1));
+  const position = style.animationStyle === 'elevate'
+    ? `\\move(${anchor.x},${anchor.y + rise},${anchor.x},${anchor.y},0,${motionMs})`
+    : `\\pos(${anchor.x},${anchor.y})`;
+  const tag = `{\\an5${position}\\frz(${-Number(style.rotateAngle || 0)})}`;
+  const parts = text.split(/(\\N|\s+)/);
+  let last = parts.length - 1;
+  while (last >= 0 && (!parts[last] || parts[last] === '\\N' || /^\s+$/.test(parts[last]))) last--;
+  // Expanded events already contain only the words whose speech has begun.
+  // Keep previous words still; decorate only the latest spoken word.
+  if (last >= 0) {
+    let overrides = '';
+    if (style.highlightMode === 'word') overrides += `\\1c${hexToABGR(style.highlightColor, 100)}&`;
+    if (style.animationStyle === 'pop') overrides += `\\fscx96\\fscy96\\t(0,${motionMs},\\fscx100\\fscy100)`;
+    if (style.animationStyle === 'classic') overrides += `\\1a&H33&\\t(0,${motionMs},\\1a&H00&)`;
+    if (overrides) parts[last] = `{${overrides}}${parts[last]}`;
+  }
+  return tag + parts.join('');
+}
+
 
 
 function buildAssContent(segments, style = {}) {
@@ -268,14 +291,22 @@ function buildAssContent(segments, style = {}) {
   const hasShadow = Boolean(style.textShadow);
 
   const primaryColor = hexToABGR(style.textColor || '#ffffff', 100);
-  const backColor = hexToABGR(style.bgColor || '#000000', bgOpacity);
+  const backColor = style.curated && bgOpacity === 0
+    ? hexToABGR(style.shadowColor || '#000000', style.textShadow ? 85 : 0)
+    : hexToABGR(style.bgColor || '#000000', bgOpacity);
 
   let outlineColor = hexToABGR(style.shadowColor || '#000000', 100);
   let borderStyle = bgOpacity > 5 ? 3 : 1;
   let outline = 0;
   let shadow = 0;
 
-  switch (animStyle) {
+  if (style.curated) {
+    // Typography is defined by the preset, never by the animation name.
+    borderStyle = bgOpacity > 0 ? 3 : 1;
+    outlineColor = bgOpacity > 0 ? backColor : hexToABGR(style.strokeColor || '#111318', 100);
+    outline = bgOpacity > 0 ? Math.max(0, Number(style.paddingY) || 6) : Math.max(0, Number(style.strokeWidth) || 0);
+    shadow = bgOpacity > 0 || !style.textShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
+  } else switch (animStyle) {
     case 'neon':
       outlineColor = hexToABGR(style.shadowColor || '#00e5ff', 90);
       borderStyle = 1; outline = 4; shadow = 0;
@@ -355,7 +386,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     text = text.replace(/\r?\n/g, '\\N');
     if (!text.includes('\\N')) text = wrapText(text, charsPerLine);
     text = escapeAssText(text);
-    text = buildAssDialogueText(text, animStyle, durationMs, anchor);
+    text = style.curated
+      ? buildCuratedDialogueText(text, style, durationMs, anchor)
+      : buildAssDialogueText(text, animStyle, durationMs, anchor);
 
     return `Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${text}`;
   }).join('\n');
@@ -458,7 +491,7 @@ function burnSubtitles({ inputPath, segments, style }) {
     const proc = spawn(ffmpegBin, [
       '-y',
       '-i', inputPath,
-      '-vf', `ass='${safeAssPath}'`,
+      '-vf', `ass='${safeAssPath}':fontsdir='${escapeFilterPath(captionFontsDir)}'`,
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
       '-crf', '23',
