@@ -44,3 +44,29 @@ test('untrusted progress URLs are rejected before they are requested',async()=>{
   assert.equal(calls,1);
   for(const url of ['http://p.savenow.to/a','https://savenow.to.evil.test/a','https://x@p.savenow.to/a']) assert.throws(()=>providerUrl(url));
 });
+
+test('provider start rejection retains safe reason and excludes secrets and HTML',async()=>{
+  await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','secret-key',{
+    get:async()=>({data:{success:false,error:'Quota exceeded secret-key',content:'PRIVATE_HTML',url:'https://private.test/token'}}),
+  }),e=>/start rejected response/.test(e.message)&&/Quota exceeded/.test(e.message)&&
+    !/secret-key|PRIVATE_HTML|private.test/.test(e.message));
+});
+test('progress rejection is distinguished from initial request failure',async()=>{
+  const responses=[pending,{success:0,progress:0,text:'Video unavailable'}];
+  await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+    wait:async()=>{},get:async()=>({data:responses.shift()}),
+  }),/progress rejected response: success=0; progress=0; text=Video unavailable/);
+});
+test('documented ID-only accepted response uses progress endpoint',async()=>{
+  const calls=[],responses=[{success:true,id:'job_123'},ready];
+  assert.equal(await fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+    wait:async()=>{},get:async(url,opts)=>{calls.push({url,opts});return {data:responses.shift()};},
+  }),ready.download_url);
+  assert.equal(calls[1].url,'https://p.savenow.to/ajax/progress.php?id=job_123');
+  assert.equal(calls[1].opts.headers,undefined);
+});
+test('HTTP rejection includes sanitized provider explanation',async()=>{
+  await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','secret-key',{
+    get:async()=>{throw {response:{status:403,data:{message:'Not subscribed secret-key'}}};},
+  }),e=>/start failed \(HTTP 403\).*Not subscribed/.test(e.message)&&!e.message.includes('secret-key'));
+});
