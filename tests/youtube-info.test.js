@@ -70,3 +70,42 @@ test('HTTP rejection includes sanitized provider explanation',async()=>{
     get:async()=>{throw {response:{status:403,data:{message:'Not subscribed secret-key'}}};},
   }),e=>/start failed \(HTTP 403\).*Not subscribed/.test(e.message)&&!e.message.includes('secret-key'));
 });
+
+test('actual Render success=0/progress=50 preparing response keeps polling to MP4',async()=>{
+  const responses=[pending,
+    {success:0,progress:50,text:'Preparing streaming download'},
+    {success:0,progress:700,text:'Downloading'},ready];
+  const calls=[];
+  assert.equal(await fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+    wait:async()=>{}, get:async(url,options)=>{calls.push({url,options});return {data:responses.shift()};},
+  }),ready.download_url);
+  assert.equal(calls.length,4);
+  assert.ok(calls.slice(1).every(c=>c.url===pending.progress_url&&!c.options.headers));
+});
+test('zero-success pending response never accepted as a failed initial submission',async()=>{
+  await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+    get:async()=>({data:{...pending,success:0,progress:50,text:'Preparing streaming download'}}),
+  }),/start rejected/);
+});
+test('pending text does not hide explicit failures or invalid progress',async()=>{
+  for(const reply of [
+    {success:0,progress:50,text:'Preparing streaming download',error:'Failed'},
+    {success:0,progress:50,text:'Preparing streaming download',status:'failed'},
+    {success:0,progress:50,text:'Downloading failed'},
+    {success:0,progress:1000,text:'Preparing streaming download',download_url:ready.download_url},
+    ...[undefined,null,'',-1,1001,'bad'].map(progress=>({success:0,progress,text:'Preparing streaming download'})),
+  ]) {
+    const responses=[pending,reply];
+    await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+      wait:async()=>{},get:async()=>({data:responses.shift()}),
+    }),/progress rejected/);
+  }
+});
+test('zero-success preparation still respects deadline without starting another job',async()=>{
+  let clock=0,calls=0;
+  await assert.rejects(fetchFromYouTubeInfo('b9OVPcW1gfY','key',{
+    now:()=>clock,timeoutMs:10000,intervalMs:3000,wait:async ms=>{clock+=ms;},
+    get:async()=>({data:++calls===1?pending:{success:0,progress:50,text:'Preparing streaming download'}}),
+  }),/timed out/);
+  assert.equal(calls,4);
+});

@@ -51,7 +51,21 @@ async function fetchFromYouTubeInfo(videoId, key, {
   });
   let progressUrl;
   for (let attempt = 0; attempt < 60; attempt++) {
-    if (!data || ![true, 1, '1'].includes(data.success)) {
+    // Observed live: {success:0, progress:50, text:'Preparing streaming download'}.
+    // On progress checks, zero also means not finished yet. Only accept that
+    // combination for a known pending state of a job already accepted above.
+    const progress = data?.progress;
+    const validProgress = (typeof progress === 'number' ||
+      (typeof progress === 'string' && progress.trim() !== '')) &&
+      Number.isFinite(Number(progress)) && Number(progress) >= 0 && Number(progress) < 1000;
+    const pendingText = /^(preparing(?: streaming)? download|downloading|processing|queued|converting|merging)(?:\b|$)/i
+      .test(String(data?.text || '').trim());
+    const explicitError = Boolean(data?.error && data.error !== '0') ||
+      /\b(failed|failure|error|cancelled|canceled|unavailable|expired)\b/i
+        .test(`${data?.status || ''} ${data?.text || ''}`);
+    const stillPreparing = attempt > 0 && [0, '0', false].includes(data?.success) &&
+      validProgress && pendingText && !explicitError;
+    if (!data || explicitError || (![true, 1, '1'].includes(data.success) && !stillPreparing)) {
       const stage = attempt === 0 ? 'start' : 'progress';
       throw new Error(`YouTube Info ${stage} rejected response: ${responseDetail(data, key)}`);
     }
