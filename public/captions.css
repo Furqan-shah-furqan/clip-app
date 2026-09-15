@@ -2327,7 +2327,7 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PRESETS GALLERY DRAWER & 160+ PRESET CARDS STYLES
+   PRESETS GALLERY DRAWER & 24 PRESET CARDS STYLES
    Declarative Caption Presets Engine (Moonshot / Submagic / Captions.ai)
    ═══════════════════════════════════════════════════════════ */
 
@@ -2825,3 +2825,25 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 .presets-gallery-empty p {
   font-size: 13px;
 }
+/* Curated captions: legible at onset, with no stagger or blur. */
+.caption-smooth-word {
+  display: inline-block;
+  white-space: nowrap;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  transform-origin: 50% 75%;
+  animation-duration: var(--smooth-duration, .12s);
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+  animation-fill-mode: both;
+}
+.caption-smooth-word--classic { animation-name: caption-soft-fade; }
+.caption-smooth-word--elevate { animation-name: caption-soft-rise; }
+.caption-smooth-word--pop { animation-name: caption-soft-pop; }
+@keyframes caption-soft-fade { from { opacity: .8; } to { opacity: 1; } }
+@keyframes caption-soft-rise { from { transform: translateY(3px); } to { transform: translateY(0); } }
+@keyframes caption-soft-pop { from { transform: scale(.96); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .caption-smooth-word { animation: none; }
+}
+.preset-gallery-card:focus-visible { outline: 2px solid #83deff; outline-offset: 3px; }

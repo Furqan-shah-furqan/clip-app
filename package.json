@@ -12,7 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "test:captions": "node --test tests/captions.test.js"
+    "test:captions": "node --test tests/caption*.test.js"
   },
   "dependencies": {
     "axios": "^1.9.0",

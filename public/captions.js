@@ -808,6 +808,7 @@ function buildScaledStyleForExport(baseStyle) {
   return {
     ...style,
     fontSize: Math.round((Number(style.fontSize) || 28) * scale),
+    strokeWidth: Number(((Number(style.strokeWidth) || 0) * scale).toFixed(2)),
     shadowBlur: Math.round((Number(style.shadowBlur) || 0) * scale),
     shadowOffsetX: Math.round((Number(style.shadowOffsetX) || 0) * scale),
     shadowOffsetY: Math.round((Number(style.shadowOffsetY) || 0) * scale),
@@ -1815,6 +1816,25 @@ function getShadowCss(style) {
 function getTextTransformCss(style) {
   return style.textTransform || "none";
 }
+function captionFontName(family) {
+  return String(family || "Montserrat").split(",")[0].replace(/['"]/g, "").trim();
+}
+function selectCaptionFont(family) {
+  if (!capFontFamily) return;
+  const name = captionFontName(family);
+  let option = Array.from(capFontFamily.options).find(o => captionFontName(o.value) === name);
+  if (!option) {
+    option = new Option(name, family);
+    capFontFamily.add(option);
+  }
+  capFontFamily.value = option.value;
+}
+async function ensureCaptionFont(style) {
+  if (!document.fonts?.load) return;
+  const name = captionFontName(style.fontFamily);
+  const faces = await document.fonts.load(`${Number(style.fontWeight) || 800} 28px "${name}"`);
+  if (style.curated && !faces.length) throw new Error(`Could not load ${name}. Refresh the page and try again.`);
+}
 function normalizeStyle(style = {}) {
   const merged = { ...DEFAULT_STYLE, ...(style || {}) };
   merged.positionX = Number(merged.positionX ?? 50);
@@ -1826,7 +1846,7 @@ function normalizeStyle(style = {}) {
   merged.lineSpacing = clamp(parseFloat(merged.lineSpacing ?? 1.35), 0.8, 2.5);
   merged.presetDuration = clamp(parseFloat(merged.presetDuration ?? 0.6), 0.2, 2.5);
   merged.letterSpacing = clamp(parseFloat(merged.letterSpacing ?? 0), -2, 14);
-  merged.strokeWidth = clamp(parseInt(merged.strokeWidth ?? 0, 10), 0, 10);
+  merged.strokeWidth = clamp(parseFloat(merged.strokeWidth ?? 0), 0, 10);
   merged.strokeColor = merged.strokeColor || "#000000";
   merged.glowIntensity = clamp(parseInt(merged.glowIntensity ?? 0, 10), 0, 60);
   merged.rotateAngle = clamp(parseInt(merged.rotateAngle ?? 0, 10), -15, 15);
@@ -1866,7 +1886,8 @@ function applyTextBoxVisuals(element, style) {
   // Core Typography & Antialiasing
   element.style.webkitFontSmoothing = "antialiased";
   element.style.textRendering = "optimizeLegibility";
-  element.style.fontStyle = "normal";
+  element.style.fontStyle = merged.fontStyle || "normal";
+  element.style.fontSynthesis = merged.curated ? "none" : "";
   element.style.fontFamily = merged.fontFamily;
   element.style.fontSize = `${merged.fontSize}px`;
   element.style.color = merged.textColor;
@@ -1885,6 +1906,12 @@ function applyTextBoxVisuals(element, style) {
     element.style.display = "inline-block";
     element.style.backdropFilter = "blur(4px)";
     element.style.webkitBackdropFilter = "blur(4px)";
+    if (merged.curated) {
+      element.style.padding = `${merged.paddingY}px ${merged.paddingX}px`;
+      element.style.borderRadius = `${Number(merged.borderRadius) || 0}px`;
+      element.style.backdropFilter = "none";
+      element.style.webkitBackdropFilter = "none";
+    }
   } else {
     element.style.backgroundColor = "transparent";
     element.style.padding = "0px";
@@ -1925,7 +1952,7 @@ function applyTextBoxVisuals(element, style) {
   }
 
   // 2. Force Neon Glow Rendering (Layered textShadow + drop-shadow filter)
-  const neonGlow = Number(merged.neonGlow !== undefined ? merged.neonGlow : (merged.glowIntensity || merged.shadowBlur || 0));
+  const neonGlow = Number(merged.neonGlow !== undefined ? merged.neonGlow : (merged.glowIntensity || 0));
   let computedTextShadow = "none";
   if (neonGlow > 0) {
     const glowColor = merged.textColor || "#FFDE00";
@@ -2129,8 +2156,41 @@ function renderWordSpan(w, idx, anim, delay, activeWordIdx) {
  * and maintains sequential animation delays. Only re-renders DOM when text, segment ID,
  * wordsPerRow, animation style, or active word changes.
  */
+// Reuse visible words as speech progresses. Only newly spoken words enter;
+// no stagger delay or replay of the entire phrase on every audio timestamp.
+function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  const signature = `${segId}|${style.activePresetId}|${style.animationStyle}`;
+  const existing = Array.from(container.children);
+  const canAppend = container.dataset.smoothKey === signature &&
+    existing.length <= words.length && existing.every((el, i) => el.textContent === words[i]);
+  if (!canAppend) container.replaceChildren();
+  container.dataset.smoothKey = signature;
+  container.classList.remove("has-cap-rows");
+  container.style.setProperty("--smooth-duration", `${Math.min(.18, Number(style.presetDuration) || .12)}s`);
+  words.forEach((word, i) => {
+    let span = container.children[i];
+    if (!span) {
+      if (i) container.appendChild(document.createTextNode(" "));
+      span = document.createElement("span");
+      span.textContent = word;
+      const motion = captionVideo && !captionVideo.paused && !captionVideo.seeking ? style.animationStyle : "none";
+      span.className = `caption-smooth-word caption-smooth-word--${motion}`;
+      container.appendChild(span);
+    }
+    span.style.color = style.highlightMode === "word" && i === activeWordIdx
+      ? style.highlightColor : "inherit";
+  });
+}
+
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
+
+  if (editorState.style.curated) {
+    renderSmoothCaption(captionOverlayText, text, segId, activeWordIdx, editorState.style);
+    return;
+  }
+  delete captionOverlayText.dataset.smoothKey;
 
   if (!text) {
     captionOverlayText.innerHTML = "";
@@ -2501,6 +2561,12 @@ function updateLivePreview() {
     ? getParityDisplayText(currentSeg, currentTime, s)
     : "Sample Caption";
 
+  if (s.curated) {
+    renderSmoothCaption(captionLivePreview, sampleText, currentSeg?.id,
+      getActiveDisplayWordIndex(currentSeg, currentTime, s), s);
+    return;
+  }
+
   const anim = s.animationStyle || "none";
   const delay = ANIM_WORD_DELAY[anim] ?? 0.07;
 
@@ -2616,7 +2682,7 @@ function stopCaptionSync() {
 function populateStyleControls() {
   editorState.style = normalizeStyle(editorState.style);
   const s = editorState.style;
-  if (capFontFamily) capFontFamily.value = s.fontFamily;
+  selectCaptionFont(s.fontFamily);
   if (capFontSize) capFontSize.value = String(s.fontSize);
   if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
   if (capLineSpacing) capLineSpacing.value = String(s.lineSpacing ?? 1.35);
@@ -2677,7 +2743,7 @@ function syncStyleFromControls(options = {}) {
   editorState.style = normalizeStyle(editorState.style);
 
   editorState.style.fontFamily =
-    capFontFamily?.value || "'Montserrat', sans-serif";
+    capFontFamily?.value || editorState.style.fontFamily || DEFAULT_STYLE.fontFamily;
   editorState.style.fontSize = clamp(
     parseInt(capFontSize?.value || "28", 10),
     12,
@@ -2804,7 +2870,7 @@ function renderPresetsUI() {
   const allPresets = getActivePresetsList();
   // Display top 6 popular / trending presets as quick 1-click picks in Card 4
   const quickPicks = allPresets
-    .filter((p) => p.category === "Popular" || p.badge === "TRENDING")
+    .filter((p) => p.quickPick || p.category === "Popular" || p.badge === "TRENDING")
     .slice(0, 6);
 
   const activeId = editorState.style?.activePresetId;
@@ -2980,7 +3046,7 @@ function renderPresetsGalleryGrid() {
 
     const previewWords = (preset.previewText || "MAKE MONEY").split(" ");
     const renderedWordsHtml = previewWords.map((word, idx) => {
-      const isHl = idx === 0 && s.highlightColor;
+      const isHl = idx === previewWords.length - 1 && s.highlightMode === "word";
       const wordColor = isHl ? s.highlightColor : (s.textColor || "#ffffff");
       return `<span class="preset-hl-word" style="color: ${wordColor};">${word}</span>`;
     }).join(" ");
@@ -3047,7 +3113,7 @@ function renderPresetsGalleryGrid() {
             <span class="preset-card-cat">${preset.category || "General"}</span>
           </div>
           <div class="preset-card-tags">
-            <span class="preset-card-tag">${s.wordAnimation || s.animationStyle || "Pop"}</span>
+            <span class="preset-card-tag">${s.fontFamily || "Montserrat"}</span>
             <span class="preset-card-tag">${s.wordsInRow || "Auto"}</span>
           </div>
         </div>
@@ -3056,6 +3122,9 @@ function renderPresetsGalleryGrid() {
   }).join("");
 
   presetsModalGrid.querySelectorAll(".preset-gallery-card").forEach((card) => {
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); card.click(); }
+    });
     card.addEventListener("click", () => {
       const pid = card.dataset.presetId;
       applyPresetFromGallery(pid);
@@ -3092,7 +3161,12 @@ function applyPresetFromGallery(id) {
   const newStyle = {
     ...DEFAULT_STYLE,
     ...preservedPosition,
-    fontFamily: s.fontFamily ? (s.fontFamily.includes(",") ? s.fontFamily : `'${s.fontFamily}', sans-serif`) : DEFAULT_STYLE.fontFamily,
+    curated: Boolean(s.curated),
+    highlightMode: s.highlightMode || "none",
+    presetDuration: Number(s.presetDuration) || .2,
+    shadowOffsetX: Number(s.shadowOffsetX) || 0,
+    shadowOffsetY: Number(s.shadowOffsetY) || 0,
+    fontFamily: s.fontFamily ? (s.fontFamily.includes(",") ? s.fontFamily : `'${s.fontFamily}', ${s.fontFamily === "Libre Caslon Text" ? "serif" : s.fontFamily === "Space Mono" ? "monospace" : "sans-serif"}`) : DEFAULT_STYLE.fontFamily,
     fontSize: Number(s.fontSize) || 28,
     fontWeight: s.fontWeight || 800,
     textTransform: s.textTransform || "none",
@@ -3104,11 +3178,11 @@ function applyPresetFromGallery(id) {
     bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
     bgPadding: Number(s.bgPadding) || 12,
     paddingX: Number(s.bgPadding) || 14,
-    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.75) : 8,
+    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.7) : 8,
     borderRadius: Number(s.borderRadius) || 10,
     boxShadow: s.boxShadow || "none",
     backdropFilter: s.backdropFilter || "none",
-    textShadow: s.textShadow || "none",
+    textShadow: s.textShadow ?? false,
     shadowColor: s.shadowColor || "#000000",
     shadowBlur: Number(s.shadowBlur) || 0,
     filter: s.filter || "none",
@@ -3126,6 +3200,12 @@ function applyPresetFromGallery(id) {
   };
 
   editorState.style = normalizeStyle(newStyle);
+  ensureCaptionFont(editorState.style).then(() => {
+    if (editorState.style.activePresetId === id) { applyStyleToOverlay(); syncCaptionOverlay(); }
+  }).catch(error => {
+    const label = document.getElementById("captionStatusLabel");
+    if (label) label.textContent = error.message;
+  });
 
   // Behind the Person subject segmentation management
   if (captionVideoWrap) {
@@ -3252,6 +3332,7 @@ async function exportCaptionedVideo() {
     syncStyleFromControls();
 
     const normalizedStyle = normalizeStyle(editorState.style);
+    await ensureCaptionFont(normalizedStyle);
     const scaledStyle = buildScaledStyleForExport(normalizedStyle);
 
     const wrappedSegments = normalizeSegments(
@@ -3377,6 +3458,7 @@ async function buildCaptionedClipForPublish() {
   persistCaptions();
 
   const normalizedStyle = normalizeStyle(editorState.style);
+  await ensureCaptionFont(normalizedStyle);
   const scaledStyle = buildScaledStyleForExport(normalizedStyle);
 
   const wrappedSegments = normalizeSegments(
@@ -3586,7 +3668,12 @@ function bindControls() {
   const onLiveSliderInput = () => syncStyleFromControls({ isLiveSlider: true });
   const onSliderCommit = () => syncStyleFromControls({ isLiveSlider: false });
 
-  capFontFamily?.addEventListener("change", onSliderCommit);
+  capFontFamily?.addEventListener("change", () => {
+    const name = captionFontName(capFontFamily.value);
+    const weights = { Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
+    if (weights[name]) editorState.style.fontWeight = weights[name];
+    onSliderCommit();
+  });
   capAnimStyle?.addEventListener("change", onSliderCommit);
   capTextShadow?.addEventListener("change", onSliderCommit);
 
