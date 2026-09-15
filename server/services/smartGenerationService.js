@@ -10,6 +10,7 @@ const {
   getJobWorkspace,
 } = require("../utils/paths");
 const { smartGenerateClip } = require("./smartClipService");
+const { createYouTubeClipSession } = require("./youtubeClipSession");
 const { getPythonCandidates } = require("../utils/pythonRuntime");
 const { findSmartClipMoments, getDynamicClipQuota } = require("./smartClipRanker");
 const {
@@ -672,6 +673,11 @@ async function runSmartGeneration({
 
   // Step 3: Individual Trimmed Clip Acquisition & Generation (if YouTube)
   if (normalizedSourceType === "youtube") {
+    const clipSession = createYouTubeClipSession({
+      sourceUrl, sourceDir: workspace.sourceDir, isCancelled,
+      onFallback: () => onProgress(45, "FAST download limit reached. Trying alternate source downloader..."),
+    });
+    try {
     for (let i = 0; i < suggestions.length; i++) {
       if (await isCancelled()) throw new Error("Job cancelled by user");
 
@@ -689,7 +695,7 @@ async function runSmartGeneration({
       const endSec = Number(suggestion.endSec != null ? suggestion.endSec : timeToSeconds(suggestion.end || "00:00:30"));
 
       try {
-        const result = await smartGenerateClip({
+        const result = await clipSession.generate({
           sourceUrl,
           inputPath: sourceUrl,
           clip: { startTime: startSec, endTime: endSec },
@@ -734,6 +740,10 @@ async function runSmartGeneration({
         console.error(`[SmartGenerationService][Job ${generationJobId}] Moment ${i + 1} processing error:`, clipErr.message || clipErr);
         // Requirement 4: Do not abort entire job if other clips succeeded or can succeed
       }
+    }
+
+    } finally {
+      clipSession.dispose();
     }
 
     // Requirement 4: Partial success preservation (if 2 out of 3 clips succeed, return success)

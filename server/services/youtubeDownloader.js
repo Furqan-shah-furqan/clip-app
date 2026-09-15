@@ -779,7 +779,10 @@ async function downloadYouTubeSource(input) {
   }
 
   const targetUrl = `https://www.youtube.com/watch?v=${videoId}`;
-  const targetPath = path.join(uploadsDir, `yt_source_${videoId}_${Date.now()}.mp4`);
+  const targetPath = (typeof input === "object" && input?.targetPath) ||
+    path.join(uploadsDir, `yt_source_${videoId}_${Date.now()}.mp4`);
+  const skipFast = typeof input === "object" && input?.skipFast === true;
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   const rapidApiKey = (process.env.RAPIDAPI_KEY || "").trim();
 
   console.log(`[YouTube-Downloader] Starting source download for Video ID: ${videoId}`);
@@ -789,14 +792,16 @@ async function downloadYouTubeSource(input) {
     const hostConfig = sanitizeRapidApiHost(process.env.RAPIDAPI_HOST).toLowerCase();
     let streamUrl = null;
 
-    if (hostConfig.includes("ytstream")) {
+    if (skipFast || hostConfig.includes("ytstream")) {
       try {
         streamUrl = await fetchFromYtStream(videoId, rapidApiKey);
       } catch (ytErr) {
-        console.warn(`[RapidAPI][ytstream] Failed (${ytErr.message}), trying FAST Downloader...`);
-        try {
-          streamUrl = await fetchFromFastDownloader(videoId, rapidApiKey);
-        } catch {}
+        console.warn(`[RapidAPI][ytstream] Failed (${ytErr.message}).`);
+        if (!skipFast) {
+          try {
+            streamUrl = await fetchFromFastDownloader(videoId, rapidApiKey);
+          } catch {}
+        }
       }
     } else {
       try {
