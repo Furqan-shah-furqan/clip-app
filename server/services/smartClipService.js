@@ -258,6 +258,14 @@ async function downloadTrimmedClipViaRapidApi({
       console.warn(`[smartClipService] RapidAPI trim download attempt ${attempt}/${maxRapidApiAttempts} failed (${rapidErr.message})`);
       try { if (fs.existsSync(snippetPath)) fs.unlinkSync(snippetPath); } catch {}
 
+      // A provider limit is not a network hiccup. Let the job switch providers
+      // instead of spending two requests on every selected moment.
+      if (rapidErr.response?.status === 429) {
+        const limitError = new Error("FAST downloader request allowance or rate limit reached (HTTP 429).");
+        limitError.code = "FAST_DOWNLOAD_LIMIT";
+        throw limitError;
+      }
+
       if (attempt < maxRapidApiAttempts) {
         console.log("[smartClipService] Network hiccup detected. Retrying RapidAPI trim download in 4 seconds...");
         await new Promise((res) => setTimeout(res, 4000));
