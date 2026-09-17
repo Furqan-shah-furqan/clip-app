@@ -5,6 +5,8 @@ const publishQueue = new Queue("publish-jobs", {
   connection: redis
 });
 
+publishQueue.on("error", (err) => console.error("[PublishQueue] Redis unavailable:", err.message));
+
 function getPublishJobId(scheduledPostId) {
   return `scheduled-post-${scheduledPostId}`;
 }

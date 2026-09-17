@@ -13,6 +13,8 @@ const generationQueue = new Queue(GENERATION_QUEUE_NAME, {
   connection: queueConnection,
 });
 
+generationQueue.on("error", (err) => console.error("[GenerationQueue] Redis unavailable:", err.message));
+
 function getGenerationBullJobId(generationJobId) {
   return `generation-${generationJobId}`;
 }

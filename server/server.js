@@ -1201,7 +1201,7 @@ app.get("/api/files/download/:fileName", (req, res) => {
 
 // Health check
 app.get(["/health", "/api/health"], (req, res) => {
-  res.json({ ok: true, status: "healthy" });
+  res.json({ ok: true, status: "healthy", revision: process.env.RENDER_GIT_COMMIT || null });
 });
 
 app.get("/api/version", (req, res) => {

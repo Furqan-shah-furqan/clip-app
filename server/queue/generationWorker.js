@@ -1,3 +1,4 @@
+const { workerOptions } = require("./redisBudget");
 require("dotenv").config();
 const { Worker } = require("bullmq");
 const { createRedisClient } = require("../lib/redis");
@@ -283,6 +284,7 @@ const generationWorker = new Worker(
     }
   },
   {
+    ...workerOptions,
     connection: workerConnection,
     concurrency,
   }
