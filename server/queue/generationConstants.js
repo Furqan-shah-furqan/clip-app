@@ -5,8 +5,8 @@
 
 const GENERATION_QUEUE_NAME = "clip-generation-jobs";
 const WORKER_HEARTBEAT_KEY = "clipflow:generation-worker:heartbeat";
-const WORKER_HEARTBEAT_TTL_SEC = 60;
-const WORKER_HEARTBEAT_INTERVAL_MS = 20000;
+const WORKER_HEARTBEAT_TTL_SEC = 180;
+const WORKER_HEARTBEAT_INTERVAL_MS = 60000;
 
 module.exports = {
   GENERATION_QUEUE_NAME,

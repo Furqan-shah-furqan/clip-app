@@ -1,3 +1,4 @@
+const { workerOptions } = require("./redisBudget");
 const { Worker } = require("bullmq");
 const redis = require("../lib/redis");
 const {
@@ -28,6 +29,7 @@ const publishWorker = new Worker(
     return result;
   },
   {
+    ...workerOptions,
     connection: redis,
   },
 );

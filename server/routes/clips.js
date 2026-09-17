@@ -1,3 +1,4 @@
+const { queueFailure } = require("../queue/redisBudget");
 const express = require("express");
 const axios = require("axios");
 const multer = require("multer");
@@ -408,19 +409,21 @@ router.post("/smart-generate", async (req, res) => {
     try {
       await addGenerationJob(job.id);
     } catch (enqueueError) {
+      const failure = queueFailure(enqueueError);
       console.error(`[SmartGenerate] Failed to add job ${job.id} to BullMQ:`, enqueueError.message);
       await prisma.generationJob.update({
         where: { id: job.id },
         data: {
           status: "FAILED",
           stage: "Failed to queue job",
-          errorMessage: `Queue error: ${enqueueError.message}`,
+          errorMessage: failure.message,
           completedAt: new Date(),
         },
       });
-      return res.status(500).json({
-        error: "Failed to queue smart clip generation",
-        details: enqueueError.message,
+      return res.status(failure.status).json({
+        error: failure.message,
+        details: failure.message,
+        code: failure.code,
       });
     }
 
