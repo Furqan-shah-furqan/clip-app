@@ -53,6 +53,9 @@ const DEFAULT_STYLE = {
   strokeColor: "#000000",
   glowIntensity: 0,
   rotateAngle: 0,
+  boxWidth: 88,
+  boxHeight: 0,
+  textAlign: "center",
   behindPerson: false,
   activePresetId: null,
 };
@@ -820,7 +823,10 @@ function buildScaledStyleForExport(baseStyle) {
     ),
     lineHeight: Number(style.lineSpacing || 1.35),
     lineSpacing: Number(style.lineSpacing || 1.35),
-    maxWidthPercent: 88,
+    maxWidthPercent: style.boxWidth || 88,
+    boxWidth: style.boxWidth || 88,
+    textAlign: style.textAlign || "center",
+    editorBox: true,
     positionX: Number(style.positionX ?? 50),
     positionY: Number(style.positionY ?? 82),
     wordsPerRow: Number(style.wordsPerRow || 0),
@@ -832,6 +838,37 @@ function buildScaledStyleForExport(baseStyle) {
     playResX: exportVideoWidth,
     playResY: exportVideoHeight,
   };
+}
+
+function wrapExportToBox(segments, style) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return segments;
+  ctx.font = `${style.fontWeight || 700} ${style.fontSize}px ${style.fontFamily}`;
+  const width = Math.max(20, (captionVideoWrap?.clientWidth || captionVideo?.clientWidth || 300) * (style.boxWidth || 88) / 100 - (style.bgOpacity > 0 ? Number(style.paddingX || 0) * 2 : 0));
+  const measure = text => {
+    const shown = style.textTransform === "uppercase" ? text.toUpperCase() : style.textTransform === "lowercase" ? text.toLowerCase() : text;
+    return ctx.measureText(shown).width + Math.max(0, shown.length - 1) * Number(style.letterSpacing || 0);
+  };
+  return segments.map(segment => {
+    const words = String(segment.text).split(/\s+/).filter(Boolean), lines = []; let line = "";
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (line && measure(candidate) > width) { lines.push(line); line = ""; }
+      if (measure(word) > width) {
+        // Match overflow-wrap:anywhere for long words at narrow box sizes.
+        const graphemes = typeof Intl.Segmenter === "function"
+          ? Array.from(new Intl.Segmenter(undefined, {granularity:"grapheme"}).segment(word), item => item.segment)
+          : Array.from(word);
+        for (const character of graphemes) {
+          if (line && measure(line + character) > width) { lines.push(line); line = ""; }
+          line += character;
+        }
+      } else line = line ? `${line} ${word}` : word;
+    }
+    if (line) lines.push(line);
+    return {...segment, text:lines.join("\n")};
+  });
 }
 
 // ─── WORD-BY-WORD HELPERS ────────────────────────────────
@@ -1754,9 +1791,14 @@ function renderTimeline() {
       ta.addEventListener("input", () => {
         const seg = editorState.segments.find((s) => s.id === ta.dataset.id);
         if (seg) {
+          const corrected = ta.value.trim().split(/\s+/);
+          if (seg.words?.length && corrected.length !== seg.words.length) {
+            ta.setCustomValidity("Correct words without adding or removing them to preserve audio timing.");
+            ta.reportValidity(); return;
+          }
+          ta.setCustomValidity("");
           seg.text = ta.value;
-          // Edited wording no longer matches the recognized word alignment.
-          seg.words = undefined;
+          seg.words?.forEach((word, i) => { word.word = corrected[i]; });
           _lastRenderedSegId = null;
           _lastRenderedText = null;
           persistCaptions();
@@ -1807,11 +1849,11 @@ function renderTimeline() {
 
 // Style & overlay
 function getShadowCss(style) {
-  if (!style.textShadow) return "none";
+  if (!style.textShadow || style.textShadow === "none") return "none";
   const blur = clamp(Number(style.shadowBlur) || 0, 0, 30);
   const offX = clamp(Number(style.shadowOffsetX) || 0, -20, 20);
   const offY = clamp(Number(style.shadowOffsetY) || 0, -20, 20);
-  return `${offX}px ${offY}px ${blur}px ${style.shadowColor || "#000"}`;
+  return `${offX}px ${offY}px ${blur}px ${style.shadowColor || "#000"}, ${offX}px ${offY}px ${Math.min(2, blur)}px ${style.shadowColor || "#000"}`;
 }
 function getTextTransformCss(style) {
   return style.textTransform || "none";
@@ -1833,10 +1875,12 @@ async function ensureCaptionFont(style) {
   if (!document.fonts?.load) return;
   const name = captionFontName(style.fontFamily);
   const faces = await document.fonts.load(`${Number(style.fontWeight) || 800} 28px "${name}"`);
-  if (style.curated && !faces.length) throw new Error(`Could not load ${name}. Refresh the page and try again.`);
+  if (!faces.length) throw new Error(`Could not load ${name}. Refresh the page and try again.`);
 }
 function normalizeStyle(style = {}) {
   const merged = { ...DEFAULT_STYLE, ...(style || {}) };
+  const legacyFonts = { Impact: "'Anton', sans-serif", "Arial Black": "'Archivo Black', sans-serif", Georgia: "'Libre Caslon Text', serif" };
+  if (legacyFonts[captionFontName(merged.fontFamily)]) merged.fontFamily = legacyFonts[captionFontName(merged.fontFamily)];
   merged.positionX = Number(merged.positionX ?? 50);
   merged.positionY = Number(merged.positionY ?? 82);
   merged.wordsPerRow = Number(merged.wordsPerRow ?? 0);
@@ -1849,7 +1893,10 @@ function normalizeStyle(style = {}) {
   merged.strokeWidth = clamp(parseFloat(merged.strokeWidth ?? 0), 0, 10);
   merged.strokeColor = merged.strokeColor || "#000000";
   merged.glowIntensity = clamp(parseInt(merged.glowIntensity ?? 0, 10), 0, 60);
-  merged.rotateAngle = clamp(parseInt(merged.rotateAngle ?? 0, 10), -15, 15);
+  merged.rotateAngle = clamp(parseInt(merged.rotateAngle ?? 0, 10), -360, 360);
+  merged.boxWidth = clamp(Number(merged.boxWidth) || 88, 15, 100);
+  merged.boxHeight = clamp(Number(merged.boxHeight) || 0, 0, 90);
+  merged.textAlign = ["left", "center", "right"].includes(merged.textAlign) ? merged.textAlign : "center";
   merged.textTransform = merged.textTransform || "none";
   if (style?.bgColor !== undefined) merged.bgColor = style.bgColor;
   if (style?.bgOpacity !== undefined) merged.bgOpacity = Number(style.bgOpacity);
@@ -1930,12 +1977,13 @@ function applyTextBoxVisuals(element, style) {
   element.style.setProperty("--caption-line-height", String(lineSpacing));
 
   // Layout sizing
-  element.style.width = "max-content";
-  element.style.maxWidth = "92%";
+  element.style.width = "100%";
+  element.style.maxWidth = "100%";
+  element.style.textAlign = merged.textAlign;
   element.style.boxSizing = "border-box";
   element.style.whiteSpace = "normal";
-  element.style.wordBreak = "keep-all";
-  element.style.overflowWrap = "normal";
+  element.style.wordBreak = "normal";
+  element.style.overflowWrap = "anywhere";
 
   // Dynamic animation cadence / speed from preset duration
   element.style.setProperty("--preset-duration", `${Number(merged.presetDuration || 0.6)}s`);
@@ -2167,7 +2215,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
   if (!canAppend) container.replaceChildren();
   container.dataset.smoothKey = signature;
   container.classList.remove("has-cap-rows");
-  container.style.setProperty("--smooth-duration", `${Math.min(.18, Number(style.presetDuration) || .12)}s`);
+  container.style.setProperty("--smooth-duration", `${Number(style.presetDuration) || .12}s`);
   words.forEach((word, i) => {
     let span = container.children[i];
     if (!span) {
@@ -2178,7 +2226,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
       container.appendChild(span);
     }
-    span.style.color = style.highlightMode === "word" && i === activeWordIdx
+    span.style.color = (style.highlightMode === "word" || ["highlight", "highlightimpact", "wordcolor"].includes(style.animationStyle)) && i === activeWordIdx
       ? style.highlightColor : "inherit";
   });
 }
@@ -2186,7 +2234,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
 
-  if (editorState.style.curated) {
+  if (editorState.style.curated || editorState.style.boxWidth) {
     renderSmoothCaption(captionOverlayText, text, segId, activeWordIdx, editorState.style);
     return;
   }
@@ -2310,6 +2358,7 @@ function applyStyleToOverlay() {
   if (wasSelected) captionOverlay.classList.add("is-selected");
   if (wasDragging) captionOverlay.classList.add("is-dragging");
   if (wasResizing) captionOverlay.classList.add("is-resizing");
+  if (captionEditSession) captionOverlay.classList.add("is-editing");
 
   const posX = clamp(Number(s.positionX ?? 50), 5, 95);
   const posY = clamp(Number(s.positionY ?? 82), 5, 95);
@@ -2317,7 +2366,13 @@ function applyStyleToOverlay() {
   captionOverlay.style.left = `${posX}%`;
   captionOverlay.style.top = `${posY}%`;
   captionOverlay.style.bottom = "auto";
-  captionOverlay.style.transform = "translate(-50%, -50%)";
+  captionOverlay.style.transform = `translate(-50%, -50%) rotate(${Number(s.rotateAngle) || 0}deg)`;
+  captionOverlay.style.width = `${s.boxWidth || 88}%`;
+  captionOverlay.style.height = s.boxHeight ? `${s.boxHeight}%` : "auto";
+  // An explicit frame cannot clip a longer phrase; it grows at the minimum font size.
+  captionOverlay.style.minHeight = "min-content";
+  captionOverlayText.style.transform = "none";
+  syncBoxControls();
 
   if (capBoxSizeLabel) {
     capBoxSizeLabel.textContent = `${s.fontSize ?? 28}px`;
@@ -2326,187 +2381,172 @@ function applyStyleToOverlay() {
   updatePositionUI();
 }
 
-let isDraggingCaption = false;
-let dragStartX = 0;
-let dragStartY = 0;
-let dragStartPosX = 50;
-let dragStartPosY = 82;
+// Editor-only geometry. Clip extraction and speech timestamps are untouched.
+let captionEditSession = null;
+function syncBoxControls() {
+  const s = editorState.style;
+  for (const [id, value] of [["capBoxWidth", s.boxWidth || 88], ["capBoxHeight", s.boxHeight || 0]]) {
+    const el = document.getElementById(id);
+    if (el) el.value = String(value);
+    const label = document.getElementById(id + "Val");
+    if (label) label.textContent = value ? `${Math.round(value)}%` : "Auto";
+  }
+  document.querySelectorAll("[data-text-align]").forEach(button => {
+    const active = button.dataset.textAlign === (s.textAlign || "center");
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+}
 
-let isResizingCaption = false;
-let resizeHandleType = null;
-let activeHandleElement = null;
-let resizeStartDist = 0;
-let resizeStartDx = 0;
-let resizeStartFontSize = 28;
-let resizeStartPaddingX = 14;
-let resizeStartPaddingY = 10;
-let resizeOverlayCenterX = 0;
-let resizeOverlayCenterY = 0;
+function finishCaptionEdit(cancel = false) {
+  if (!captionEditSession) return;
+  const { segment, originalWords, originalText } = captionEditSession;
+  if (cancel) { segment.words = originalWords; segment.text = originalText; }
+  captionEditSession = null;
+  captionOverlay.classList.remove("is-editing");
+  captionOverlayText.replaceChildren();
+  delete captionOverlayText.dataset.smoothKey;
+  resetCaptionRenderCache();
+  persistCaptions();
+  renderTimeline();
+  syncCaptionOverlay();
+  const done = document.getElementById("capDoneEditing");
+  if (done) done.hidden = true;
+  setBoxHint("Saved. Drag edges to reshape; drag corners to scale text.");
+}
+function setBoxHint(message) {
+  const hint = document.getElementById("capBoxHint");
+  if (hint) hint.textContent = message;
+}
+function beginCaptionEdit() {
+  if (captionEditSession) return;
+  const segment = getActiveSegmentByTime(safeVideoTime());
+  if (!segment) { setBoxHint("Seek to a spoken word, then choose Edit words."); return; }
+  captionVideo.pause();
+  captionEditSession = { segment, originalText: segment.text, originalWords: segment.words?.map(w => ({...w})) };
+  captionOverlay.classList.add("is-selected", "is-editing");
+  captionOverlayText.replaceChildren();
+  const words = segment.words?.length ? segment.words : String(segment.text).split(/\s+/).map(word => ({word}));
+  words.forEach((word, index) => {
+    if (index) captionOverlayText.appendChild(document.createTextNode(" "));
+    const span = document.createElement("span");
+    span.className = "caption-edit-word";
+    span.contentEditable = "plaintext-only";
+    span.setAttribute("role", "textbox");
+    span.setAttribute("aria-label", `Edit word ${index + 1}: ${word.word}`);
+    span.textContent = word.word;
+    span.addEventListener("pointerdown", e => e.stopPropagation());
+    span.addEventListener("keydown", e => {
+      e.stopPropagation();
+      if (e.key === "Escape") { e.preventDefault(); finishCaptionEdit(true); }
+      else if (e.key === "Enter") { e.preventDefault(); span.blur(); finishCaptionEdit(); }
+    });
+    span.addEventListener("blur", () => {
+      if (!captionEditSession) return;
+      const corrected = span.textContent.trim();
+      if (!corrected || /\s/.test(corrected)) {
+        span.textContent = word.word;
+        setBoxHint("Replace one word at a time to keep its audio timing. Enter saves; Esc cancels.");
+        return;
+      }
+      word.word = corrected;
+      if (segment.words?.length) segment.words[index].word = corrected;
+      segment.text = words.map(w => w.word).join(" ");
+      persistCaptions();
+    });
+    captionOverlayText.appendChild(span);
+  });
+  const done = document.getElementById("capDoneEditing");
+  if (done) done.hidden = false;
+  setBoxHint("Click a word to correct it. Enter saves; Esc cancels. Audio timing stays the same.");
+  captionOverlayText.querySelector("[contenteditable]")?.focus();
+}
 
 function initCaptionDragging() {
   if (!captionOverlay || !captionVideoWrap) return;
-
-  const onPointerDown = (e) => {
-    // Always select the caption on tap/click to reveal the CapCut bounding box
+  let gesture = null;
+  captionOverlay.addEventListener("dblclick", e => { e.stopPropagation(); beginCaptionEdit(); });
+  captionOverlay.addEventListener("pointerdown", e => {
+    if (captionEditSession || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
     captionOverlay.classList.add("is-selected");
-
-    // 1. Check if clicked on a CapCut resize handle (corner or side)
-    const handleEl = e.target.closest(".cap-resize-handle");
-    if (handleEl) {
-      e.stopPropagation();
-      e.preventDefault();
-      isResizingCaption = true;
-      activeHandleElement = handleEl;
-      resizeHandleType = handleEl.dataset.handle || "br";
-      captionOverlay.classList.add("is-resizing");
-      handleEl.classList.add("is-active");
-
-      const rect = captionOverlay.getBoundingClientRect();
-      resizeOverlayCenterX = rect.left + rect.width / 2;
-      resizeOverlayCenterY = rect.top + rect.height / 2;
-
-      resizeStartDist = Math.hypot(e.clientX - resizeOverlayCenterX, e.clientY - resizeOverlayCenterY);
-      resizeStartDx = Math.abs(e.clientX - resizeOverlayCenterX);
-      resizeStartFontSize = Number(editorState.style.fontSize ?? 28);
-      resizeStartPaddingX = Number(editorState.style.paddingX ?? 14);
-      resizeStartPaddingY = Number(editorState.style.paddingY ?? 10);
-
-      try {
-        handleEl.setPointerCapture?.(e.pointerId);
-      } catch {}
-      return;
-    }
-
-    // 2. Normal drag to move caption anywhere
-    isDraggingCaption = true;
-    captionOverlay.classList.add("is-dragging");
-    dragStartX = e.clientX;
-    dragStartY = e.clientY;
-    dragStartPosX = Number(editorState.style.positionX ?? 50);
-    dragStartPosY = Number(editorState.style.positionY ?? 82);
-    try {
-      captionOverlay.setPointerCapture?.(e.pointerId);
-    } catch {}
-    e.preventDefault();
-  };
-
-  const onPointerMove = (e) => {
-    if (isResizingCaption) {
-      if (resizeHandleType === "ml" || resizeHandleType === "mr") {
-        // Adjust horizontal width / padding (side handles)
-        const currDx = Math.abs(e.clientX - resizeOverlayCenterX);
-        const ratio = currDx / Math.max(resizeStartDx, 10);
-        const newPadX = Math.round(clamp(resizeStartPaddingX * ratio, 4, 40));
-        const newPadY = Math.max(2, Math.round(newPadX * 0.7));
-
-        editorState.style.paddingX = newPadX;
-        editorState.style.paddingY = newPadY;
-
-        if (capBoxPadding) capBoxPadding.value = String(newPadX);
-        if (capBoxPaddingVal) capBoxPaddingVal.textContent = `${newPadX}px`;
-      } else {
-        // Corner handles: proportional box size and font scaling (CapCut style)
-        const currDist = Math.hypot(e.clientX - resizeOverlayCenterX, e.clientY - resizeOverlayCenterY);
-        const scaleFactor = currDist / Math.max(resizeStartDist, 10);
-
-        const newFontSize = Math.round(clamp(resizeStartFontSize * scaleFactor, 12, 72));
-        const newPadX = Math.round(clamp(resizeStartPaddingX * scaleFactor, 4, 40));
-        const newPadY = Math.max(2, Math.round(newPadX * 0.7));
-
-        editorState.style.fontSize = newFontSize;
-        editorState.style.paddingX = newPadX;
-        editorState.style.paddingY = newPadY;
-
-        if (capFontSize) capFontSize.value = String(newFontSize);
-        if (capFontSizeVal) capFontSizeVal.textContent = String(newFontSize);
-        if (capBoxPadding) capBoxPadding.value = String(newPadX);
-        if (capBoxPaddingVal) capBoxPaddingVal.textContent = `${newPadX}px`;
-        if (capBoxSizeLabel) capBoxSizeLabel.textContent = `${newFontSize}px`;
+    const handle = e.target.closest(".cap-resize-handle")?.dataset.handle;
+    const bounds = captionVideoWrap.getBoundingClientRect();
+    gesture = { x:e.clientX, y:e.clientY, handle, bounds, style:{...editorState.style},
+      width:captionOverlay.offsetWidth, height:captionOverlay.offsetHeight };
+    captionOverlay.classList.add(handle ? "is-resizing" : "is-dragging");
+    captionOverlay.setPointerCapture?.(e.pointerId);
+  });
+  captionOverlay.addEventListener("pointermove", e => {
+    if (!gesture) return;
+    const g = gesture, s = editorState.style, dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (g.handle) {
+      const rad = Number(g.style.rotateAngle || 0) * Math.PI / 180;
+      const localX = dx * Math.cos(rad) + dy * Math.sin(rad);
+      const localY = -dx * Math.sin(rad) + dy * Math.cos(rad);
+      let width = g.width, height = g.height;
+      if (g.handle.includes("l")) width -= localX * 2;
+      if (g.handle.includes("r")) width += localX * 2;
+      if (g.handle.includes("t")) height -= localY * 2;
+      if (g.handle.includes("b")) height += localY * 2;
+      const corner = ["tl", "tr", "bl", "br"].includes(g.handle);
+      const vertical = ["mt", "mb"].includes(g.handle);
+      if (corner) {
+        const scale = clamp(Math.min(width / g.width, height / g.height), .3, 3);
+        width = g.width * scale; height = g.height * scale;
+        s.fontSize = Math.round(clamp(g.style.fontSize * scale, 12, 72));
+      } else if (vertical) {
+        s.fontSize = Math.round(clamp(g.style.fontSize * height / g.height, 12, 72));
       }
-
-      applyStyleToOverlay();
-      updateLivePreview();
-      debouncedPersistCaptions();
-      return;
+      s.boxWidth = clamp(width / g.bounds.width * 100, 15, 100);
+      s.boxHeight = vertical || corner ? clamp(height / g.bounds.height * 100, 4, 90) : 0;
+      if (capFontSize) capFontSize.value = String(s.fontSize);
+      if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
+    } else {
+      s.positionX = clamp(g.style.positionX + dx / g.bounds.width * 100, 5, 95);
+      s.positionY = clamp(g.style.positionY + dy / g.bounds.height * 100, 5, 95);
+      s.position = "custom";
     }
-
-    if (!isDraggingCaption) return;
-    const rect = captionVideoWrap.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
-
-    const deltaX = e.clientX - dragStartX;
-    const deltaY = e.clientY - dragStartY;
-
-    const deltaXPercent = (deltaX / rect.width) * 100;
-    const deltaYPercent = (deltaY / rect.height) * 100;
-
-    const newX = Math.round(clamp(dragStartPosX + deltaXPercent, 5, 95));
-    const newY = Math.round(clamp(dragStartPosY + deltaYPercent, 5, 95));
-
-    editorState.style.positionX = newX;
-    editorState.style.positionY = newY;
-    editorState.style.position = "custom";
-
-    captionOverlay.style.left = `${newX}%`;
-    captionOverlay.style.top = `${newY}%`;
-
-    updatePositionUI();
-  };
-
-  const onPointerUp = (e) => {
-    if (isResizingCaption) {
-      isResizingCaption = false;
-      resizeHandleType = null;
-      if (activeHandleElement) {
-        activeHandleElement.classList.remove("is-active");
-        try {
-          activeHandleElement.releasePointerCapture?.(e.pointerId);
-        } catch {}
-        activeHandleElement = null;
-      }
-      captionOverlay.classList.remove("is-resizing");
-      applyStyleToOverlay();
-      syncCaptionOverlay();
-      updateLivePreview();
-      persistCaptions();
-      return;
-    }
-
-    if (!isDraggingCaption) return;
-    isDraggingCaption = false;
-    captionOverlay.classList.remove("is-dragging");
-    try {
-      captionOverlay.releasePointerCapture?.(e.pointerId);
-    } catch {}
+    applyStyleToOverlay();
+  });
+  const finish = e => {
+    if (!gesture) return;
+    gesture = null;
+    captionOverlay.classList.remove("is-resizing", "is-dragging");
+    if (captionOverlay.hasPointerCapture?.(e.pointerId)) captionOverlay.releasePointerCapture(e.pointerId);
     persistCaptions();
   };
-
-  // Deselect caption when tapping/clicking outside the box in the preview or elsewhere
-  const onOutsidePointerDown = (e) => {
-    if (!captionOverlay.classList.contains("is-selected")) return;
-    if (captionOverlay.contains(e.target)) return;
-    // Don't deselect if adjusting editor style cards on the right
-    if (e.target.closest && e.target.closest(".ce-card, .ce-workspace, .ce-quality-badge-wrap")) return;
-
+  captionOverlay.addEventListener("pointerup", finish);
+  captionOverlay.addEventListener("pointercancel", finish);
+  document.getElementById("capEditWords")?.addEventListener("click", beginCaptionEdit);
+  document.getElementById("capDoneEditing")?.addEventListener("click", () => finishCaptionEdit());
+  captionVideo.addEventListener("play", () => finishCaptionEdit());
+  captionVideo.addEventListener("seeking", () => finishCaptionEdit());
+  document.querySelectorAll("[data-text-align]").forEach(button => button.addEventListener("click", () => {
+    editorState.style.textAlign = button.dataset.textAlign;
+    applyStyleToOverlay(); persistCaptions();
+  }));
+  for (const key of ["boxWidth", "boxHeight"]) {
+    const id = key === "boxWidth" ? "capBoxWidth" : "capBoxHeight";
+    document.getElementById(id)?.addEventListener("input", e => {
+      const value = Number(e.target.value);
+      if (key === "boxHeight" && value > 0) {
+        const previous = captionOverlay.offsetHeight;
+        const height = captionVideoWrap.clientHeight * value / 100;
+        editorState.style.fontSize = Math.round(clamp(editorState.style.fontSize * height / Math.max(previous, 1), 12, 72));
+        if (capFontSize) capFontSize.value = String(editorState.style.fontSize);
+        if (capFontSizeVal) capFontSizeVal.textContent = String(editorState.style.fontSize);
+      }
+      editorState.style[key] = value;
+      applyStyleToOverlay(); persistCaptions();
+    });
+  }
+  window.addEventListener("pointerdown", e => {
+    if (captionOverlay.contains(e.target) || e.target.closest?.(".ce-workspace, #capDoneEditing, #capEditWords")) return;
+    // Blur saves the current word before leaving edit mode.
+    if (captionEditSession) { document.activeElement?.blur(); finishCaptionEdit(); }
     captionOverlay.classList.remove("is-selected");
-    captionOverlay.classList.remove("is-resizing");
-    captionOverlay.classList.remove("is-dragging");
-  };
-
-  // Direct video preview click to immediately deselect
-  captionVideoWrap?.addEventListener("pointerdown", (e) => {
-    if (!captionOverlay.contains(e.target)) {
-      captionOverlay.classList.remove("is-selected");
-      captionOverlay.classList.remove("is-resizing");
-      captionOverlay.classList.remove("is-dragging");
-    }
   });
-
-  captionOverlay.addEventListener("pointerdown", onPointerDown);
-  window.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("pointerup", onPointerUp);
-  window.addEventListener("pointercancel", onPointerUp);
-  window.addEventListener("pointerdown", onOutsidePointerDown, true);
 }
 
 function getActiveSegmentByTime(time) {
@@ -2515,6 +2555,7 @@ function getActiveSegmentByTime(time) {
 }
 
 function syncCaptionOverlay() {
+  if (captionEditSession) return;
   if (!captionVideo || !captionOverlay || !captionOverlayText) return;
 
   const currentTime = safeVideoTime();
@@ -2694,7 +2735,7 @@ function populateStyleControls() {
   if (capBoxPadding) capBoxPadding.value = String(parseInt(s.paddingX ?? 14, 10) || 14);
   if (capBoxPaddingVal) capBoxPaddingVal.textContent = String(parseInt(s.paddingX ?? 14, 10) || 14);
   if (capBoxSizeLabel) capBoxSizeLabel.textContent = `${s.fontSize ?? 28}px`;
-  if (capTextShadow) capTextShadow.checked = s.textShadow;
+  if (capTextShadow) capTextShadow.checked = Boolean(s.textShadow && s.textShadow !== "none");
   if (capShadowColor) capShadowColor.value = s.shadowColor;
   if (capShadowBlur) capShadowBlur.value = String(s.shadowBlur);
   if (capShadowBlurVal) capShadowBlurVal.textContent = String(s.shadowBlur);
@@ -2811,8 +2852,8 @@ function syncStyleFromControls(options = {}) {
   );
   editorState.style.rotateAngle = clamp(
     parseInt(capRotateAngle?.value || "0", 10),
-    -15,
-    15,
+    -360,
+    360,
   );
   editorState.style.textTransform = capTextTransform?.value || "none";
 
@@ -2882,6 +2923,7 @@ function renderPresetsUI() {
       <button
         class="preset-card${active ? " preset-card--active" : ""}"
         data-preset-id="${preset.id}"
+        aria-pressed="${active}"
         type="button"
         title="${preset.name} (${preset.category || "Popular"})"
       >
@@ -3143,6 +3185,7 @@ function applyPresetFromGallery(id) {
     positionX: cur.positionX !== undefined ? cur.positionX : 50,
     positionY: cur.positionY !== undefined ? cur.positionY : 82,
     rotateAngle: cur.rotateAngle !== undefined ? cur.rotateAngle : 0,
+    boxWidth: cur.boxWidth || 88, boxHeight: cur.boxHeight || 0, textAlign: cur.textAlign || "center",
   };
 
   const s = preset.style || {};
@@ -3329,6 +3372,7 @@ async function exportCaptionedVideo() {
       exportCaptionedVideoBtn.textContent = "Exporting...";
     }
 
+    document.activeElement?.blur(); finishCaptionEdit();
     syncStyleFromControls();
 
     const normalizedStyle = normalizeStyle(editorState.style);
@@ -3364,7 +3408,7 @@ async function exportCaptionedVideo() {
       body: JSON.stringify({
         clip: editorState.clip,
         videoUrl: sourceUrl,
-        segments: exportSegments,
+        segments: wrapExportToBox(exportSegments, normalizedStyle),
         style: scaledStyle,
       }),
     });
@@ -3485,7 +3529,7 @@ async function buildCaptionedClipForPublish() {
     body: JSON.stringify({
       clip: editorState.clip,
       videoUrl: sourceUrl,
-      segments: exportSegments,
+      segments: wrapExportToBox(exportSegments, normalizedStyle),
       style: scaledStyle,
     }),
   });
@@ -3609,6 +3653,7 @@ function pathSafeFileNameFromUrl(value = "") {
 
 // Navigation
 function goBack() {
+  document.activeElement?.blur(); finishCaptionEdit();
   try {
     persistCaptions();
   } catch (e) {
@@ -3670,9 +3715,10 @@ function bindControls() {
 
   capFontFamily?.addEventListener("change", () => {
     const name = captionFontName(capFontFamily.value);
-    const weights = { Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
+    const weights = { "Archivo Black":400, Poppins:700, Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
     if (weights[name]) editorState.style.fontWeight = weights[name];
     onSliderCommit();
+    ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
   capAnimStyle?.addEventListener("change", onSliderCommit);
   capTextShadow?.addEventListener("change", onSliderCommit);
@@ -3859,7 +3905,7 @@ function bindControls() {
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.key === " ") {
       const tag = document.activeElement?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      if (tag === "input" || tag === "textarea" || tag === "select" || document.activeElement?.isContentEditable) return;
       e.preventDefault();
       toggleVideoPlayback();
     }

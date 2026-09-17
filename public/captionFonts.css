@@ -5,3 +5,21 @@
 @font-face { font-family: 'Bebas Neue'; src: url('fonts/BebasNeue-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Libre Caslon Text'; src: url('fonts/LibreCaslonText.ttf') format('truetype'); font-weight: 400 700; font-style: normal; font-display: swap; }
 @font-face { font-family: 'Space Mono'; src: url('fonts/SpaceMono-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Inter'; src: url('fonts/Inter.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Playfair Display'; src: url('fonts/PlayfairDisplay.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Montserrat'; src: url('fonts/Montserrat.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Archivo Black'; src: url('fonts/ArchivoBlack.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Cinzel'; src: url('fonts/Cinzel.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Oswald'; src: url('fonts/Oswald.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Poppins'; src: url('fonts/Poppins.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'JetBrains Mono'; src: url('fonts/JetBrainsMono.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+
+@font-face { font-family: 'Syne'; src: url('fonts/Syne.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
