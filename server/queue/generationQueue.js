@@ -7,7 +7,7 @@ const {
 } = require("./generationConstants");
 
 // Dedicated Redis connection for BullMQ Queue operations
-const queueConnection = createRedisClient("GenerationQueue");
+const queueConnection = createRedisClient("GenerationQueue", "producer");
 
 const generationQueue = new Queue(GENERATION_QUEUE_NAME, {
   connection: queueConnection,
@@ -29,6 +29,15 @@ async function isGenerationWorkerAlive() {
     return exists === 1;
   } catch {
     return false;
+  }
+}
+
+async function getGenerationQueueHealth() {
+  try {
+    await queueConnection.ping();
+    return { redis: "ready", worker: (await isGenerationWorkerAlive()) ? "ready" : "starting" };
+  } catch {
+    return { redis: "unavailable", worker: "unavailable" };
   }
 }
 
@@ -95,4 +104,5 @@ module.exports = {
   removeGenerationJob,
   getGenerationBullJobId,
   isGenerationWorkerAlive,
+  getGenerationQueueHealth,
 };

@@ -1204,6 +1204,13 @@ app.get(["/health", "/api/health"], (req, res) => {
   res.json({ ok: true, status: "healthy", revision: process.env.RENDER_GIT_COMMIT || null });
 });
 
+app.get("/api/queue-health", async (req, res) => {
+  const { getGenerationQueueHealth } = require("./queue/generationQueue");
+  const queue = await getGenerationQueueHealth();
+  const ok = queue.redis === "ready" && queue.worker === "ready";
+  res.status(ok ? 200 : 503).json({ ok, queue, revision: process.env.RENDER_GIT_COMMIT || null });
+});
+
 app.get("/api/version", (req, res) => {
   res.json({
     ok: true,

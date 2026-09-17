@@ -1,9 +1,11 @@
 const { workerOptions } = require("./redisBudget");
 const { Worker } = require("bullmq");
-const redis = require("../lib/redis");
+const { createRedisClient } = require("../lib/redis");
 const {
   runScheduledPostById,
 } = require("../services/publishing/runScheduledPost");
+
+const publishWorkerConnection = createRedisClient("PublishWorker", "worker");
 
 const publishWorker = new Worker(
   "publish-jobs",
@@ -30,7 +32,7 @@ const publishWorker = new Worker(
   },
   {
     ...workerOptions,
-    connection: redis,
+    connection: publishWorkerConnection,
   },
 );
 

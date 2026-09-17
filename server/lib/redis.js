@@ -1,28 +1,14 @@
 const IORedis = require("ioredis");
 const { REDIS_URL } = require("../config/env");
+const { buildRedisOptions } = require("./redisOptions");
 
 /**
  * Creates an IORedis client configured specifically for BullMQ compatibility.
  * BullMQ requires maxRetriesPerRequest: null.
  * Also configures TLS if the URL scheme is rediss:// (e.g. Render Redis, Upstash, AWS ElastiCache).
  */
-function createRedisClient(label = "redis") {
-  const isTls = REDIS_URL && REDIS_URL.startsWith("rediss://");
-
-  const options = {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-    retryStrategy(times) {
-      // Exponential backoff with a cap of 10 seconds
-      return Math.min(times * 500, 10000);
-    },
-  };
-
-  if (isTls) {
-    options.tls = {
-      rejectUnauthorized: false,
-    };
-  }
+function createRedisClient(label = "redis", role = "producer") {
+  const options = buildRedisOptions(REDIS_URL, role);
 
   const client = new IORedis(REDIS_URL, options);
 
@@ -47,7 +33,7 @@ function createRedisClient(label = "redis") {
 }
 
 // Shared default client for lightweight key-value checks (e.g. worker heartbeat)
-const defaultRedis = createRedisClient("default");
+const defaultRedis = createRedisClient("default", "producer");
 
 module.exports = defaultRedis;
 module.exports.createRedisClient = createRedisClient;
