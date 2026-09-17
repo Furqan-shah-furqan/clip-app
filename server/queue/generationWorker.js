@@ -2,7 +2,6 @@ const { workerOptions } = require("./redisBudget");
 require("dotenv").config();
 const { Worker } = require("bullmq");
 const { createRedisClient } = require("../lib/redis");
-const defaultRedis = require("../lib/redis");
 const prisma = require("../lib/prisma");
 const {
   GENERATION_QUEUE_NAME,
@@ -25,7 +24,8 @@ const concurrency = Math.max(
 console.log("[GenerationWorker] Starting...");
 
 // Dedicated connection for the BullMQ Worker (handles blocking BRPOP/BLPOP commands)
-const workerConnection = createRedisClient("GenerationWorker");
+const workerConnection = createRedisClient("GenerationWorker", "worker");
+const heartbeatConnection = createRedisClient("GenerationHeartbeat", "worker");
 
 // Track currently active GenerationJob ID for clean shutdown & recovery
 let currentActiveJobId = null;
@@ -35,7 +35,7 @@ let heartbeatInterval = null;
 
 async function sendWorkerHeartbeat() {
   try {
-    await defaultRedis.set(
+    await heartbeatConnection.set(
       WORKER_HEARTBEAT_KEY,
       String(Date.now()),
       "EX",
@@ -59,7 +59,7 @@ async function initWorker() {
     console.log("[GenerationWorker] Database ready");
 
     // 2. Verify Redis connectivity
-    await defaultRedis.ping();
+    await heartbeatConnection.ping();
     console.log("[GenerationWorker] Redis ready");
 
     console.log(`[GenerationWorker] Queue: ${GENERATION_QUEUE_NAME}`);
@@ -334,7 +334,7 @@ const gracefulShutdown = async (signal) => {
   }
 
   try {
-    await defaultRedis.del(WORKER_HEARTBEAT_KEY);
+    await heartbeatConnection.del(WORKER_HEARTBEAT_KEY);
   } catch {}
 
   try {

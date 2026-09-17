@@ -424,8 +424,52 @@ const aspectRatioInput = document.getElementById("aspectRatio");
 const smartClipBtn = document.getElementById("smartClipBtn");
 const cancelGenerationBtn = document.getElementById("cancelGenerationBtn");
 const generationActionRow = document.getElementById("generationActionRow");
+const expectedOutputCard = document.getElementById("expectedOutputCard");
+const expectedOutputDuration = document.getElementById("expectedOutputDuration");
+const expectedOutputCount = document.getElementById("expectedOutputCount");
+const expectedOutputPreviews = document.getElementById("expectedOutputPreviews");
+let generationEtaTimer = null;
+let generationEtaDeadline = 0;
 
-function renderGenerationControls(mode = "idle") {
+function stopGenerationCountdown() {
+  if (generationEtaTimer) clearInterval(generationEtaTimer);
+  generationEtaTimer = null;
+  generationEtaDeadline = 0;
+}
+
+function formatRemainingTime(seconds) {
+  const safe = Math.max(1, Math.ceil(Number(seconds) || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return mins ? `${mins}m ${String(secs).padStart(2, "0")}s remaining` : `${secs}s remaining`;
+}
+
+function paintGenerationCountdown() {
+  if (!smartClipBtn || !generationEtaDeadline || !state.isGenerating) return;
+  smartClipBtn.textContent = formatRemainingTime((generationEtaDeadline - Date.now()) / 1000);
+}
+
+function setGenerationCountdown(etaSeconds) {
+  const nextDeadline = Date.now() + Math.max(5, Number(etaSeconds) || 0) * 1000;
+  if (
+    !generationEtaDeadline ||
+    nextDeadline < generationEtaDeadline - 3000 ||
+    nextDeadline > generationEtaDeadline + 30000
+  ) {
+    generationEtaDeadline = nextDeadline;
+  }
+  paintGenerationCountdown();
+  if (!generationEtaTimer) generationEtaTimer = setInterval(paintGenerationCountdown, 1000);
+}
+
+function estimateGenerationSeconds(progress = 5, elapsedSeconds = 0) {
+  const p = Math.max(1, Math.min(99, Number(progress) || 5));
+  if (elapsedSeconds > 5 && p > 5) return Math.max(5, elapsedSeconds * (100 - p) / p);
+  const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
+  return Math.min(360, 55 + Math.min(180, duration * 0.08) + Math.min(3, getAutoSmartClipCount()) * 24);
+}
+
+function renderGenerationControls(mode = "idle", etaSeconds = null) {
   const normalized = String(mode || "idle").toLowerCase();
 
   if (normalized === "starting") {
@@ -452,7 +496,8 @@ function renderGenerationControls(mode = "idle") {
     }
     if (smartClipBtn) {
       smartClipBtn.disabled = true;
-      smartClipBtn.textContent = "Generating clips...";
+      if (etaSeconds !== null) setGenerationCountdown(etaSeconds);
+      else if (!generationEtaDeadline) setGenerationCountdown(estimateGenerationSeconds());
       smartClipBtn.classList.remove("is-starting", "is-cancelling");
       smartClipBtn.classList.add("is-generating");
     }
@@ -477,6 +522,7 @@ function renderGenerationControls(mode = "idle") {
   }
 
   // Default: IDLE
+  stopGenerationCountdown();
   if (cancelGenerationBtn) {
     cancelGenerationBtn.classList.add("is-hidden");
     cancelGenerationBtn.disabled = false;
@@ -1193,6 +1239,20 @@ function getAutoSmartClipCount() {
   return Math.min(10, Math.max(8, Math.floor(minutes / 12))); // 100+ min: 8 to 10 clips
 }
 
+function updateExpectedOutputCard() {
+  if (!expectedOutputCard) return;
+  const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
+  const count = Math.min(3, getAutoSmartClipCount());
+  expectedOutputDuration.textContent = duration
+    ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
+    : "Add a video to estimate your output";
+  expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
+  const shown = Math.min(5, count);
+  expectedOutputPreviews.innerHTML = Array.from({ length: shown }, (_, index) =>
+    `<span class="expected-preview${index === 1 ? " is-featured" : ""}"><span>▷</span></span>`
+  ).join("") + (count > shown ? `<span class="expected-preview expected-preview-more">+${count - shown}</span>` : "");
+}
+
 function updateClipPlanner() {
   const autoPicks = getAutoSmartClipCount();
   if (videoLengthText)
@@ -1204,6 +1264,7 @@ function updateClipPlanner() {
     totalPossibleClips.textContent = `${autoPicks} smart picks`;
   if (clipLengthInfo)
     clipLengthInfo.textContent = `${state.selectedDuration}s target length • auto-ranked by transcript`;
+  updateExpectedOutputCard();
 }
 
 function autoHookForClip(index) {
@@ -3175,11 +3236,24 @@ function getCleanSmartClipError(error) {
 }
 
 async function createSmartGenerationJob(payload) {
-  const res = await apiFetch(`${API_BASE}/clips/smart-generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  let res;
+  try {
+    res = await apiFetch(`${API_BASE}/clips/smart-generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("The generation queue did not respond within 20 seconds. Check REDIS_URL and restart the Render service.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res || !res.jobId) {
     throw new Error(res?.error || "Failed to create generation job");
@@ -3314,7 +3388,15 @@ async function pollGenerationJob(jobId, onProgress, requestVersion) {
     }
 
     if (onProgress && typeof onProgress === "function") {
-      onProgress(displayProgress, displayStage);
+      const elapsedSeconds = Math.max(
+        0,
+        (Date.now() - new Date(startedAt || createdAt || Date.now()).getTime()) / 1000,
+      );
+      onProgress(
+        displayProgress,
+        displayStage,
+        estimateGenerationSeconds(displayProgress, elapsedSeconds),
+      );
     }
 
     if (status === "COMPLETED" || Number(progress) === 100) {
@@ -3355,12 +3437,13 @@ function startGenerationPolling(jobId) {
 
   pollGenerationJob(
     jobId,
-    (progress, stage) => {
+    (progress, stage, etaSeconds) => {
       if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
         console.log("[GenerationUI] Poll response ignored because job changed");
         return;
       }
-      updateProgress(progress, stage);
+      updateProgress(progress, stage, etaSeconds);
+      renderGenerationControls("active", etaSeconds);
     },
     currentVersion
   )
