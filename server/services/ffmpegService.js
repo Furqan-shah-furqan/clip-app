@@ -254,12 +254,14 @@ function buildAssDialogueText(text, animStyle, durationMs, anchor) {
 }
 
 function buildCuratedDialogueText(text, style, durationMs, anchor) {
-  const motionMs = Math.max(1, Math.min(180, durationMs, (Number(style.presetDuration) || .12) * 1000));
+  const motionMs = Math.max(1, Math.min(durationMs, (Number(style.presetDuration) || .12) * 1000));
   const rise = Math.max(1, Math.round((Number(style.fontSize) || 28) * .1));
   const position = style.animationStyle === 'elevate'
     ? `\\move(${anchor.x},${anchor.y + rise},${anchor.x},${anchor.y},0,${motionMs})`
     : `\\pos(${anchor.x},${anchor.y})`;
-  const tag = `{\\an5${position}\\frz(${-Number(style.rotateAngle || 0)})}`;
+  const align = style.textAlign === 'left' ? 4 : style.textAlign === 'right' ? 6 : 5;
+  const origin = anchor.origin || anchor;
+  const tag = `{\\an${align}${position}\\org(${origin.x},${origin.y})\\frz${-Number(style.rotateAngle || 0)}\\q2}`;
   const parts = text.split(/(\\N|\s+)/);
   let last = parts.length - 1;
   while (last >= 0 && (!parts[last] || parts[last] === '\\N' || /^\s+$/.test(parts[last]))) last--;
@@ -267,9 +269,12 @@ function buildCuratedDialogueText(text, style, durationMs, anchor) {
   // Keep previous words still; decorate only the latest spoken word.
   if (last >= 0) {
     let overrides = '';
-    if (style.highlightMode === 'word') overrides += `\\1c${hexToABGR(style.highlightColor, 100)}&`;
-    if (style.animationStyle === 'pop') overrides += `\\fscx96\\fscy96\\t(0,${motionMs},\\fscx100\\fscy100)`;
-    if (style.animationStyle === 'classic') overrides += `\\1a&H33&\\t(0,${motionMs},\\1a&H00&)`;
+    if (style.highlightMode === 'word' || ['highlight', 'highlightimpact', 'wordcolor'].includes(style.animationStyle)) overrides += `\\1c${hexToABGR(style.highlightColor, 100)}&`;
+    if (['pop', 'highlightimpact'].includes(style.animationStyle)) overrides += `\\fscx96\\fscy96\\t(0,${motionMs},\\fscx100\\fscy100)`;
+    if (['classic', 'reveal', 'wordappend'].includes(style.animationStyle)) overrides += `\\1a&H33&\\t(0,${motionMs},\\1a&H00&)`;
+    if (style.animationStyle === 'typewriter') overrides += `\\2a&HFF&\\kf${Math.max(1, Math.round(motionMs / 10))}`;
+    if (style.animationStyle === 'cinematic') overrides += `\\blur2\\t(0,${motionMs},\\blur0)`;
+    if (style.animationStyle === 'neon') overrides += `\\bord1\\blur2\\t(0,${motionMs},\\blur0)`;
     if (overrides) parts[last] = `{${overrides}}${parts[last]}`;
   }
   return tag + parts.join('');
@@ -288,11 +293,11 @@ function buildAssContent(segments, style = {}) {
   const videoH = Number(style.exportVideoHeight || style.playResY || 1920);
   const letterSpacing = Number(style.letterSpacing) || 0;
   const bgOpacity = clamp(Number(style.bgOpacity ?? 0), 0, 100);
-  const hasShadow = Boolean(style.textShadow);
+  const hasShadow = Boolean(style.textShadow && style.textShadow !== 'none');
 
   const primaryColor = hexToABGR(style.textColor || '#ffffff', 100);
-  const backColor = style.curated && bgOpacity === 0
-    ? hexToABGR(style.shadowColor || '#000000', style.textShadow ? 85 : 0)
+  const backColor = (style.curated || style.editorBox) && bgOpacity === 0
+    ? hexToABGR(style.shadowColor || '#000000', hasShadow ? 100 : 0)
     : hexToABGR(style.bgColor || '#000000', bgOpacity);
 
   let outlineColor = hexToABGR(style.shadowColor || '#000000', 100);
@@ -300,12 +305,12 @@ function buildAssContent(segments, style = {}) {
   let outline = 0;
   let shadow = 0;
 
-  if (style.curated) {
+  if (style.curated || style.editorBox) {
     // Typography is defined by the preset, never by the animation name.
     borderStyle = bgOpacity > 0 ? 3 : 1;
     outlineColor = bgOpacity > 0 ? backColor : hexToABGR(style.strokeColor || '#111318', 100);
     outline = bgOpacity > 0 ? Math.max(0, Number(style.paddingY) || 6) : Math.max(0, Number(style.strokeWidth) || 0);
-    shadow = bgOpacity > 0 || !style.textShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
+    shadow = style.editorBox || bgOpacity > 0 || !hasShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
   } else switch (animStyle) {
     case 'neon':
       outlineColor = hexToABGR(style.shadowColor || '#00e5ff', 90);
@@ -384,12 +389,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     let text = normalizeText(seg.text, textTransform);
     text = text.replace(/\r?\n/g, '\\N');
-    if (!text.includes('\\N')) text = wrapText(text, charsPerLine);
+    if (!style.editorBox && !text.includes('\\N')) text = wrapText(text, charsPerLine);
     text = escapeAssText(text);
+    if (style.editorBox) {
+      const lines = text.split('\\N');
+      const boxWidth = videoW * clamp(Number(style.boxWidth) || 88, 15, 100) / 100;
+      const inset = bgOpacity > 0 ? Number(style.paddingX) || 0 : 0;
+      const x = anchor.x + (style.textAlign === 'left' ? -boxWidth / 2 + inset : style.textAlign === 'right' ? boxWidth / 2 - inset : 0);
+      const step = fontSize * (Number(style.lineSpacing) || 1.35);
+      const event = (layer, content) => `Dialogue: ${layer},${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${content}`;
+      return lines.map((line, index) => {
+        const point = { x:Math.round(x), y:Math.round(anchor.y + (index - (lines.length - 1) / 2) * step), origin:anchor };
+        const lineStyle = index === lines.length - 1 ? style : {...style, animationStyle:'none', highlightMode:'none'};
+        const foreground = event(0, buildCuratedDialogueText(line, lineStyle, durationMs, point));
+        if (!hasShadow) return foreground;
+        const shadowPoint = {...point, x:point.x + (Number(style.shadowOffsetX) || 0), y:point.y + (Number(style.shadowOffsetY) || 0)};
+        const align = style.textAlign === 'left' ? 4 : style.textAlign === 'right' ? 6 : 5;
+        const shadowTags = `{\\an${align}\\pos(${shadowPoint.x},${shadowPoint.y})\\org(${anchor.x},${anchor.y})\\frz${-Number(style.rotateAngle || 0)}\\q2\\bord0\\shad0\\1c${hexToABGR(style.shadowColor || '#000000', 100)}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
+        const crispShadow = shadowTags.replace(/\\blur[0-9.]+/, `\\blur${Math.min(2, Math.max(0, Number(style.shadowBlur) || 0))}`);
+        return event(-2, shadowTags + line) + '\n' + event(-1, crispShadow + line) + '\n' + foreground;
+      }).join('\n');
+    }
     text = style.curated
       ? buildCuratedDialogueText(text, style, durationMs, anchor)
       : buildAssDialogueText(text, animStyle, durationMs, anchor);
-
     return `Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${text}`;
   }).join('\n');
 

@@ -10,8 +10,9 @@
       href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Bebas+Neue&family=Cinzel:wght@700;900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Montserrat:wght@600;700;800;900&family=Oswald:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Poppins:wght@600;700;800;900&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="captionFonts.css?v=curated-1" />
-    <link rel="stylesheet" href="captions.css?v=curated-1" />
+    <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
+    <link rel="stylesheet" href="captions.css?v=editor-2" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-2" />
   </head>
   <body class="caption-editor-page theme-dark">
     <!-- Ambient glowing lights matching home page -->
@@ -162,7 +163,7 @@
                       >
                         <!-- CapCut Bounding Box Frame & Corner Handles -->
                         <div class="cap-box-frame" id="capBoxFrame">
-                          <div class="cap-box-info" id="capBoxInfo">
+                          <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
                             <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
                           </div>
                           <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
@@ -200,7 +201,7 @@
                 <div class="ce-card-head">
                   <div class="ce-card-title-group">
                     <span class="ce-card-icon">🔤</span>
-                    <h4 class="ce-card-title">Typography &amp; Cadence</h4>
+                    <h4 class="ce-card-title">Typography &amp; Motion</h4>
                   </div>
                 </div>
 
@@ -223,10 +224,7 @@
                         <option value="'Syne', sans-serif">Syne</option>
                         <option value="'Poppins', sans-serif">Poppins</option>
                         <option value="'Oswald', sans-serif">Oswald</option>
-                        <option value="Impact, sans-serif">Impact</option>
-                        <option value="'Arial Black', sans-serif">Arial Black</option>
                         <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-                        <option value="Georgia, serif">Georgia</option>
                       </select>
                       <span class="ce-select-caret">⌄</span>
                     </div>
@@ -552,7 +550,7 @@
                 <div class="ce-card-head">
                   <div class="ce-card-title-group">
                     <span class="ce-card-icon">📍</span>
-                    <h4 class="ce-card-title">Position &amp; Tilt</h4>
+                    <h4 class="ce-card-title">Text Box &amp; Position</h4>
                   </div>
                   <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
                 </div>
@@ -578,9 +576,21 @@
                   </button>
                 </div>
 
+                  <div class="ce-box-toolbar">
+                  <div class="ce-align-buttons" role="group" aria-label="Caption text alignment">
+<button type="button" class="ce-align-btn" data-text-align="left" aria-label="Align left" title="Align left" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M3 10h12M3 15h18M3 20h12"/></svg></button><button type="button" class="ce-align-btn" data-text-align="center" aria-label="Align center" title="Align center" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button><button type="button" class="ce-align-btn" data-text-align="right" aria-label="Align right" title="Align right" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M9 10h12M3 15h18M9 20h12"/></svg></button></div>
+                  <button type="button" class="ce-btn" id="capEditWords">Edit words</button>
+                  <button type="button" class="ce-btn" id="capDoneEditing" hidden>Done</button>
+                </div>
+                <p id="capBoxHint" class="ce-box-hint" aria-live="polite">Double-click captions to correct words. Edges reshape; corners scale text.</p>
+                <div class="ce-field-row">
+                  <div class="ce-field"><label for="capBoxWidth" class="ce-label">Box width <span id="capBoxWidthVal">88%</span></label><input class="ce-range" type="range" id="capBoxWidth" min="15" max="100" value="88" /></div>
+                  <div class="ce-field"><label for="capBoxHeight" class="ce-label">Box height <span id="capBoxHeightVal">Auto</span></label><input class="ce-range" type="range" id="capBoxHeight" min="0" max="90" value="0" /></div>
+                </div>
+
                 <!-- X and Y Sliders -->
                 <div class="ce-coord-sliders">
-                  <div class="ce-field ce-field--compact">
+                <div class="ce-field ce-field--compact">
                     <div class="ce-label-with-val">
                       <label class="ce-label" for="capPosX">Horizontal (X)</label>
                       <span class="ce-val-tag" id="capPosXVal">50%</span>
@@ -614,15 +624,15 @@
                 <!-- ROTATION / TILT ANGLE -->
                 <div class="ce-field ce-field--compact" style="margin-top: 4px;">
                   <div class="ce-label-with-val">
-                    <label class="ce-label" for="capRotateAngle">Rotation / Tilt</label>
+                    <label class="ce-label" for="capRotateAngle">Rotation</label>
                     <span class="ce-val-tag"><span id="capRotateAngleVal">0</span>°</span>
                   </div>
                   <input
                     class="ce-range"
                     type="range"
                     id="capRotateAngle"
-                    min="-15"
-                    max="15"
+                    min="-360"
+                    max="360"
                     step="1"
                     value="0"
                   />
@@ -734,9 +744,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-    <script src="captionPresets.js?v=curated-1"></script>
+    <script src="captionPresets.js?v=editor-2"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=curated-1"></script>
+    <script src="captions.js?v=editor-2"></script>
   </body>
 </html>
