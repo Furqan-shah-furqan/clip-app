@@ -1996,7 +1996,7 @@ function applyTextBoxVisuals(element, style) {
     element.style.paintOrder = "stroke fill markers";
     element.style.strokeLinejoin = "round";
   } else {
-    element.style.webkitTextStroke = "none";
+    element.style.webkitTextStroke = "0px transparent";
   }
 
   // 2. Force Neon Glow Rendering (Layered textShadow + drop-shadow filter)
@@ -2943,9 +2943,15 @@ function renderPresetsUI() {
     `;
   }).join("");
 
-  presetsGrid.querySelectorAll(".preset-card").forEach((card) => {
-    card.addEventListener("click", () => applyPresetFromGallery(card.dataset.presetId));
-  });
+  // Delegate to the stable container: control refreshes replace the cards.
+  presetsGrid.onclick = handlePresetSelection;
+}
+
+function handlePresetSelection(event) {
+  const card = event.target.closest?.("[data-preset-id]");
+  if (!card) return;
+  event.preventDefault();
+  applyPresetFromGallery(card.dataset.presetId);
 }
 
 function initPresetsGallery() {
@@ -3093,9 +3099,7 @@ function renderPresetsGalleryGrid() {
       return `<span class="preset-hl-word" style="color: ${wordColor};">${word}</span>`;
     }).join(" ");
 
-    const textStroke = (s.strokeWidth && Number(s.strokeWidth) > 0)
-      ? `${s.strokeWidth}px ${s.strokeColor || "#000000"}`
-      : "none";
+    const textStroke = "0px transparent";
 
     let textShadow = "none";
     if (s.textShadow && typeof s.textShadow === "string" && s.textShadow !== "none" && s.textShadow !== "true") {
@@ -3112,11 +3116,10 @@ function renderPresetsGalleryGrid() {
     }
 
     return `
-      <div
+      <button type="button"
         class="preset-gallery-card${isActive ? " is-active" : ""}"
         data-preset-id="${preset.id}"
-        role="button"
-        tabindex="0"
+        aria-pressed="${isActive}"
         title="Apply ${preset.name}"
       >
         ${badgeHtml}
@@ -3159,19 +3162,11 @@ function renderPresetsGalleryGrid() {
             <span class="preset-card-tag">${s.wordsInRow || "Auto"}</span>
           </div>
         </div>
-      </div>
+      </button>
     `;
   }).join("");
 
-  presetsModalGrid.querySelectorAll(".preset-gallery-card").forEach((card) => {
-    card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); card.click(); }
-    });
-    card.addEventListener("click", () => {
-      const pid = card.dataset.presetId;
-      applyPresetFromGallery(pid);
-    });
-  });
+  presetsModalGrid.onclick = handlePresetSelection;
 }
 
 function applyPresetFromGallery(id) {
@@ -3216,7 +3211,7 @@ function applyPresetFromGallery(id) {
     textColor: s.textColor || "#ffffff",
     highlightColor: s.highlightColor || "#22c55e",
     strokeColor: s.strokeColor || "#000000",
-    strokeWidth: Number(s.strokeWidth) || 0,
+    strokeWidth: 0,
     bgColor: s.bgColor !== undefined ? s.bgColor : "transparent",
     bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
     bgPadding: Number(s.bgPadding) || 12,
@@ -3238,7 +3233,7 @@ function applyPresetFromGallery(id) {
     glowIntensity: Number(s.glowIntensity) || 0,
     behindPerson: isBehind,
     activePresetId: preset.id,
-    activePresetStyle: { ...s, behindPerson: isBehind },
+    activePresetStyle: { ...s, strokeWidth: 0, behindPerson: isBehind },
     assConfig: preset.assConfig || null,
   };
 
