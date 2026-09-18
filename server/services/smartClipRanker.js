@@ -210,7 +210,6 @@ function getDynamicClipQuota(durationInSeconds) {
   if (minutes < 15) return 2;
   if (minutes < 30) return 4;
   if (minutes < 50) return 6;
-  // 7 to 8 clips per hour (~1 clip per 7.5 min)
   return Math.min(30, Math.max(1, Math.round(minutes * (7.5 / 60))));
 }
 

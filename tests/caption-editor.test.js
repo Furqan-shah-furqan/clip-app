@@ -109,6 +109,30 @@ test('alignment/full rotation/box size survive preset selection, control changes
   assert.equal(exported.boxWidth,62);assert.equal(exported.textAlign,'right');assert.equal(exported.rotateAngle,300);
 });
 
+test('every gallery preset applies and persists without changing caption text or timing',()=>{
+  const h=harness();
+  const before=h.run('JSON.stringify(editorState.segments)');
+  for(const preset of CAPTION_PRESETS){
+    h.context.applyPresetFromGallery(preset.id);
+    assert.equal(h.run('editorState.style.activePresetId'),preset.id);
+    assert.equal(h.run('editorState.style.strokeWidth'),0);
+    assert.equal(JSON.parse(h.saved.get('clipflow-caption-style')).activePresetId,preset.id);
+    assert.equal(h.run('JSON.stringify(editorState.segments)'),before);
+  }
+});
+
+test('preset clicks on nested content survive re-rendering both preset lists',()=>{
+  const h=harness();
+  h.context.renderPresetsUI();h.context.renderPresetsGalleryGrid();
+  for(const container of [h.controls.presetsGrid,h.controls.presetsModalGrid]){
+    for(const preset of CAPTION_PRESETS){
+      container.onclick({target:{closest:()=>({dataset:{presetId:preset.id}})},preventDefault(){}});
+      assert.equal(h.run('editorState.style.activePresetId'),preset.id);
+      assert.equal(JSON.parse(h.saved.get('clipflow-caption-style')).activePresetId,preset.id);
+    }
+  }
+});
+
 test('export wraps to box using measured text without modifying words or event times',()=>{
   const h=harness(), segments=[{start:1,end:1.25,text:'hello world again',words:[{word:'again',start:1,end:1.25}]}];
   const wrapped=h.context.wrapExportToBox(segments,{fontFamily:'Barlow',fontSize:28,fontWeight:700,boxWidth:40});

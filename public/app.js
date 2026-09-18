@@ -1767,6 +1767,12 @@ function renderGeneratedClips() {
     })
     .join("");
 
+  generatedClipsGrid.innerHTML = clipsHtml;
+  if (expectedClipsGrid) {
+    expectedClipsGrid.style.display = "grid";
+    expectedClipsGrid.innerHTML = clipsHtml;
+  }
+
   // Attach interactive preview and frame decode hooks to every card
   generatedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
     const vid = card.querySelector("video");

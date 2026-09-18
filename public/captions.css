@@ -430,7 +430,6 @@ body.caption-editor-page .scene-grid {
   width: 100%;
   height: 100%;
   background: #000000;
-  border-radius: 15px !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1088,7 +1087,7 @@ body.caption-editor-page .scene-grid {
   overflow: hidden; /* Fits in first fold */
 }
 
-/* 45px BORDER RADIUS FOR 4 MAIN COMPONENTS — ZERO BORDERS */
+/* 30px BORDER RADIUS FOR 4 MAIN COMPONENTS — ZERO BORDERS */
 .ce-card {
   background: #141416 !important;
   border: none !important;
@@ -1216,8 +1215,7 @@ body.caption-editor-page .scene-grid {
   width: 100%;
 }
 
-.ce-select,
-#capAnimStyle {
+.ce-select {
   width: 100%;
   height: 30px;
   padding: 0 28px 0 12px;
@@ -2155,11 +2153,7 @@ body.caption-editor-page .scene-grid {
    THEME LIGHT STYLES FOR CAPTION STUDIO & WHOLE APP
    ═════════════════════════════════════════════════════════════ */
 body.caption-editor-page.theme-light {
-  background: #f4f1ec !important;
-}
-
-body.caption-editor-page.theme-light .ce-phone-screen {
-  background: #e9ecef !important;
+  background: #0b0c0e !important;
 }
 
 body.caption-editor-page.theme-light .day-night-toggle {
