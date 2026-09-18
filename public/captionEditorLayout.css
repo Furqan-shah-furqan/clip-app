@@ -131,3 +131,55 @@ body.caption-editor-page .preset-card.preset-card--active {
   border:2px solid white !important;
   box-shadow:0 0 0 1px white !important;
 }
+
+/* One palette for the editor chrome; caption artwork keeps its own colors. */
+body.caption-editor-page {
+  --editor-bg:#0b0c0e; --editor-panel:#16181c; --editor-control:#25282e;
+  --editor-text:#f5f6f8; --editor-muted:#b4bac4; --editor-line:#414650;
+  padding:5px;
+  background:var(--editor-bg) !important;
+  color:var(--editor-text);
+  color-scheme:dark;
+}
+body.caption-editor-page.theme-light {
+  --editor-bg:#eceef1; --editor-panel:#ffffff; --editor-control:#e7eaf0;
+  --editor-text:#191d25; --editor-muted:#535d6d; --editor-line:#c3cad5;
+  color-scheme:light;
+}
+body.caption-editor-page .ce-layout,
+body.caption-editor-page .ce-style-grid { gap:0; }
+body.caption-editor-page .ce-topbar,
+body.caption-editor-page .ce-preview-panel,
+body.caption-editor-page .ce-card { margin:5px !important; border-radius:45px !important; }
+body.caption-editor-page .presets-drawer-panel { border-radius:45px !important; }
+body.caption-editor-page .ce-phone-frame,
+body.caption-editor-page .ce-phone-screen,
+body.caption-editor-page .ce-phone-bezel,
+body.caption-editor-page .caption-video-wrap,
+body.caption-editor-page #capAnimStyle { border-radius:15px !important; }
+body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card,.ce-topbar,.ce-preview-panel,.presets-drawer-panel) {
+  --text:var(--editor-text); --muted:var(--editor-muted); --muted-2:var(--editor-muted);
+  --panel:var(--editor-panel); --panel-2:var(--editor-control); --line:var(--editor-line);
+  background:var(--editor-panel) !important; color:var(--editor-text) !important;
+}
+body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card-title,.ce-label,.ce-field-label,.ce-clip-title,.ce-status-label,.ce-hint,.ce-box-hint,.presets-drawer-title,.presets-drawer-subtitle) {
+  color:var(--editor-text) !important;
+}
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card :is(.ce-select,.ce-input,.ce-pill-group,.ce-pill-opt,.ce-val-tag,.ce-align-buttons,.ce-align-btn,.ce-drag-hint),
+body.caption-editor-page:is(.theme-dark,.theme-light) :is(.presets-search-input,.preset-category-pill,.presets-drawer-close) {
+  background:var(--editor-control) !important; color:var(--editor-text) !important;
+}
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-select option {
+  background:var(--editor-control); color:var(--editor-text);
+}
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card :is(.ce-pill-opt,.ce-align-btn).is-active,
+body.caption-editor-page:is(.theme-dark,.theme-light) .preset-category-pill.is-active {
+  background:var(--editor-text) !important; color:var(--editor-panel) !important;
+}
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range { accent-color:var(--editor-text); background:var(--editor-control); }
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range::-webkit-slider-runnable-track { background:var(--editor-control); }
+body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range::-webkit-slider-thumb { background:var(--editor-text); box-shadow:0 0 0 3px var(--editor-panel); }
+/* Preset swatches and the video retain their media colors in both themes. */
+@media(max-width:680px) {
+  body.caption-editor-page .ce-preview-panel { width:calc(100% - 10px); justify-self:center; }
+}
