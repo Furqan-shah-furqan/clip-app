@@ -80,7 +80,7 @@ body.caption-editor-page {
   height: 100vh;
   max-height: 100vh;
   overflow: hidden; /* No page scrollbar! */
-  padding: 7px; /* 7px margin from every side framing the black container */
+  padding: 5px !important; /* 5px margin from every side framing the black container */
   box-sizing: border-box;
   background: #ffffff !important; /* Pure white page background */
   color: var(--text);
@@ -421,6 +421,7 @@ body.caption-editor-page .scene-grid {
   height: 100%;
   position: relative;
   background: #0a0a0c;
+  border-radius: 15px !important;
   overflow: hidden;
 }
 
@@ -429,6 +430,7 @@ body.caption-editor-page .scene-grid {
   width: 100%;
   height: 100%;
   background: #000000;
+  border-radius: 15px !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1086,11 +1088,11 @@ body.caption-editor-page .scene-grid {
   overflow: hidden; /* Fits in first fold */
 }
 
-/* 30px BORDER RADIUS FOR 4 MAIN COMPONENTS — ZERO BORDERS */
+/* 45px BORDER RADIUS FOR 4 MAIN COMPONENTS — ZERO BORDERS */
 .ce-card {
   background: #141416 !important;
   border: none !important;
-  border-radius: 30px !important;
+  border-radius: 45px !important;
   padding: 13px 18px !important;
   display: flex;
   flex-direction: column;
@@ -1214,11 +1216,12 @@ body.caption-editor-page .scene-grid {
   width: 100%;
 }
 
-.ce-select {
+.ce-select,
+#capAnimStyle {
   width: 100%;
   height: 30px;
   padding: 0 28px 0 12px;
-  border-radius: 25px !important;
+  border-radius: 15px !important;
   border: none !important;
   background: #1e1f24 !important;
   color: var(--text);
@@ -2152,7 +2155,11 @@ body.caption-editor-page .scene-grid {
    THEME LIGHT STYLES FOR CAPTION STUDIO & WHOLE APP
    ═════════════════════════════════════════════════════════════ */
 body.caption-editor-page.theme-light {
-  background: #0b0c0e !important;
+  background: #f4f1ec !important;
+}
+
+body.caption-editor-page.theme-light .ce-phone-screen {
+  background: #e9ecef !important;
 }
 
 body.caption-editor-page.theme-light .day-night-toggle {
