@@ -162,6 +162,124 @@ body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card,.ce-topbar,.c
   --panel:var(--editor-panel); --panel-2:var(--editor-control); --line:var(--editor-line);
   background:var(--editor-panel) !important; color:var(--editor-text) !important;
 }
+
+/* First Fold Strict Viewport Layout & Smaller Typography */
+html, body.caption-editor-page {
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  padding: 5px !important;
+  box-sizing: border-box !important;
+}
+
+body.caption-editor-page .ce-main-container {
+  height: calc(100vh - 10px) !important;
+  max-height: calc(100vh - 10px) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+body.caption-editor-page .ce-topbar {
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 4px 14px !important;
+  margin-bottom: 4px !important;
+  flex-shrink: 0 !important;
+}
+
+body.caption-editor-page .ce-shell {
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: calc(100vh - 66px) !important;
+  max-height: calc(100vh - 66px) !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+body.caption-editor-page .ce-layout {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) !important;
+  gap: 6px !important;
+  align-items: stretch !important;
+}
+
+body.caption-editor-page .ce-preview-panel {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  padding: 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+body.caption-editor-page .ce-phone-stage {
+  flex: 1 !important;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+body.caption-editor-page .ce-phone-frame {
+  max-height: 100% !important;
+  width: auto !important;
+  max-width: 250px !important;
+  aspect-ratio: 9/16 !important;
+}
+
+body.caption-editor-page .ce-workspace {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+body.caption-editor-page .ce-style-grid {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  grid-template-rows: 1.25fr 1fr !important;
+  gap: 6px !important;
+}
+
+body.caption-editor-page .ce-card {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 10px 12px !important;
+  border-radius: 45px !important;
+  gap: 6px !important;
+  box-sizing: border-box !important;
+}
+
+/* Smaller Compact Typography Across Controls */
+body.caption-editor-page .ce-card-title { font-size: 11px !important; font-weight: 700 !important; }
+body.caption-editor-page .ce-label,
+body.caption-editor-page .ce-field-label { font-size: 9.5px !important; margin-bottom: 2px !important; }
+body.caption-editor-page .ce-pill-opt { font-size: 9.5px !important; padding: 2px 7px !important; height: 22px !important; }
+body.caption-editor-page .ce-select,
+body.caption-editor-page .ce-input { font-size: 10.5px !important; height: 25px !important; padding: 0 20px 0 8px !important; }
+body.caption-editor-page .ce-kicker { font-size: 8.5px !important; }
+body.caption-editor-page .ce-clip-title { font-size: 11px !important; }
+body.caption-editor-page .ce-status-label,
+body.caption-editor-page .ce-hint,
+body.caption-editor-page .ce-box-hint { font-size: 9px !important; }
+body.caption-editor-page .ce-back-btn,
+body.caption-editor-page .ce-sync-btn,
+body.caption-editor-page .ce-btn { font-size: 10.5px !important; padding: 3px 8px !important; height: 26px !important; }
+body.caption-editor-page .preset-name { font-size: 9px !important; }
+body.caption-editor-page .ce-value-badge { font-size: 9px !important; padding: 1px 5px !important; }
 body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card-title,.ce-label,.ce-field-label,.ce-clip-title,.ce-status-label,.ce-hint,.ce-box-hint,.presets-drawer-title,.presets-drawer-subtitle) {
   color:var(--editor-text) !important;
 }

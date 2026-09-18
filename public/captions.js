@@ -2234,7 +2234,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
 
-  if (editorState.style.curated || editorState.style.boxWidth) {
+  if (editorState.style.curated) {
     renderSmoothCaption(captionOverlayText, text, segId, activeWordIdx, editorState.style);
     return;
   }
