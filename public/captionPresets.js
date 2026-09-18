@@ -875,6 +875,17 @@ const CAPTION_PRESETS = [
   }
 ];
 
+// Kinetic hook references, adapted to editable, speech-timed caption styles.
+CATEGORIES.push("Kinetic Hooks");
+const hookBase = {...CAPTION_PRESETS[0].style, strokeWidth:0, fontSize:32,
+  textTransform:"uppercase", presetDuration:.35, wordsInRow:"2 Words",
+  textShadow:true, shadowBlur:4, shadowOffsetY:2, lineSpacing:1.05};
+CAPTION_PRESETS.push(
+  {id:"hook-red-label",name:"No Hook · Red Label",category:"Kinetic Hooks",previewText:"HOOK VIEWS!",badge:"NEW",style:{...hookBase,fontFamily:"Anton",fontWeight:400,textColor:"#FFFFFF",bgColor:"#EF3340",bgOpacity:100,bgPadding:8,highlightColor:"#FFFFFF",wordAnimation:"pop"}},
+  {id:"hook-acid-scroll",name:"People Scroll · Acid",category:"Kinetic Hooks",previewText:"PEOPLE SCROLL",badge:"NEW",style:{...hookBase,fontFamily:"Anton",fontWeight:400,textColor:"#FFFFFF",highlightColor:"#DFFF00",highlightMode:"word",bgOpacity:0,wordAnimation:"highlight"}},
+  {id:"hook-editorial-focus",name:"Focus · Editorial",category:"Kinetic Hooks",previewText:"ON HOOK DESIGN",badge:"NEW",style:{...hookBase,fontFamily:"Libre Caslon Text",fontWeight:400,textColor:"#171717",highlightColor:"#171717",bgColor:"#E6F324",bgOpacity:100,bgPadding:8,wordAnimation:"elevate"}},
+  {id:"hook-magenta-impact",name:"Think · Magenta",category:"Kinetic Hooks",previewText:"MAKE THEM FEEL",badge:"NEW",style:{...hookBase,fontFamily:"Bebas Neue",fontWeight:400,textColor:"#F12CE8",highlightColor:"#FFF047",highlightMode:"word",bgOpacity:0,wordAnimation:"highlightimpact"}}
+);
 const DEFAULT_PRESET = CAPTION_PRESETS[0];
 
 function getPresetsByCategory(category) {

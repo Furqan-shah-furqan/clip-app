@@ -1,0 +1,27 @@
+/* Shared menu treatment. Native selects retain form values and validation. */
+.cf-select { position:relative; display:block; min-width:0; width:100%; }
+.cf-select select.cf-native { position:absolute !important; width:1px !important; height:1px !important; opacity:0; clip-path:inset(50%); overflow:hidden; padding:0 !important; border:0 !important; }
+.cf-select-trigger,.cf-select-menu {
+  --menu-bg:#fff; --menu-text:#1b1c20; --menu-row:#f0f1f3; --menu-line:#e5e6e9;
+  font-family:inherit; color:var(--menu-text); background:var(--menu-bg);
+}
+body.theme-dark .cf-select-trigger,body.theme-dark .cf-select-menu,
+body:not(.theme-light) .cf-select-trigger,body:not(.theme-light) .cf-select-menu {
+  --menu-bg:#191b20; --menu-text:#f4f5f7; --menu-row:#2c2f36; --menu-line:#3d414b;
+}
+.cf-select-trigger { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:38px; padding:8px 12px; border:1px solid var(--menu-line) !important; border-radius:15px !important; font-size:14px; line-height:20px; text-align:left; cursor:pointer; box-shadow:0 1px 3px #00000008; }
+.cf-select-trigger span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cf-select-trigger::after { content:''; width:7px; height:7px; border-right:1.7px solid currentColor; border-bottom:1.7px solid currentColor; transform:rotate(45deg); flex:none; margin-right:4px; transition:transform .15s; }
+.cf-select-trigger[aria-expanded=true]::after { transform:rotate(225deg); }
+.cf-select-trigger:disabled { opacity:.5; cursor:not-allowed; }
+.cf-select-trigger:focus-visible { outline:2px solid #8b6df0; outline-offset:2px; }
+.cf-select-menu { position:fixed; inset:auto; margin:0; box-sizing:border-box; z-index:2147483647; padding:8px; border:1px solid var(--menu-line) !important; border-radius:24px !important; box-shadow:0 14px 40px #0002,0 2px 5px #0001; overflow-y:auto; overscroll-behavior:contain; max-height:320px; }
+.cf-select-menu[hidden] { display:none !important; }
+.cf-select-menu-title { margin:0 4px 6px; padding:8px 7px; font-size:12px; line-height:20px; opacity:.65; border-bottom:1px solid var(--menu-line); }
+.cf-select-option { display:flex; align-items:center; gap:10px; padding:10px 12px; min-height:40px; box-sizing:border-box; border-radius:15px; font-size:14px; line-height:20px; cursor:pointer; outline:none; }
+.cf-select-option::after { content:''; margin-left:auto; width:16px; flex:none; }
+.cf-select-option[aria-selected=true]::after { content:'✓'; }
+.cf-select-option[aria-selected=true],.cf-select-option:focus,.cf-select-option:hover { background:var(--menu-row); }
+.cf-select-option[aria-disabled=true] { opacity:.4; cursor:not-allowed; }
+.cf-select-group { padding:10px 12px 4px; font-size:10px; line-height:18px; text-transform:uppercase; opacity:.6; }
+.ce-select-wrap:has(.cf-select) > .ce-select-caret { display:none; }
