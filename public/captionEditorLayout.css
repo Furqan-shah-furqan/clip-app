@@ -99,3 +99,35 @@ body.caption-editor-page.theme-light .ce-card--presets .preset-name { color:#fff
 .caption-smooth-word { white-space:normal; overflow-wrap:anywhere; }
 body.caption-editor-page .ce-card--placement .ce-drag-hint { color:#59616b; background:#f1f2f3 !important; }
 body.caption-editor-page.theme-light .ce-card--presets .preset-card.preset-card--active { border:2px solid #fff !important; box-shadow:0 0 0 1px #fff !important; }
+
+/* Size-based corners, scoped to editor controls (not the caption artwork). */
+body.caption-editor-page .ce-card,
+body.caption-editor-page .ce-preview-panel,
+body.caption-editor-page .presets-drawer-panel { border-radius:35px !important; }
+body.caption-editor-page .ce-topbar,
+body.caption-editor-page .ce-phone-frame,
+body.caption-editor-page .ce-phone-screen,
+body.caption-editor-page .preset-card,
+body.caption-editor-page .preset-gallery-card,
+body.caption-editor-page .ce-placement-presets { border-radius:25px !important; }
+body.caption-editor-page .ce-btn,
+body.caption-editor-page .ce-select,
+body.caption-editor-page .ce-pill-opt,
+body.caption-editor-page .ce-align-btn,
+body.caption-editor-page .ce-align-buttons,
+body.caption-editor-page .preset-swatch,
+body.caption-editor-page .preset-category-pill,
+body.caption-editor-page .presets-search-input,
+body.caption-editor-page .presets-drawer-close { border-radius:15px !important; }
+body.caption-editor-page .presets-drawer-backdrop {
+  background:transparent;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+body.caption-editor-page .presets-drawer-panel { box-shadow:none; }
+body.caption-editor-page .preset-gallery-card { font:inherit; color:inherit; text-align:left; cursor:pointer; }
+body.caption-editor-page .preset-gallery-card.is-active,
+body.caption-editor-page .preset-card.preset-card--active {
+  border:2px solid white !important;
+  box-shadow:0 0 0 1px white !important;
+}
