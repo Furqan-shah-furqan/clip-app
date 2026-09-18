@@ -466,7 +466,7 @@ function estimateGenerationSeconds(progress = 5, elapsedSeconds = 0) {
   const p = Math.max(1, Math.min(99, Number(progress) || 5));
   if (elapsedSeconds > 5 && p > 5) return Math.max(5, elapsedSeconds * (100 - p) / p);
   const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
-  return Math.min(360, 55 + Math.min(180, duration * 0.08) + Math.min(3, getAutoSmartClipCount()) * 24);
+  return Math.min(600, 55 + Math.min(180, duration * 0.08) + getAutoSmartClipCount() * 24);
 }
 
 function renderGenerationControls(mode = "idle", etaSeconds = null) {
@@ -982,6 +982,26 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
     }
   }
 
+  const expKicker = document.getElementById("expectedOutputKickerText");
+  const expBar = document.getElementById("expectedOutputProgressBar");
+  const expFill = document.getElementById("expectedOutputProgressFill");
+  const expEta = document.getElementById("expectedOutputEtaText");
+  const expClipsGrid = document.getElementById("expectedOutputClipsGrid");
+  const expCount = getAutoSmartClipCount();
+
+  if (expKicker) expKicker.textContent = "⚡ GENERATING CLIPS...";
+  if (expectedOutputDuration) expectedOutputDuration.textContent = label || `Generating ${expCount} viral clips with AI...`;
+  if (expectedOutputCount) expectedOutputCount.textContent = `Clip generation in progress (${Math.round(p)}%)`;
+  if (expBar) expBar.style.display = "block";
+  if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
+  if (expEta) {
+    expEta.style.display = "block";
+    const rem = etaSeconds !== null && etaSeconds !== undefined ? etaSeconds : estimateGenerationSeconds(p);
+    expEta.textContent = `Generating ${expCount} clips • Estimated time remaining: ${formatEtaText(rem)}`;
+  }
+  if (expClipsGrid && (!state.generatedClips || !state.generatedClips.length)) expClipsGrid.style.display = "none";
+  if (expectedOutputPreviews && (!state.generatedClips || !state.generatedClips.length)) expectedOutputPreviews.style.display = "flex";
+
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
 }
@@ -1232,25 +1252,49 @@ function getAutoSmartClipCount() {
     state.videoDurationSeconds || state.uploadedProject?.duration || 0,
   );
   const minutes = Math.floor(duration / 60);
-  if (minutes < 15) return 3;           // < 15 min: 3 clips
-  if (minutes < 35) return 4;           // 15 - 35 min: 4 clips
-  if (minutes < 65) return 6;           // 35 - 65 min: 5 to 6 clips
-  if (minutes < 100) return 7;          // 65 - 100 min: 7 clips
-  return Math.min(10, Math.max(8, Math.floor(minutes / 12))); // 100+ min: 8 to 10 clips
+  if (minutes <= 0) return 3;
+  if (minutes < 5) return 1;
+  if (minutes < 15) return 2;
+  if (minutes < 30) return 4;
+  if (minutes < 50) return 6;
+  return Math.min(30, Math.max(1, Math.round(minutes * (7.5 / 60))));
 }
 
 function updateExpectedOutputCard() {
   if (!expectedOutputCard) return;
   const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
-  const count = Math.min(3, getAutoSmartClipCount());
-  expectedOutputDuration.textContent = duration
-    ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
-    : "Add a video to estimate your output";
-  expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
-  const shown = Math.min(5, count);
-  expectedOutputPreviews.innerHTML = Array.from({ length: shown }, (_, index) =>
-    `<span class="expected-preview${index === 1 ? " is-featured" : ""}"><span>▷</span></span>`
-  ).join("") + (count > shown ? `<span class="expected-preview expected-preview-more">+${count - shown}</span>` : "");
+  const count = getAutoSmartClipCount();
+  const kicker = document.getElementById("expectedOutputKickerText");
+  const bar = document.getElementById("expectedOutputProgressBar");
+  const eta = document.getElementById("expectedOutputEtaText");
+  const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
+
+  if (!state.isGenerating) {
+    if (kicker) kicker.textContent = "EXPECTED OUTPUT";
+    if (bar) bar.style.display = "none";
+    if (eta) eta.style.display = "none";
+
+    if (state.generatedClips && state.generatedClips.length > 0) {
+      if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+      if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
+      if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} generated`;
+      if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
+      if (expectedClipsGrid) expectedClipsGrid.style.display = "grid";
+    } else {
+      expectedOutputDuration.textContent = duration
+        ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
+        : "Add a video to estimate your output";
+      expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
+      if (expectedClipsGrid) expectedClipsGrid.style.display = "none";
+      if (expectedOutputPreviews) {
+        expectedOutputPreviews.style.display = "flex";
+        const shown = Math.min(5, count);
+        expectedOutputPreviews.innerHTML = Array.from({ length: shown }, (_, index) =>
+          `<span class="expected-preview${index === 1 ? " is-featured" : ""}"><span>▷</span></span>`
+        ).join("") + (count > shown ? `<span class="expected-preview expected-preview-more">+${count - shown}</span>` : "");
+      }
+    }
+  }
 }
 
 function updateClipPlanner() {
@@ -1603,15 +1647,32 @@ function renderGeneratedClips() {
   persistStudioSession();
   renderProjectHistory(lastProjectsCache);
 
+  const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
+  const kicker = document.getElementById("expectedOutputKickerText");
+  const bar = document.getElementById("expectedOutputProgressBar");
+  const eta = document.getElementById("expectedOutputEtaText");
+
   if (!state.generatedClips.length) {
     generatedClipsGrid.innerHTML = `<div class="empty-state">No smart clips generated yet.</div>`;
+    if (expectedClipsGrid) {
+      expectedClipsGrid.style.display = "none";
+      expectedClipsGrid.innerHTML = "";
+    }
+    updateExpectedOutputCard();
     return;
   }
 
   // Automatically keep caption session synced to the newest top clip
   syncActiveClipToCaptionSession(0);
 
-  generatedClipsGrid.innerHTML = state.generatedClips
+  if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+  if (bar) bar.style.display = "none";
+  if (eta) eta.style.display = "none";
+  if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
+  if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} ready`;
+  if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
+
+  const clipsHtml = state.generatedClips
     .map((clip, index) => {
       const hook = escapeHtml(clip.hook || autoHookForClip(index));
       const rawFn = clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : "");
@@ -3741,7 +3802,7 @@ smartClipBtn?.addEventListener("click", async () => {
     _currentProgress = 0;
 
     const body = buildSmartSuggestBody();
-    body.maxClips = Math.min(3, getAutoSmartClipCount());
+    body.maxClips = getAutoSmartClipCount();
     body.minScore = 30;
 
     // 2. POST create job - only transition to active after receiving valid jobId

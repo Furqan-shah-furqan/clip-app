@@ -2222,7 +2222,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       if (i) container.appendChild(document.createTextNode(" "));
       span = document.createElement("span");
       span.textContent = word;
-      const motion = captionVideo && !captionVideo.paused && !captionVideo.seeking ? style.animationStyle : "none";
+      const motion = style.animationStyle || "none";
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
       container.appendChild(span);
     }
@@ -2825,6 +2825,7 @@ function syncStyleFromControls(options = {}) {
     20,
   );
   editorState.style.animationStyle = capAnimStyle?.value || "none";
+  editorState.style.wordAnimation = capAnimStyle?.value || "none";
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
   editorState.style.positionY = clamp(Number(capPosY?.value || 82), 5, 95);
@@ -2855,7 +2856,8 @@ function syncStyleFromControls(options = {}) {
     -360,
     360,
   );
-  editorState.style.textTransform = capTextTransform?.value || "none";
+  const activeCaseOpt = textTransformGroup?.querySelector(".ce-pill-opt.is-active");
+  editorState.style.textTransform = activeCaseOpt?.dataset.case || capTextTransform?.value || editorState.style.textTransform || "none";
 
   if (capFontSizeVal)
     capFontSizeVal.textContent = String(editorState.style.fontSize);
@@ -3720,7 +3722,10 @@ function bindControls() {
     onSliderCommit();
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
-  capAnimStyle?.addEventListener("change", onSliderCommit);
+  capAnimStyle?.addEventListener("change", () => {
+    resetCaptionRenderCache();
+    onSliderCommit();
+  });
   capTextShadow?.addEventListener("change", onSliderCommit);
 
   capFontSize?.addEventListener("input", onLiveSliderInput);

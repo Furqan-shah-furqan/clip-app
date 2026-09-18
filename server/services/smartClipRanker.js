@@ -205,10 +205,13 @@ function windowsOverlap(a, b) {
 
 function getDynamicClipQuota(durationInSeconds) {
   const minutes = Math.floor(Number(durationInSeconds || 0) / 60);
-  if (minutes < 20) return 3;               // < 20 min
-  if (minutes < 45) return 4;               // 20 - 45 min
-  if (minutes < 85) return 6;               // 45 - 85 min (~1hr to 1h15m): 6 to 7 clips
-  return Math.min(12, Math.max(8, Math.floor(minutes / 10))); // 85m+ (2hr): 10 to 12 clips
+  if (minutes <= 0) return 3;
+  if (minutes < 5) return 1;
+  if (minutes < 15) return 2;
+  if (minutes < 30) return 4;
+  if (minutes < 50) return 6;
+  // 7 to 8 clips per hour (~1 clip per 7.5 min)
+  return Math.min(30, Math.max(1, Math.round(minutes * (7.5 / 60))));
 }
 
 function findSmartClipMoments(segments = [], options = {}) {
@@ -227,7 +230,7 @@ function findSmartClipMoments(segments = [], options = {}) {
   const quota =
     options.quota ||
     (effectiveDuration > 0 ? getDynamicClipQuota(effectiveDuration) : null) ||
-    Math.round(clampNumber(options.maxClips, 1, 12, 6));
+    Math.round(clampNumber(options.maxClips, 1, 30, 8));
 
   const preferredDurationSec = clampNumber(
     options.preferredDurationSec,
