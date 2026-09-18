@@ -2208,7 +2208,7 @@ function renderWordSpan(w, idx, anim, delay, activeWordIdx) {
 // no stagger delay or replay of the entire phrase on every audio timestamp.
 function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
   const words = String(text || "").trim().split(/\s+/).filter(Boolean);
-  const signature = `${segId}|${style.activePresetId}|${style.animationStyle}`;
+  const signature = `${segId}|${style.activePresetId}|${style.animationStyle}|${style.presetDuration}`;
   const existing = Array.from(container.children);
   const canAppend = container.dataset.smoothKey === signature &&
     existing.length <= words.length && existing.every((el, i) => el.textContent === words[i]);
@@ -2222,7 +2222,9 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       if (i) container.appendChild(document.createTextNode(" "));
       span = document.createElement("span");
       span.textContent = word;
-      const motion = captionVideo && !captionVideo.paused && !captionVideo.seeking ? style.animationStyle : "none";
+      // A deliberate style change must preview even while paused. Existing
+      // word nodes stay intact during playback, so motion never restarts per frame.
+      const motion = style.animationStyle || "none";
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
       container.appendChild(span);
     }
@@ -2825,6 +2827,7 @@ function syncStyleFromControls(options = {}) {
     20,
   );
   editorState.style.animationStyle = capAnimStyle?.value || "none";
+  editorState.style.wordAnimation = editorState.style.animationStyle;
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
   editorState.style.positionY = clamp(Number(capPosY?.value || 82), 5, 95);
@@ -3771,6 +3774,7 @@ function bindControls() {
       const val = btn.dataset.case || "none";
       if (capTextTransform) capTextTransform.value = val;
       editorState.style.textTransform = val;
+      applyStyleToOverlay();
       textTransformGroup.querySelectorAll(".ce-pill-opt").forEach((b) => b.classList.toggle("is-active", b === btn));
       resetCaptionRenderCache();
       persistCaptions();

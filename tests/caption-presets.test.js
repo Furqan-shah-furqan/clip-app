@@ -49,7 +49,7 @@ function editor() {
   return { context,controls,saved,run:s=>vm.runInContext(s,context) };
 }
 
-test('all 24 presets survive control sync/save without changing transcript, timings, or position', async () => {
+test('all presets survive control sync/save without changing transcript, timings, or position', async () => {
   const h=editor();
   const transcript=h.run('JSON.stringify(editorState.segments)');
   h.run('editorState.style.positionX=43; editorState.style.positionY=73;');
@@ -70,7 +70,7 @@ test('all 24 presets survive control sync/save without changing transcript, timi
     assert.equal(exported.fontFamily,style.fontFamily);
     await h.context.ensureCaptionFont(style);
   }
-  assert.equal(CAPTION_PRESETS.length,24);
+  assert.equal(CAPTION_PRESETS.length,28);
 });
 
 test('font selection tolerates quotes, serif fallbacks, and saved custom families', () => {
@@ -96,6 +96,18 @@ test('curated rendering preserves earlier word nodes, hides pauses, and updates 
   assert.equal(container.children.length,0);
   h.context.renderSmoothCaption(container,'go','seg',0,s);
   assert.notEqual(container.children[0],first);
+});
+
+test('paused animation changes preview immediately and frame updates preserve word nodes', () => {
+  const h=editor(), container=new Element();
+  for(const animationStyle of ['classic','pop','elevate','reveal','highlight','neon','cinematic','typewriter','oneword','twoword','wordcolor','wordappend','highlightimpact','none']) {
+    const style={...CAPTION_PRESETS[0].style,animationStyle};
+    h.context.renderSmoothCaption(container,'hello','s',0,style);
+    const word=container.children[0];
+    assert.equal(word.className,`caption-smooth-word caption-smooth-word--${animationStyle}`);
+    h.context.renderSmoothCaption(container,'hello','s',0,style);
+    assert.equal(container.children[0],word);
+  }
 });
 
 test('ordinary shadows do not become glow and label backgrounds honor preset padding', () => {

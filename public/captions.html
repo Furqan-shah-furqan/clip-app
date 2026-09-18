@@ -12,7 +12,8 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
     <link rel="stylesheet" href="captions.css?v=editor-2" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-4" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-5" />
+    <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
     <!-- Ambient glowing lights matching home page -->
@@ -661,8 +662,8 @@
                   type="button"
                 >
                   <span class="preset-sparkle">✦</span>
-                  <span class="preset-browse-text">Browse Presets Library (24 Styles)</span>
-                  <span class="preset-browse-badge">24 STYLES</span>
+                  <span class="preset-browse-text">Browse Presets Library (28 Styles)</span>
+                  <span class="preset-browse-badge">28 STYLES</span>
                 </button>
 
                 <div class="presets-grid" id="presetsGrid"></div>
@@ -699,7 +700,7 @@
               <h3 class="presets-drawer-title">Caption Presets Library</h3>
               <p class="presets-drawer-subtitle">
                 Clean typography, readable contrast, subtle motion
-                <span class="presets-count-pill" id="presetsCountBadge">24 Styles Available</span>
+                <span class="presets-count-pill" id="presetsCountBadge">28 Styles Available</span>
               </p>
             </div>
           </div>
@@ -716,7 +717,7 @@
               type="text"
               id="presetSearchInput"
               class="presets-search-input"
-              placeholder="Search 24 curated presets by name, category, font, or animation..."
+              placeholder="Search presets by name, category, font, or animation..."
               autocomplete="off"
             />
             <button class="presets-search-clear" id="clearPresetSearchBtn" type="button" style="display: none;" title="Clear search">✕</button>
@@ -744,9 +745,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-    <script src="captionPresets.js?v=editor-2"></script>
+    <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-3"></script>
+    <script src="captions.js?v=editor-5"></script>
+    <script src="dropdowns.js?v=1"></script>
   </body>
 </html>
