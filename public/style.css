@@ -2485,9 +2485,9 @@ body:has(.appbar-switch input:checked) .smart-preview {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 28px;
-  padding: 48px 40px;
-  min-height: 420px;
+  gap: 16px;
+  padding: 28px 32px;
+  min-height: 290px;
   margin: 8px 0 24px;
   border-radius: 28px;
   background: linear-gradient(120deg, #311237 0%, #4b184f 58%, #51204e 100%);
