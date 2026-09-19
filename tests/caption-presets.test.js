@@ -110,6 +110,38 @@ test('paused animation changes preview immediately and frame updates preserve wo
   }
 });
 
+test('grouped playback replays only the newly active word and not subsequent frames', () => {
+  const h=editor(), container=new Element();
+  const style={...CAPTION_PRESETS[0].style,animationStyle:'pop'};
+  h.context.renderSmoothCaption(container,'hello world','s',0,style);
+  const counters=[0,0];
+  const animations=container.children.map((word,i)=>{
+    const animation={currentTime:500,play(){counters[i]++;}};
+    word.getAnimations=()=>[animation];
+    return animation;
+  });
+  h.context.renderSmoothCaption(container,'hello world','s',1,style);
+  assert.deepEqual(counters,[0,1]);
+  assert.equal(animations[1].currentTime,0);
+  h.context.renderSmoothCaption(container,'hello world','s',1,style);
+  assert.deepEqual(counters,[0,1]);
+  h.context.renderSmoothCaption(container,'hello world','s',0,style);
+  assert.deepEqual(counters,[1,1]);
+});
+
+test('explicit preset preview opts in to motion and cache reset permits replay', () => {
+  const h=editor(), container=new Element();
+  h.context.container=container;
+  h.run('captionOverlayText=container');
+  h.context.renderSmoothCaption(container,'hello','s',0,{animationStyle:'pop'});
+  assert.equal(container.children[0].dataset.motionPreview,'false');
+  h.run('explicitMotionPreview=true; resetCaptionRenderCache()');
+  const previous=container.children[0];
+  h.context.renderSmoothCaption(container,'hello','s',0,{animationStyle:'pop'});
+  assert.notEqual(container.children[0],previous);
+  assert.equal(container.children[0].dataset.motionPreview,'true');
+});
+
 test('ordinary shadows do not become glow and label backgrounds honor preset padding', () => {
   const h=editor(), el=new Element();
   h.context.applyTextBoxVisuals(el,{...CAPTION_PRESETS[0].style,fontFamily:"'Barlow', sans-serif"});
