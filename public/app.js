@@ -992,20 +992,31 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const expFill = document.getElementById("expectedOutputProgressFill");
   const expEta = document.getElementById("expectedOutputEtaText");
   const expClipsGrid = document.getElementById("expectedOutputClipsGrid");
-  const expCount = getAutoSmartClipCount();
+  const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
+  const targetCount = getAutoSmartClipCount();
 
-  if (expKicker) expKicker.textContent = "⚡ GENERATING CLIPS...";
-  if (expectedOutputDuration) expectedOutputDuration.textContent = label || `Generating ${expCount} viral clips with AI...`;
-  if (expectedOutputCount) expectedOutputCount.textContent = `Clip generation in progress (${Math.round(p)}%)`;
-  if (expBar) expBar.style.display = "block";
-  if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
+  if (expKicker) expKicker.textContent = "✨ GENERATED CLIPS";
+  if (expectedOutputDuration) {
+    expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
+  }
+  if (expectedOutputCount) {
+    expectedOutputCount.textContent = `${readyCount} ${readyCount === 1 ? "clip" : "clips"} ready`;
+  }
   if (expEta) {
     expEta.style.display = "block";
     const rem = etaSeconds !== null && etaSeconds !== undefined ? etaSeconds : estimateGenerationSeconds(p);
-    expEta.textContent = `Generating ${expCount} clips • Estimated time remaining: ${formatEtaText(rem)}`;
+    expEta.textContent = `${formatEtaText(rem)} remaining`;
   }
-  if (expClipsGrid && (!state.generatedClips || !state.generatedClips.length)) expClipsGrid.style.display = "none";
-  if (expectedOutputPreviews && (!state.generatedClips || !state.generatedClips.length)) expectedOutputPreviews.style.display = "flex";
+  if (expBar) expBar.style.display = "block";
+  if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
+
+  if (readyCount > 0) {
+    if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
+    if (expClipsGrid) expClipsGrid.style.display = "grid";
+  } else {
+    if (expClipsGrid) expClipsGrid.style.display = "none";
+    if (expectedOutputPreviews) expectedOutputPreviews.style.display = "flex";
+  }
 
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
@@ -1261,11 +1272,10 @@ function getAutoSmartClipCount() {
   if (minutes <= 3) return 1;
   if (minutes < 8) return 2;
   if (minutes < 15) return 3;          // ~10m: 3 clips
-  if (minutes < 25) return 5;          // ~20m: 5 clips
-  if (minutes < 45) return 6;          // ~30m: 6 clips
-  if (minutes < 75) return 8;          // ~60m (1hr): 7-8 clips
+  if (minutes < 35) return 4;          // ~30m: 4 clips
+  if (minutes < 75) return 8;          // ~60m (1hr): 8 clips
   if (minutes < 105) return 10;
-  if (minutes < 140) return 13;         // ~120m (2hr): 12-13 clips
+  if (minutes < 140) return 13;         // ~120m (2hr): 13 clips
   return Math.min(30, Math.max(13, Math.round(minutes * (13 / 120))));
 }
 
@@ -1675,9 +1685,11 @@ function renderGeneratedClips() {
   syncActiveClipToCaptionSession(0);
 
   if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
-  if (bar) bar.style.display = "none";
-  if (eta) eta.style.display = "none";
-  if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
+  if (!state.isGenerating) {
+    if (bar) bar.style.display = "none";
+    if (eta) eta.style.display = "none";
+  }
+  if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral ${state.generatedClips.length === 1 ? "clip" : "clips"} from your video`;
   if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} ready`;
   if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
 
@@ -3472,6 +3484,7 @@ async function pollGenerationJob(jobId, onProgress, requestVersion) {
         displayProgress,
         displayStage,
         estimateGenerationSeconds(displayProgress, elapsedSeconds),
+        Array.isArray(clips) ? clips : []
       );
     }
 
@@ -3513,10 +3526,14 @@ function startGenerationPolling(jobId) {
 
   pollGenerationJob(
     jobId,
-    (progress, stage, etaSeconds) => {
+    (progress, stage, etaSeconds, clips) => {
       if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
         console.log("[GenerationUI] Poll response ignored because job changed");
         return;
+      }
+      if (Array.isArray(clips) && clips.length > 0) {
+        state.generatedClips = clips;
+        renderGeneratedClips();
       }
       updateProgress(progress, stage, etaSeconds);
       renderGenerationControls("active", etaSeconds);
