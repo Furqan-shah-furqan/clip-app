@@ -11,8 +11,6 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
-    <link rel="stylesheet" href="captions.css?v=editor-2" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-4" />
   </head>
   <body class="caption-editor-page theme-dark">
     <!-- Ambient glowing lights matching home page -->
@@ -555,34 +553,31 @@
                   <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
                 </div>
 
-                <div class="ce-placement-presets" id="positionBtns">
-                  <button class="duration-btn" data-pos="top" data-x="50" data-y="12" type="button">
-                    <span>Top</span>
+                <div class="ce-position-alignment-row">
+                <div class="ce-placement-presets" id="positionBtns" role="group" aria-label="Caption position">
+                  <button class="duration-btn" data-pos="top" data-x="50" data-y="12" type="button" aria-label="Top" title="Top"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M8 8h8v5H8zM12 16v4"/></svg>
                   </button>
-                  <button class="duration-btn" data-pos="center" data-x="50" data-y="50" type="button">
-                    <span>Center</span>
+                  <button class="duration-btn" data-pos="center" data-x="50" data-y="50" type="button" aria-label="Center" title="Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h3m10 0h3M8 9h8v6H8z"/></svg>
                   </button>
-                  <button class="duration-btn active" data-pos="bottom" data-x="50" data-y="82" type="button">
-                    <span>Bottom</span>
+                  <button class="duration-btn active" data-pos="bottom" data-x="50" data-y="82" type="button" aria-label="Bottom" title="Bottom"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14M8 11h8v5H8zM12 4v4"/></svg>
                   </button>
-                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="15" type="button">
-                    <span>Top-Left</span>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="15" type="button" aria-label="Top-Left" title="Top-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14V4h10M8 8h8v5H8z"/></svg>
                   </button>
-                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="82" type="button">
-                    <span>Bottom-Left</span>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="82" type="button" aria-label="Bottom-Left" title="Bottom-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v10h10M8 11h8v5H8z"/></svg>
                   </button>
-                  <button class="duration-btn" data-pos="custom" data-x="50" data-y="82" id="resetCenterBtn" type="button">
-                    <span>Reset Center</span>
+                  <button class="duration-btn" data-pos="custom" data-x="50" data-y="82" id="resetCenterBtn" type="button" aria-label="Reset Center" title="Reset Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a8 8 0 1 1-1 7M5 3v5h5M9 10h6v4H9z"/></svg>
                   </button>
                 </div>
 
-                  <div class="ce-box-toolbar">
+
                   <div class="ce-align-buttons" role="group" aria-label="Caption text alignment">
 <button type="button" class="ce-align-btn" data-text-align="left" aria-label="Align left" title="Align left" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M3 10h12M3 15h18M3 20h12"/></svg></button><button type="button" class="ce-align-btn" data-text-align="center" aria-label="Align center" title="Align center" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button><button type="button" class="ce-align-btn" data-text-align="right" aria-label="Align right" title="Align right" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M9 10h12M3 15h18M9 20h12"/></svg></button></div>
+                </div>
+                <div class="ce-box-toolbar">
                   <button type="button" class="ce-btn" id="capEditWords">Edit words</button>
                   <button type="button" class="ce-btn" id="capDoneEditing" hidden>Done</button>
                 </div>
-                <p id="capBoxHint" class="ce-box-hint" aria-live="polite">Double-click captions to correct words. Edges reshape; corners scale text.</p>
+                <p id="capBoxHint" class="ce-box-hint" aria-live="polite" hidden></p>
                 <div class="ce-field-row">
                   <div class="ce-field"><label for="capBoxWidth" class="ce-label">Box width <span id="capBoxWidthVal">88%</span></label><input class="ce-range" type="range" id="capBoxWidth" min="15" max="100" value="88" /></div>
                   <div class="ce-field"><label for="capBoxHeight" class="ce-label">Box height <span id="capBoxHeightVal">Auto</span></label><input class="ce-range" type="range" id="capBoxHeight" min="0" max="90" value="0" /></div>
@@ -638,10 +633,6 @@
                   />
                 </div>
 
-                <div class="ce-drag-hint">
-                  <span class="hint-icon">💡</span>
-                  <span>Click &amp; drag the caption overlay on the phone preview to place it anywhere!</span>
-                </div>
               </section>
 
               <!-- CARD 4: PRESETS & EXPORT ACTIONS -->
@@ -661,8 +652,8 @@
                   type="button"
                 >
                   <span class="preset-sparkle">✦</span>
-                  <span class="preset-browse-text">Browse Presets Library (24 Styles)</span>
-                  <span class="preset-browse-badge">24 STYLES</span>
+                  <span class="preset-browse-text">Browse Presets Library (28 Styles)</span>
+                  <span class="preset-browse-badge">28 STYLES</span>
                 </button>
 
                 <div class="presets-grid" id="presetsGrid"></div>
@@ -699,7 +690,7 @@
               <h3 class="presets-drawer-title">Caption Presets Library</h3>
               <p class="presets-drawer-subtitle">
                 Clean typography, readable contrast, subtle motion
-                <span class="presets-count-pill" id="presetsCountBadge">24 Styles Available</span>
+                <span class="presets-count-pill" id="presetsCountBadge">28 Styles Available</span>
               </p>
             </div>
           </div>
@@ -716,7 +707,7 @@
               type="text"
               id="presetSearchInput"
               class="presets-search-input"
-              placeholder="Search 24 curated presets by name, category, font, or animation..."
+              placeholder="Search presets by name, category, font, or animation..."
               autocomplete="off"
             />
             <button class="presets-search-clear" id="clearPresetSearchBtn" type="button" style="display: none;" title="Clear search">✕</button>
@@ -744,9 +735,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-    <script src="captionPresets.js?v=editor-2"></script>
+    <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-3"></script>
   </body>
 </html>

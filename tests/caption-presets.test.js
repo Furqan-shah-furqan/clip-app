@@ -49,7 +49,7 @@ function editor() {
   return { context,controls,saved,run:s=>vm.runInContext(s,context) };
 }
 
-test('all 24 presets survive control sync/save without changing transcript, timings, or position', async () => {
+test('all presets survive control sync/save without changing transcript, timings, or position', async () => {
   const h=editor();
   const transcript=h.run('JSON.stringify(editorState.segments)');
   h.run('editorState.style.positionX=43; editorState.style.positionY=73;');
@@ -70,7 +70,7 @@ test('all 24 presets survive control sync/save without changing transcript, timi
     assert.equal(exported.fontFamily,style.fontFamily);
     await h.context.ensureCaptionFont(style);
   }
-  assert.equal(CAPTION_PRESETS.length,24);
+  assert.equal(CAPTION_PRESETS.length,28);
 });
 
 test('font selection tolerates quotes, serif fallbacks, and saved custom families', () => {
@@ -96,6 +96,74 @@ test('curated rendering preserves earlier word nodes, hides pauses, and updates 
   assert.equal(container.children.length,0);
   h.context.renderSmoothCaption(container,'go','seg',0,s);
   assert.notEqual(container.children[0],first);
+});
+
+test('paused animation changes preview immediately and frame updates preserve word nodes', () => {
+  const h=editor(), container=new Element();
+  for(const animationStyle of ['classic','pop','elevate','reveal','highlight','neon','cinematic','typewriter','oneword','twoword','wordcolor','wordappend','highlightimpact','none']) {
+    const style={...CAPTION_PRESETS[0].style,animationStyle};
+    h.context.renderSmoothCaption(container,'hello','s',0,style);
+    const word=container.children[0];
+    assert.equal(word.className,`caption-smooth-word caption-smooth-word--${animationStyle}`);
+    h.context.renderSmoothCaption(container,'hello','s',0,style);
+    assert.equal(container.children[0],word);
+  }
+});
+
+test('grouped playback replays only the newly active word and not subsequent frames', () => {
+  const h=editor(), container=new Element();
+  const style={...CAPTION_PRESETS[0].style,animationStyle:'pop'};
+  h.context.renderSmoothCaption(container,'hello world','s',0,style);
+  const counters=[0,0];
+  const animations=container.children.map((word,i)=>{
+    const animation={currentTime:500,play(){counters[i]++;}};
+    word.getAnimations=()=>[animation];
+    return animation;
+  });
+  h.context.renderSmoothCaption(container,'hello world','s',1,style);
+  assert.deepEqual(counters,[0,1]);
+  assert.equal(animations[1].currentTime,0);
+  h.context.renderSmoothCaption(container,'hello world','s',1,style);
+  assert.deepEqual(counters,[0,1]);
+  h.context.renderSmoothCaption(container,'hello world','s',0,style);
+  assert.deepEqual(counters,[1,1]);
+});
+
+test('explicit preset preview opts in to motion and cache reset permits replay', () => {
+  const h=editor(), container=new Element();
+  h.context.container=container;
+  h.run('captionOverlayText=container');
+  h.context.renderSmoothCaption(container,'hello','s',0,{animationStyle:'pop'});
+  assert.equal(container.children[0].dataset.motionPreview,'false');
+  h.run('explicitMotionPreview=true; resetCaptionRenderCache()');
+  const previous=container.children[0];
+  h.context.renderSmoothCaption(container,'hello','s',0,{animationStyle:'pop'});
+  assert.notEqual(container.children[0],previous);
+  assert.equal(container.children[0].dataset.motionPreview,'true');
+});
+
+test('animation selection preserves plain-text typography and transcript despite stale controls', () => {
+  const h=editor();
+  h.run('editorState.style={...DEFAULT_STYLE,fontFamily:"Inter, sans-serif",fontWeight:400,fontStyle:"italic",fontSize:31,textColor:"#ff3366",textTransform:"none"};');
+  const before=JSON.parse(h.run('JSON.stringify(editorState.style)'));
+  const transcript=h.run('JSON.stringify(editorState.segments)');
+  for(const mode of Object.keys(h.run('ANIM_WORD_DELAY'))) {
+    h.context.selectWordAnimation(mode);
+    const after=JSON.parse(h.run('JSON.stringify(editorState.style)'));
+    for(const key of ['fontFamily','fontWeight','fontStyle','fontSize','textColor','textTransform']) assert.equal(after[key],before[key],`${mode}: ${key}`);
+    assert.equal(after.animationStyle,mode);
+    assert.equal(h.run('JSON.stringify(editorState.segments)'),transcript);
+  }
+});
+
+test('explicit neon glow follows every text color despite preset filters and shadow color', () => {
+  const h=editor(),el=new Element();
+  for(const textColor of ['#ffffff','#ff3366','#00e5ff','#39ff14','#ffd700','#7c3aed']) {
+    h.context.applyTextBoxVisuals(el,{...CAPTION_PRESETS[0].style,textColor,glowIntensity:16,neonGlow:0,shadowColor:'#000000',filter:'drop-shadow(0 0 8px white)'});
+    assert.ok(el.style.filter.includes(textColor));
+    assert.ok(el.style.textShadow.includes(textColor));
+    assert.ok(!el.style.filter.includes('white'));
+  }
 });
 
 test('ordinary shadows do not become glow and label backgrounds honor preset padding', () => {

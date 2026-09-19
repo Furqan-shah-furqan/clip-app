@@ -2000,7 +2000,7 @@ function applyTextBoxVisuals(element, style) {
   }
 
   // 2. Force Neon Glow Rendering (Layered textShadow + drop-shadow filter)
-  const neonGlow = Number(merged.neonGlow !== undefined ? merged.neonGlow : (merged.glowIntensity || 0));
+  const neonGlow = Number(merged.glowIntensity || merged.neonGlow || 0);
   let computedTextShadow = "none";
   if (neonGlow > 0) {
     const glowColor = merged.textColor || "#FFDE00";
@@ -2030,12 +2030,15 @@ function applyTextBoxVisuals(element, style) {
   }
 
   // Filter / Diffuse Drop Shadow / Glow
-  if (merged.filter && merged.filter !== "none") {
+  if (neonGlow > 0) {
+    // Explicit glow follows text color, independently of shadow/preset colors.
+    element.style.filter = `drop-shadow(0 0 ${Math.max(2, neonGlow * .4)}px ${merged.textColor || "#ffffff"})`;
+  } else if (merged.filter && merged.filter !== "none") {
     element.style.filter = merged.filter;
   } else {
     const glow = Number(merged.glowIntensity) || 0;
     if (glow > 0) {
-      const glowColor = merged.shadowColor || merged.textColor || "#00e5ff";
+      const glowColor = merged.textColor || "#ffffff";
       element.style.filter = `drop-shadow(0 0 ${glow}px ${glowColor})`;
     }
   }
@@ -2053,6 +2056,9 @@ function resetCaptionRenderCache() {
   _lastRenderedAnim = null;
   _lastRenderedWordsPerRow = null;
   if (captionLivePreview) delete captionLivePreview.dataset.lastKey;
+  for (const container of [captionOverlayText, captionLivePreview]) {
+    if (container) delete container.dataset.smoothKey;
+  }
 }
 function updateShadowControlsState() {
   if (shadowControlsGrid)
@@ -2206,9 +2212,10 @@ function renderWordSpan(w, idx, anim, delay, activeWordIdx) {
  */
 // Reuse visible words as speech progresses. Only newly spoken words enter;
 // no stagger delay or replay of the entire phrase on every audio timestamp.
+let explicitMotionPreview = false;
 function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
   const words = String(text || "").trim().split(/\s+/).filter(Boolean);
-  const signature = `${segId}|${style.activePresetId}|${style.animationStyle}`;
+  const signature = `${segId}|${style.activePresetId}|${style.animationStyle}|${style.presetDuration}`;
   const existing = Array.from(container.children);
   const canAppend = container.dataset.smoothKey === signature &&
     existing.length <= words.length && existing.every((el, i) => el.textContent === words[i]);
@@ -2216,6 +2223,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
   container.dataset.smoothKey = signature;
   container.classList.remove("has-cap-rows");
   container.style.setProperty("--smooth-duration", `${Number(style.presetDuration) || .12}s`);
+  const activeChanged = container.dataset.activeMotionWord !== String(activeWordIdx);
   words.forEach((word, i) => {
     let span = container.children[i];
     if (!span) {
@@ -2224,11 +2232,20 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       span.textContent = word;
       const motion = style.animationStyle || "none";
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
+      span.dataset.motionPreview = String(explicitMotionPreview);
       container.appendChild(span);
+    } else if (activeChanged && i === activeWordIdx) {
+      // Grouped captions reuse their words. Replay only the newly spoken word,
+      // not every word on every video frame.
+      for (const animation of span.getAnimations?.() || []) {
+        animation.currentTime = 0;
+        animation.play();
+      }
     }
     span.style.color = (style.highlightMode === "word" || ["highlight", "highlightimpact", "wordcolor"].includes(style.animationStyle)) && i === activeWordIdx
       ? style.highlightColor : "inherit";
   });
+  container.dataset.activeMotionWord = String(activeWordIdx);
 }
 
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
@@ -2412,11 +2429,11 @@ function finishCaptionEdit(cancel = false) {
   syncCaptionOverlay();
   const done = document.getElementById("capDoneEditing");
   if (done) done.hidden = true;
-  setBoxHint("Saved. Drag edges to reshape; drag corners to scale text.");
+  setBoxHint("Changes saved.");
 }
 function setBoxHint(message) {
   const hint = document.getElementById("capBoxHint");
-  if (hint) hint.textContent = message;
+  if (hint) { hint.textContent = message; hint.hidden = !message; }
 }
 function beginCaptionEdit() {
   if (captionEditSession) return;
@@ -2602,7 +2619,7 @@ function updateLivePreview() {
     ? getParityDisplayText(currentSeg, currentTime, s)
     : "Sample Caption";
 
-  if (s.curated) {
+  if (s.curated || s.boxWidth) {
     renderSmoothCaption(captionLivePreview, sampleText, currentSeg?.id,
       getActiveDisplayWordIndex(currentSeg, currentTime, s), s);
     return;
@@ -2825,7 +2842,6 @@ function syncStyleFromControls(options = {}) {
     20,
   );
   editorState.style.animationStyle = capAnimStyle?.value || "none";
-  editorState.style.wordAnimation = capAnimStyle?.value || "none";
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
   editorState.style.positionY = clamp(Number(capPosY?.value || 82), 5, 95);
@@ -3172,6 +3188,7 @@ function renderPresetsGalleryGrid() {
 }
 
 function applyPresetFromGallery(id) {
+  explicitMotionPreview = true;
   const allPresets = getActivePresetsList();
   const preset = allPresets.find((p) => p.id === id);
   if (!preset) return;
@@ -3677,6 +3694,25 @@ function goBack() {
 window.goBack = goBack;
 
 // Bind controls
+function selectWordAnimation(mode) {
+  explicitMotionPreview = true;
+  editorState.style.animationStyle = mode;
+  editorState.style.wordAnimation = mode;
+  if (["oneword", "twoword", "wordappend"].includes(mode)) {
+    editorState.style.wordsPerRow = mode === "oneword" ? 1 : mode === "twoword" ? 2 : 0;
+    if (capWordsPerRow) capWordsPerRow.value = String(editorState.style.wordsPerRow);
+    wordsPerRowGroup?.querySelectorAll(".ce-pill-opt").forEach(btn => {
+      btn.classList.toggle("is-active", Number(btn.dataset.words) === editorState.style.wordsPerRow);
+    });
+  }
+  // Motion is an independent edit: never re-read or replace typography/preset controls.
+  resetCaptionRenderCache();
+  applyStyleToOverlay();
+  syncCaptionOverlay();
+  updateLivePreview();
+  persistCaptions();
+}
+
 function bindControls() {
   ensurePublishNavButton();
 
@@ -3718,8 +3754,6 @@ function bindControls() {
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
   capAnimStyle?.addEventListener("change", () => {
-    resetCaptionRenderCache();
-    onSliderCommit();
   });
   capTextShadow?.addEventListener("change", onSliderCommit);
 
@@ -3776,6 +3810,7 @@ function bindControls() {
       const val = btn.dataset.case || "none";
       if (capTextTransform) capTextTransform.value = val;
       editorState.style.textTransform = val;
+      applyStyleToOverlay();
       textTransformGroup.querySelectorAll(".ce-pill-opt").forEach((b) => b.classList.toggle("is-active", b === btn));
       resetCaptionRenderCache();
       persistCaptions();
@@ -3857,6 +3892,10 @@ function bindControls() {
 
   // ── Video Playback & Controls ──
   captionVideo?.addEventListener("play", updatePlaybackUI);
+  captionVideo?.addEventListener("play", () => {
+    resetCaptionRenderCache();
+    syncCaptionOverlay();
+  });
   captionVideo?.addEventListener("pause", updatePlaybackUI);
   captionVideo?.addEventListener("timeupdate", updatePlaybackUI);
   captionVideo?.addEventListener("loadedmetadata", updatePlaybackUI);

@@ -2845,6 +2845,6 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 @keyframes caption-soft-rise { from { transform: translateY(3px); } to { transform: translateY(0); } }
 @keyframes caption-soft-pop { from { transform: scale(.96); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .caption-smooth-word { animation: none; }
+  .caption-smooth-word:not([data-motion-preview="true"]) { animation: none; }
 }
 .preset-gallery-card:focus-visible { outline: 2px solid #83deff; outline-offset: 3px; }

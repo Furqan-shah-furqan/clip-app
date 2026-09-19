@@ -73,7 +73,8 @@ body.theme-light .ce-card--colors,body.theme-light .ce-card--presets { backgroun
 @media(max-width:1050px) { .ce-layout { grid-template-columns:minmax(230px,310px) minmax(0,1fr); } .ce-style-grid { grid-template-columns:1fr; } }
 @media(max-width:680px) { body.caption-editor-page { padding:10px; } .ce-layout { grid-template-columns:1fr; } .ce-preview-panel { position:relative; top:0; max-width:360px; width:100%; margin:auto !important; box-sizing:border-box; } .ce-topbar { padding:14px; gap:12px; } .ce-topbar .ce-status-chip { display:none; } .ce-card { padding:20px !important; } }
 
-@media (prefers-reduced-motion: reduce) { .caption-smooth-word { animation:none !important; } }
+/* Honor reduced motion until the user explicitly previews an animation. */
+@media (prefers-reduced-motion: reduce) { .caption-smooth-word:not([data-motion-preview="true"]) { animation:none !important; } }
 /* Override legacy theme rules without affecting the rest of the app. */
 body.caption-editor-page { width:100%; }
 .ce-shell { max-height:none; background:transparent; }
@@ -162,124 +163,6 @@ body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card,.ce-topbar,.c
   --panel:var(--editor-panel); --panel-2:var(--editor-control); --line:var(--editor-line);
   background:var(--editor-panel) !important; color:var(--editor-text) !important;
 }
-
-/* First Fold Strict Viewport Layout & Smaller Typography */
-html, body.caption-editor-page {
-  height: 100vh !important;
-  max-height: 100vh !important;
-  overflow: hidden !important;
-  padding: 5px !important;
-  box-sizing: border-box !important;
-}
-
-body.caption-editor-page .ce-main-container {
-  height: calc(100vh - 10px) !important;
-  max-height: calc(100vh - 10px) !important;
-  overflow: hidden !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-body.caption-editor-page .ce-topbar {
-  height: 46px !important;
-  min-height: 46px !important;
-  padding: 4px 14px !important;
-  margin-bottom: 4px !important;
-  flex-shrink: 0 !important;
-}
-
-body.caption-editor-page .ce-shell {
-  flex: 1 !important;
-  min-height: 0 !important;
-  height: calc(100vh - 66px) !important;
-  max-height: calc(100vh - 66px) !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-}
-
-body.caption-editor-page .ce-layout {
-  height: 100% !important;
-  max-height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  display: grid !important;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) !important;
-  gap: 6px !important;
-  align-items: stretch !important;
-}
-
-body.caption-editor-page .ce-preview-panel {
-  height: 100% !important;
-  max-height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  padding: 10px !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 6px !important;
-}
-
-body.caption-editor-page .ce-phone-stage {
-  flex: 1 !important;
-  min-height: 0 !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-body.caption-editor-page .ce-phone-frame {
-  max-height: 100% !important;
-  width: auto !important;
-  max-width: 250px !important;
-  aspect-ratio: 9/16 !important;
-}
-
-body.caption-editor-page .ce-workspace {
-  height: 100% !important;
-  max-height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-}
-
-body.caption-editor-page .ce-style-grid {
-  height: 100% !important;
-  max-height: 100% !important;
-  min-height: 0 !important;
-  overflow: hidden !important;
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  grid-template-rows: 1.25fr 1fr !important;
-  gap: 6px !important;
-}
-
-body.caption-editor-page .ce-card {
-  height: 100% !important;
-  max-height: 100% !important;
-  min-height: 0 !important;
-  overflow-y: auto !important;
-  padding: 10px 12px !important;
-  border-radius: 45px !important;
-  gap: 6px !important;
-  box-sizing: border-box !important;
-}
-
-/* Smaller Compact Typography Across Controls */
-body.caption-editor-page .ce-card-title { font-size: 11px !important; font-weight: 700 !important; }
-body.caption-editor-page .ce-label,
-body.caption-editor-page .ce-field-label { font-size: 9.5px !important; margin-bottom: 2px !important; }
-body.caption-editor-page .ce-pill-opt { font-size: 9.5px !important; padding: 2px 7px !important; height: 22px !important; }
-body.caption-editor-page .ce-select,
-body.caption-editor-page .ce-input { font-size: 10.5px !important; height: 25px !important; padding: 0 20px 0 8px !important; }
-body.caption-editor-page .ce-kicker { font-size: 8.5px !important; }
-body.caption-editor-page .ce-clip-title { font-size: 11px !important; }
-body.caption-editor-page .ce-status-label,
-body.caption-editor-page .ce-hint,
-body.caption-editor-page .ce-box-hint { font-size: 9px !important; }
-body.caption-editor-page .ce-back-btn,
-body.caption-editor-page .ce-sync-btn,
-body.caption-editor-page .ce-btn { font-size: 10.5px !important; padding: 3px 8px !important; height: 26px !important; }
-body.caption-editor-page .preset-name { font-size: 9px !important; }
-body.caption-editor-page .ce-value-badge { font-size: 9px !important; padding: 1px 5px !important; }
 body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card-title,.ce-label,.ce-field-label,.ce-clip-title,.ce-status-label,.ce-hint,.ce-box-hint,.presets-drawer-title,.presets-drawer-subtitle) {
   color:var(--editor-text) !important;
 }
@@ -300,4 +183,85 @@ body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range::-webki
 /* Preset swatches and the video retain their media colors in both themes. */
 @media(max-width:680px) {
   body.caption-editor-page .ce-preview-panel { width:calc(100% - 10px); justify-self:center; }
+}
+
+/* Reference typography scale: headings 28/38, 24/34, 20/30;
+   body 16/26, 14/24; details 12/20; compact labels 10/18. */
+body.caption-editor-page { font-size:14px; line-height:24px; }
+body.caption-editor-page .ce-clip-title { font-size:24px; line-height:34px; font-weight:600; }
+body.caption-editor-page .presets-drawer-title { font-size:28px; line-height:38px; font-weight:700; }
+body.caption-editor-page .ce-card-title { font-size:20px; line-height:30px; font-weight:500; }
+body.caption-editor-page .preset-card-name { font-size:16px; line-height:26px; }
+body.caption-editor-page :is(.ce-label,.ce-hint,.ce-box-hint,.preset-name) { font-size:12px; line-height:20px; }
+body.caption-editor-page :is(.ce-badge,.ce-val-tag,.preset-browse-badge) { font-size:10px; line-height:18px; }
+body.caption-editor-page .ce-phone-frame {
+  border:10px solid #000 !important; border-radius:45px !important;
+  box-sizing:border-box; background:#000; overflow:hidden;
+}
+body.caption-editor-page :is(.ce-phone-screen,.ce-phone-bezel,.caption-video-wrap) { border-radius:35px !important; }
+
+/* Desktop keeps all four tool panels and preview within the viewport.
+   Dense panels scroll internally; narrow screens keep normal page scrolling. */
+@media(min-width:1000px) and (min-height:600px) {
+  html:has(.caption-editor-page),body.caption-editor-page { height:100%; overflow:hidden; }
+  body.caption-editor-page .ce-main-container { height:calc(100dvh - 10px); min-height:0; display:flex; flex-direction:column; }
+  body.caption-editor-page .ce-topbar { min-height:54px; padding:6px 18px; flex-shrink:0; }
+  body.caption-editor-page .ce-shell { flex:1; min-height:0; height:auto; overflow:hidden; }
+  body.caption-editor-page .ce-layout { height:100%; min-height:0; grid-template-columns:minmax(225px,29%) minmax(0,1fr); max-width:none; }
+  body.caption-editor-page .ce-workspace { height:100%; min-height:0; overflow:hidden; }
+  body.caption-editor-page .ce-style-grid { height:100%; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:repeat(2,minmax(0,1fr)); }
+  body.caption-editor-page .ce-card { min-height:0; overflow:auto; padding:12px 18px !important; gap:8px; overscroll-behavior:contain; }
+  body.caption-editor-page .ce-card-head { padding-bottom:0; }
+  body.caption-editor-page .ce-field { gap:4px; }
+  body.caption-editor-page .ce-field-row { gap:8px; }
+  body.caption-editor-page .ce-preview-panel { position:relative; top:0; min-height:0; height:calc(100% - 10px) !important; padding:12px !important; gap:8px; overflow:auto; }
+  body.caption-editor-page .ce-phone-stage { min-height:0; flex:1; }
+  body.caption-editor-page .ce-phone-frame { width:auto; height:min(100%,calc(100dvh - 215px)) !important; max-width:100%; max-height:100%; aspect-ratio:9/16; margin:auto; }
+  body.caption-editor-page .presets-grid { gap:6px; }
+  body.caption-editor-page .preset-card { padding:8px; min-height:58px; }
+  body.caption-editor-page .ce-export-actions-area { margin-top:6px; }
+  body.caption-editor-page .ce-btn--export-hero { min-height:40px; padding:8px; font-size:14px; line-height:24px; }
+}
+
+/* Every animation offered in the selector has a smooth-renderer counterpart. */
+.caption-smooth-word--classic { animation-name:capClassic; }
+.caption-smooth-word--pop { animation-name:capPop; }
+.caption-smooth-word--elevate { animation-name:capElevate; }
+.caption-smooth-word--highlight { animation-name:capHighlight; }
+.caption-smooth-word--oneword,.caption-smooth-word--twoword { animation-name:capWordGroup; }
+.caption-smooth-word--wordcolor { animation-name:capWordColor; }
+.caption-smooth-word--highlightimpact { animation-name:capHighlightImpact; }
+
+/* Compact editor chrome; caption artwork retains the selected font size. */
+body.caption-editor-page { font-size:12px; line-height:18px; }
+body.caption-editor-page .ce-clip-title { font-size:18px; line-height:24px; }
+body.caption-editor-page .ce-card-title { font-size:14px; line-height:20px; }
+body.caption-editor-page :is(.ce-label,.ce-hint,.ce-box-hint,.ce-btn,.ce-pill-opt,.cf-select-trigger) { font-size:11px; line-height:16px; }
+body.caption-editor-page :is(.ce-val-tag,.preset-name) { font-size:10px; line-height:14px; }
+body.caption-editor-page .cf-select-trigger { min-height:30px; padding:6px 10px; }
+body.caption-editor-page .ce-card .ce-range { height:3px; margin-block:7px; }
+body.caption-editor-page .ce-card .ce-range::-webkit-slider-runnable-track { height:3px; border-radius:15px; }
+body.caption-editor-page .ce-card .ce-range::-webkit-slider-thumb { width:10px; height:10px; margin-top:-3.5px; box-shadow:none; }
+body.caption-editor-page .ce-card .ce-range::-moz-range-track { height:3px; background:var(--editor-control); }
+body.caption-editor-page .ce-card .ce-range::-moz-range-thumb { width:10px; height:10px; border:0; background:var(--editor-text); }
+#capBoxHint[hidden] { display:none; }
+body.caption-editor-page .ce-position-alignment-row { display:flex; align-items:center; gap:5px; min-width:0; overflow-x:auto; flex-shrink:0; }
+body.caption-editor-page .ce-position-alignment-row :is(.ce-placement-presets,.ce-align-buttons) { display:flex; flex-wrap:nowrap; align-items:center; gap:2px; padding:3px; margin:0; width:auto; background:var(--editor-control) !important; border-radius:15px !important; }
+body.caption-editor-page .ce-position-alignment-row :is(.duration-btn,.ce-align-btn) { display:grid; place-items:center; flex:0 0 27px; width:27px; min-width:27px; height:28px; min-height:28px; padding:0; border:0; border-radius:50% !important; color:var(--editor-text); background:transparent !important; }
+body.caption-editor-page .ce-position-alignment-row :is(.duration-btn.active,.ce-align-btn.is-active,.ce-align-btn[aria-pressed="true"]) { background:var(--editor-text) !important; color:var(--editor-panel) !important; box-shadow:none; }
+body.caption-editor-page .ce-position-alignment-row button:focus-visible { outline:2px solid #00bde9; outline-offset:1px; }
+body.caption-editor-page .ce-box-toolbar { gap:5px; }
+body.caption-editor-page .ce-box-toolbar .ce-btn { min-height:28px; padding:4px 9px; }
+body.caption-editor-page .ce-coord-sliders { gap:5px; }
+@media(min-width:1000px) and (min-height:600px) {
+  body.caption-editor-page .ce-topbar { min-height:0; height:calc(10dvh - 20px); box-sizing:border-box; padding:3px 16px; }
+  body.caption-editor-page .ce-layout { grid-template-columns:calc(23vw + 10px) minmax(0,1fr); }
+  body.caption-editor-page .ce-preview-panel { height:90dvh !important; padding:0 !important; margin-block:0 !important; overflow:hidden; background:transparent !important; }
+  body.caption-editor-page .ce-phone-stage { height:90dvh !important; width:23vw; flex:none; }
+  body.caption-editor-page .ce-phone-frame { width:23vw; min-width:23vw; max-width:23vw; height:90dvh !important; max-height:none; aspect-ratio:auto; }
+  body.caption-editor-page .ce-card { padding:8px 14px !important; gap:4px; }
+  body.caption-editor-page .ce-field { gap:3px; }
+  body.caption-editor-page .ce-field-row { gap:6px; }
+  body.caption-editor-page .ce-pill-opt { padding:5px 8px; }
+  body.caption-editor-page .ce-btn--export-hero { min-height:32px; padding:5px; font-size:12px; line-height:18px; }
 }
