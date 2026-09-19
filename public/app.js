@@ -568,6 +568,11 @@ function showGenerationProgress(job = {}) {
   if (heroCard) {
     heroCard.style.display = "none";
   }
+
+  if (job.resultJson?.clips && Array.isArray(job.resultJson.clips) && job.resultJson.clips.length > 0) {
+    state.generatedClips = job.resultJson.clips;
+    renderGeneratedClips();
+  }
   const mpCard = document.getElementById("modernProgressCard");
   if (mpCard) {
     mpCard.classList.remove("is-hidden");
@@ -657,7 +662,7 @@ const selectedDurationText = document.getElementById("selectedDurationText");
 const possibleClipsText = document.getElementById("possibleClipsText");
 const totalPossibleClips = document.getElementById("totalPossibleClips");
 const clipLengthInfo = document.getElementById("clipLengthInfo");
-const generatedClipsGrid = document.getElementById("generatedClipsGrid");
+const generatedClipsGrid = document.getElementById("expectedOutputClipsGrid") || document.getElementById("generatedClipsGrid");
 const downloadAllBtn = document.getElementById("downloadAllBtn");
 const deleteAllBtn = document.getElementById("deleteAllBtn");
 const gridViewBtn = document.getElementById("gridViewBtn");
@@ -1253,11 +1258,15 @@ function getAutoSmartClipCount() {
   );
   const minutes = Math.floor(duration / 60);
   if (minutes <= 0) return 3;
-  if (minutes < 5) return 1;
-  if (minutes < 15) return 2;
-  if (minutes < 30) return 4;
-  if (minutes < 50) return 6;
-  return Math.min(30, Math.max(1, Math.round(minutes * (7.5 / 60))));
+  if (minutes <= 3) return 1;
+  if (minutes < 8) return 2;
+  if (minutes < 15) return 3;          // ~10m: 3 clips
+  if (minutes < 25) return 5;          // ~20m: 5 clips
+  if (minutes < 45) return 6;          // ~30m: 6 clips
+  if (minutes < 75) return 8;          // ~60m (1hr): 7-8 clips
+  if (minutes < 105) return 10;
+  if (minutes < 140) return 13;         // ~120m (2hr): 12-13 clips
+  return Math.min(30, Math.max(13, Math.round(minutes * (13 / 120))));
 }
 
 function updateExpectedOutputCard() {

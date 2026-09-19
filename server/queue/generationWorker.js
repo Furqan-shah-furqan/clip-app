@@ -186,10 +186,24 @@ const generationWorker = new Worker(
 
     try {
       // 3. Execute smart generation pipeline in isolated workspace
+      const onClipGenerated = async (clip, allClips) => {
+        try {
+          await prisma.generationJob.update({
+            where: { id: generationJobId },
+            data: {
+              resultJson: { clips: allClips },
+            },
+          });
+        } catch (err) {
+          console.warn(`[GenerationWorker][${generationJobId}] Failed saving partial clip:`, err.message);
+        }
+      };
+
       const result = await runSmartGeneration({
         generationJobId,
         payload: dbJob.requestJson,
         onProgress,
+        onClipGenerated,
         isCancelled,
       });
 

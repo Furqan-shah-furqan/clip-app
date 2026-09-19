@@ -2920,10 +2920,10 @@ function renderPresetsUI() {
 
   presetsGrid.innerHTML = quickPicks.map((preset) => {
     const s = preset.style || {};
-    const active = activeId === preset.id;
+    const active = activeId ? activeId === preset.id : (editorState.style?.animationStyle && editorState.style.animationStyle === preset.style?.animationStyle);
     return `
       <button
-        class="preset-card${active ? " preset-card--active" : ""}"
+        class="preset-card${active ? " preset-card--active is-active" : ""}"
         data-preset-id="${preset.id}"
         aria-pressed="${active}"
         type="button"
