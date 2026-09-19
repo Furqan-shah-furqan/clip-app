@@ -2000,7 +2000,7 @@ function applyTextBoxVisuals(element, style) {
   }
 
   // 2. Force Neon Glow Rendering (Layered textShadow + drop-shadow filter)
-  const neonGlow = Number(merged.neonGlow !== undefined ? merged.neonGlow : (merged.glowIntensity || 0));
+  const neonGlow = Number(merged.glowIntensity || merged.neonGlow || 0);
   let computedTextShadow = "none";
   if (neonGlow > 0) {
     const glowColor = merged.textColor || "#FFDE00";
@@ -2030,12 +2030,15 @@ function applyTextBoxVisuals(element, style) {
   }
 
   // Filter / Diffuse Drop Shadow / Glow
-  if (merged.filter && merged.filter !== "none") {
+  if (neonGlow > 0) {
+    // Explicit glow follows text color, independently of shadow/preset colors.
+    element.style.filter = `drop-shadow(0 0 ${Math.max(2, neonGlow * .4)}px ${merged.textColor || "#ffffff"})`;
+  } else if (merged.filter && merged.filter !== "none") {
     element.style.filter = merged.filter;
   } else {
     const glow = Number(merged.glowIntensity) || 0;
     if (glow > 0) {
-      const glowColor = merged.shadowColor || merged.textColor || "#00e5ff";
+      const glowColor = merged.textColor || "#ffffff";
       element.style.filter = `drop-shadow(0 0 ${glow}px ${glowColor})`;
     }
   }
@@ -2618,7 +2621,7 @@ function updateLivePreview() {
     ? getParityDisplayText(currentSeg, currentTime, s)
     : "Sample Caption";
 
-  if (s.curated) {
+  if (s.curated || s.boxWidth) {
     renderSmoothCaption(captionLivePreview, sampleText, currentSeg?.id,
       getActiveDisplayWordIndex(currentSeg, currentTime, s), s);
     return;
@@ -3693,6 +3696,25 @@ function goBack() {
 window.goBack = goBack;
 
 // Bind controls
+function selectWordAnimation(mode) {
+  explicitMotionPreview = true;
+  editorState.style.animationStyle = mode;
+  editorState.style.wordAnimation = mode;
+  if (["oneword", "twoword", "wordappend"].includes(mode)) {
+    editorState.style.wordsPerRow = mode === "oneword" ? 1 : mode === "twoword" ? 2 : 0;
+    if (capWordsPerRow) capWordsPerRow.value = String(editorState.style.wordsPerRow);
+    wordsPerRowGroup?.querySelectorAll(".ce-pill-opt").forEach(btn => {
+      btn.classList.toggle("is-active", Number(btn.dataset.words) === editorState.style.wordsPerRow);
+    });
+  }
+  // Motion is an independent edit: never re-read or replace typography/preset controls.
+  resetCaptionRenderCache();
+  applyStyleToOverlay();
+  syncCaptionOverlay();
+  updateLivePreview();
+  persistCaptions();
+}
+
 function bindControls() {
   ensurePublishNavButton();
 
@@ -3734,17 +3756,7 @@ function bindControls() {
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
   capAnimStyle?.addEventListener("change", () => {
-    explicitMotionPreview = true;
-    // These modes define the visible word group, overriding preset grouping.
-    const mode = capAnimStyle.value;
-    if (["oneword", "twoword", "wordappend"].includes(mode)) {
-      editorState.style.wordsPerRow = mode === "oneword" ? 1 : mode === "twoword" ? 2 : 0;
-      if (capWordsPerRow) capWordsPerRow.value = String(editorState.style.wordsPerRow);
-      wordsPerRowGroup?.querySelectorAll(".ce-pill-opt").forEach((btn) => {
-        btn.classList.toggle("is-active", Number(btn.dataset.words) === editorState.style.wordsPerRow);
-      });
-    }
-    onSliderCommit();
+    selectWordAnimation(capAnimStyle.value);
   });
   capTextShadow?.addEventListener("change", onSliderCommit);
 
