@@ -142,6 +142,30 @@ test('explicit preset preview opts in to motion and cache reset permits replay',
   assert.equal(container.children[0].dataset.motionPreview,'true');
 });
 
+test('animation selection preserves plain-text typography and transcript despite stale controls', () => {
+  const h=editor();
+  h.run('editorState.style={...DEFAULT_STYLE,fontFamily:"Inter, sans-serif",fontWeight:400,fontStyle:"italic",fontSize:31,textColor:"#ff3366",textTransform:"none"};');
+  const before=JSON.parse(h.run('JSON.stringify(editorState.style)'));
+  const transcript=h.run('JSON.stringify(editorState.segments)');
+  for(const mode of Object.keys(h.run('ANIM_WORD_DELAY'))) {
+    h.context.selectWordAnimation(mode);
+    const after=JSON.parse(h.run('JSON.stringify(editorState.style)'));
+    for(const key of ['fontFamily','fontWeight','fontStyle','fontSize','textColor','textTransform']) assert.equal(after[key],before[key],`${mode}: ${key}`);
+    assert.equal(after.animationStyle,mode);
+    assert.equal(h.run('JSON.stringify(editorState.segments)'),transcript);
+  }
+});
+
+test('explicit neon glow follows every text color despite preset filters and shadow color', () => {
+  const h=editor(),el=new Element();
+  for(const textColor of ['#ffffff','#ff3366','#00e5ff','#39ff14','#ffd700','#7c3aed']) {
+    h.context.applyTextBoxVisuals(el,{...CAPTION_PRESETS[0].style,textColor,glowIntensity:16,neonGlow:0,shadowColor:'#000000',filter:'drop-shadow(0 0 8px white)'});
+    assert.ok(el.style.filter.includes(textColor));
+    assert.ok(el.style.textShadow.includes(textColor));
+    assert.ok(!el.style.filter.includes('white'));
+  }
+});
+
 test('ordinary shadows do not become glow and label backgrounds honor preset padding', () => {
   const h=editor(), el=new Element();
   h.context.applyTextBoxVisuals(el,{...CAPTION_PRESETS[0].style,fontFamily:"'Barlow', sans-serif"});
