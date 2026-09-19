@@ -11,8 +11,8 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
-    <link rel="stylesheet" href="captions.css?v=editor-2" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-5" />
+    <link rel="stylesheet" href="captions.css?v=editor-6" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-6" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -583,7 +583,7 @@
                   <button type="button" class="ce-btn" id="capEditWords">Edit words</button>
                   <button type="button" class="ce-btn" id="capDoneEditing" hidden>Done</button>
                 </div>
-                <p id="capBoxHint" class="ce-box-hint" aria-live="polite">Double-click captions to correct words. Edges reshape; corners scale text.</p>
+                <p id="capBoxHint" class="ce-box-hint" aria-live="polite" hidden></p>
                 <div class="ce-field-row">
                   <div class="ce-field"><label for="capBoxWidth" class="ce-label">Box width <span id="capBoxWidthVal">88%</span></label><input class="ce-range" type="range" id="capBoxWidth" min="15" max="100" value="88" /></div>
                   <div class="ce-field"><label for="capBoxHeight" class="ce-label">Box height <span id="capBoxHeightVal">Auto</span></label><input class="ce-range" type="range" id="capBoxHeight" min="0" max="90" value="0" /></div>
@@ -639,10 +639,6 @@
                   />
                 </div>
 
-                <div class="ce-drag-hint">
-                  <span class="hint-icon">💡</span>
-                  <span>Click &amp; drag the caption overlay on the phone preview to place it anywhere!</span>
-                </div>
               </section>
 
               <!-- CARD 4: PRESETS & EXPORT ACTIONS -->
@@ -748,7 +744,7 @@
     <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-5"></script>
+    <script src="captions.js?v=editor-6"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>

@@ -73,7 +73,8 @@ body.theme-light .ce-card--colors,body.theme-light .ce-card--presets { backgroun
 @media(max-width:1050px) { .ce-layout { grid-template-columns:minmax(230px,310px) minmax(0,1fr); } .ce-style-grid { grid-template-columns:1fr; } }
 @media(max-width:680px) { body.caption-editor-page { padding:10px; } .ce-layout { grid-template-columns:1fr; } .ce-preview-panel { position:relative; top:0; max-width:360px; width:100%; margin:auto !important; box-sizing:border-box; } .ce-topbar { padding:14px; gap:12px; } .ce-topbar .ce-status-chip { display:none; } .ce-card { padding:20px !important; } }
 
-@media (prefers-reduced-motion: reduce) { .caption-smooth-word { animation:none !important; } }
+/* Honor reduced motion until the user explicitly previews an animation. */
+@media (prefers-reduced-motion: reduce) { .caption-smooth-word:not([data-motion-preview="true"]) { animation:none !important; } }
 /* Override legacy theme rules without affecting the rest of the app. */
 body.caption-editor-page { width:100%; }
 .ce-shell { max-height:none; background:transparent; }
@@ -230,3 +231,29 @@ body.caption-editor-page :is(.ce-phone-screen,.ce-phone-bezel,.caption-video-wra
 .caption-smooth-word--oneword,.caption-smooth-word--twoword { animation-name:capWordGroup; }
 .caption-smooth-word--wordcolor { animation-name:capWordColor; }
 .caption-smooth-word--highlightimpact { animation-name:capHighlightImpact; }
+
+/* Compact editor chrome; caption artwork retains the selected font size. */
+body.caption-editor-page { font-size:12px; line-height:18px; }
+body.caption-editor-page .ce-clip-title { font-size:18px; line-height:24px; }
+body.caption-editor-page .ce-card-title { font-size:14px; line-height:20px; }
+body.caption-editor-page :is(.ce-label,.ce-hint,.ce-box-hint,.ce-btn,.ce-pill-opt,.cf-select-trigger) { font-size:11px; line-height:16px; }
+body.caption-editor-page :is(.ce-val-tag,.preset-name) { font-size:10px; line-height:14px; }
+body.caption-editor-page .cf-select-trigger { min-height:30px; padding:6px 10px; }
+body.caption-editor-page .ce-card .ce-range { height:3px; margin-block:7px; }
+body.caption-editor-page .ce-card .ce-range::-webkit-slider-runnable-track { height:3px; border-radius:15px; }
+body.caption-editor-page .ce-card .ce-range::-webkit-slider-thumb { width:10px; height:10px; margin-top:-3.5px; box-shadow:none; }
+body.caption-editor-page .ce-card .ce-range::-moz-range-track { height:3px; background:var(--editor-control); }
+body.caption-editor-page .ce-card .ce-range::-moz-range-thumb { width:10px; height:10px; border:0; background:var(--editor-text); }
+#capBoxHint[hidden] { display:none; }
+@media(min-width:1000px) and (min-height:600px) {
+  body.caption-editor-page .ce-topbar { min-height:0; height:calc(10dvh - 20px); box-sizing:border-box; padding:3px 16px; }
+  body.caption-editor-page .ce-layout { grid-template-columns:calc(15vw + 10px) minmax(0,1fr); }
+  body.caption-editor-page .ce-preview-panel { height:90dvh !important; padding:0 !important; margin-block:0 !important; overflow:hidden; background:transparent !important; }
+  body.caption-editor-page .ce-phone-stage { height:90dvh !important; width:15vw; flex:none; }
+  body.caption-editor-page .ce-phone-frame { width:15vw; min-width:15vw; max-width:15vw; height:90dvh !important; max-height:none; aspect-ratio:auto; }
+  body.caption-editor-page .ce-card { padding:10px 16px !important; gap:5px; }
+  body.caption-editor-page .ce-field { gap:3px; }
+  body.caption-editor-page .ce-field-row { gap:6px; }
+  body.caption-editor-page .ce-pill-opt { padding:5px 8px; }
+  body.caption-editor-page .ce-btn--export-hero { min-height:32px; padding:5px; font-size:12px; line-height:18px; }
+}
