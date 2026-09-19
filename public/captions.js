@@ -2230,8 +2230,6 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       if (i) container.appendChild(document.createTextNode(" "));
       span = document.createElement("span");
       span.textContent = word;
-      // A deliberate style change must preview even while paused. Existing
-      // word nodes stay intact during playback, so motion never restarts per frame.
       const motion = style.animationStyle || "none";
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
       span.dataset.motionPreview = String(explicitMotionPreview);
@@ -2253,7 +2251,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
 
-  if (editorState.style.curated || editorState.style.boxWidth) {
+  if (editorState.style.curated) {
     renderSmoothCaption(captionOverlayText, text, segId, activeWordIdx, editorState.style);
     return;
   }
@@ -2844,7 +2842,6 @@ function syncStyleFromControls(options = {}) {
     20,
   );
   editorState.style.animationStyle = capAnimStyle?.value || "none";
-  editorState.style.wordAnimation = editorState.style.animationStyle;
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
   editorState.style.positionY = clamp(Number(capPosY?.value || 82), 5, 95);
@@ -2875,7 +2872,8 @@ function syncStyleFromControls(options = {}) {
     -360,
     360,
   );
-  editorState.style.textTransform = capTextTransform?.value || "none";
+  const activeCaseOpt = textTransformGroup?.querySelector(".ce-pill-opt.is-active");
+  editorState.style.textTransform = activeCaseOpt?.dataset.case || capTextTransform?.value || editorState.style.textTransform || "none";
 
   if (capFontSizeVal)
     capFontSizeVal.textContent = String(editorState.style.fontSize);
@@ -2938,10 +2936,10 @@ function renderPresetsUI() {
 
   presetsGrid.innerHTML = quickPicks.map((preset) => {
     const s = preset.style || {};
-    const active = activeId === preset.id;
+    const active = activeId ? activeId === preset.id : (editorState.style?.animationStyle && editorState.style.animationStyle === preset.style?.animationStyle);
     return `
       <button
-        class="preset-card${active ? " preset-card--active" : ""}"
+        class="preset-card${active ? " preset-card--active is-active" : ""}"
         data-preset-id="${preset.id}"
         aria-pressed="${active}"
         type="button"
@@ -3756,7 +3754,6 @@ function bindControls() {
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
   capAnimStyle?.addEventListener("change", () => {
-    selectWordAnimation(capAnimStyle.value);
   });
   capTextShadow?.addEventListener("change", onSliderCommit);
 

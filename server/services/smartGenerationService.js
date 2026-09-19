@@ -466,6 +466,7 @@ async function runSmartGeneration({
   generationJobId,
   payload,
   onProgress = () => {},
+  onClipGenerated = async () => {},
   isCancelled = () => false,
 }) {
   const workspace = getJobWorkspace(generationJobId);
@@ -496,7 +497,7 @@ async function runSmartGeneration({
   } = payload || {};
 
   const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
-  const safeMaxClips = Math.max(1, Math.min(12, Number(maxClips) || 3));
+  const safeMaxClips = Math.max(1, Math.min(30, Number(maxClips) || 8));
   const safeMinScore = Math.max(1, Math.min(100, Number(minScore) || 50));
 
   if (normalizedSourceType === "youtube" && (!sourceUrl || !isValidYouTubeUrl(sourceUrl))) {
@@ -734,7 +735,11 @@ async function runSmartGeneration({
           }
         }
 
-        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl }));
+        const clipPayload = buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl });
+        clips.push(clipPayload);
+        if (onClipGenerated) {
+          try { await onClipGenerated(clipPayload, clips); } catch (e) {}
+        }
       } catch (clipErr) {
         if (clipErr.message === "Job cancelled by user") throw clipErr;
         console.error(`[SmartGenerationService][Job ${generationJobId}] Moment ${i + 1} processing error:`, clipErr.message || clipErr);

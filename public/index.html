@@ -325,17 +325,22 @@
             </div>
 
             <div class="expected-output-card" id="expectedOutputCard">
-              <div class="expected-output-copy">
-                <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span>Expected output</span></div>
-                <p id="expectedOutputDuration">Add a video to estimate your output</p>
-                <strong id="expectedOutputCount">3 clips</strong>
+              <div class="expected-output-header" style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; width: 100%; flex-wrap: wrap; gap: 16px;">
+                <div class="expected-output-copy" style="flex: 1; min-width: 260px;">
+                  <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span id="expectedOutputKickerText">EXPECTED OUTPUT</span></div>
+                  <p id="expectedOutputDuration">Add a video to estimate your output</p>
+                  <strong id="expectedOutputCount">8 clips</strong>
+                  <div id="expectedOutputProgressBar" style="display: none; width: 100%; max-width: 480px; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; margin-top: 12px; overflow: hidden;">
+                    <div id="expectedOutputProgressFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ec4899, #a855f7); transition: width 0.3s ease;"></div>
+                  </div>
+                  <p id="expectedOutputEtaText" style="display: none; margin-top: 8px; font-size: 0.88rem; color: #f2c4f5; font-weight: 600;"></p>
+                </div>
+                <div class="expected-output-previews" id="expectedOutputPreviews" aria-hidden="true"></div>
               </div>
-              <div class="expected-output-previews" id="expectedOutputPreviews" aria-hidden="true"></div>
+              <div class="expected-output-generated-clips clips-view clips-story-row" id="expectedOutputClipsGrid" style="display: none; grid-column: 1 / -1; width: 100%; margin-top: 20px;"></div>
             </div>
 
-            <div class="clips-view clips-story-row" id="generatedClipsGrid">
-              <div class="empty-state">No smart clips generated yet.</div>
-            </div>
+            <!-- Generated clips render directly inside expectedOutputCard / expectedOutputClipsGrid above -->
           </section>
         </section>
 
