@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
+    <link rel="stylesheet" href="smartResults.css?v=1" />
   </head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
@@ -328,14 +329,13 @@
               <div class="expected-output-copy">
                 <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span id="expectedOutputKickerText">EXPECTED OUTPUT</span></div>
                 <p id="expectedOutputDuration">Add a video to estimate your output</p>
-                <strong id="expectedOutputCount">8 clips</strong>
+                <strong id="expectedOutputCount"></strong>
                 <p id="expectedOutputEtaText" style="display: none; margin-top: 6px; font-size: 0.8rem; color: #f2c4f5; font-weight: 600;"></p>
                 <div id="expectedOutputProgressBar" style="display: none; width: 100%; height: 6px; background: rgba(255,255,255,0.15); border-radius: 3px; margin-top: 6px; overflow: hidden;">
                   <div id="expectedOutputProgressFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ec4899, #a855f7); transition: width 0.3s ease;"></div>
                 </div>
               </div>
-              <div class="expected-output-previews" id="expectedOutputPreviews" aria-hidden="true"></div>
-              <div class="expected-output-generated-clips clips-view clips-story-row" id="expectedOutputClipsGrid" style="display: none;"></div>
+              <div class="smart-results-grid" id="expectedOutputClipsGrid"></div>
             </div>
 
             <!-- Generated clips render directly inside expectedOutputCard / expectedOutputClipsGrid above -->
@@ -649,7 +649,8 @@
     </div>
 
     <script src="captionClient.js?v=1"></script>
-    <script src="app.js?v=caption-recovery-1"></script>
+    <script src="smartResults.js?v=1"></script>
+    <script src="app.js?v=shared-results-1"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>
