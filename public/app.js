@@ -995,12 +995,15 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
   const targetCount = getAutoSmartClipCount();
 
-  if (expKicker) expKicker.textContent = "✨ GENERATED CLIPS";
+  if (expKicker) expKicker.textContent = "GENERATING CLIPS";
+  const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
+  const totalCount = getAutoSmartClipCount();
   if (expectedOutputDuration) {
-    expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
+    const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
+    expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
   }
   if (expectedOutputCount) {
-    expectedOutputCount.textContent = `${readyCount} ${readyCount === 1 ? "clip" : "clips"} ready`;
+    expectedOutputCount.textContent = `~${totalCount} clips`;
   }
   if (expEta) {
     expEta.style.display = "block";
@@ -1385,23 +1388,7 @@ function updateExpectedOutputCard(videoId, durationMs, progress) {
     generating: state.isGenerating, completed: smartResultsCompleted });
   expectedOutputCard.dataset.phase = view.phase;
   const kicker = document.getElementById("expectedOutputKickerText");
-  if (kicker) kicker.textContent = view.phase === "completed" ? "GENERATED CLIPS" : view.phase === "loading" ? "GENERATING CLIPS" : "EXPECTED OUTPUT";
-  expectedOutputDuration.textContent = view.phase === "completed"
-    ? `Created ${view.ready} ${view.ready === 1 ? "clip" : "clips"} from your video`
-    : duration > 0 ? `This ${Math.max(1, Math.round(duration / 60))}-minute video is estimated to produce`
-    : "Add a video to estimate your output";
-  expectedOutputCount.textContent = view.phase === "completed" ? `${view.ready} ${view.ready === 1 ? "clip" : "clips"}`
-    : view.estimate ? `~${view.estimate} ${view.estimate === 1 ? "clip" : "clips"}` : "";
-  for (const id of ["expectedOutputProgressBar", "expectedOutputEtaText"]) {
-    const el = document.getElementById(id);
-    if (el && view.phase !== "loading") el.style.display = "none";
-  }
-  const html = SmartResults.gridHtml(view, renderSingleClipCardHtml);
-  // Progress ticks do not recreate already loaded media or keyboard focus.
-  if (generatedClipsGrid._resultsHtml !== html) {
-    generatedClipsGrid.innerHTML = html;
-    generatedClipsGrid._resultsHtml = html;
-    bindResultCards();
+
   }
 }
 

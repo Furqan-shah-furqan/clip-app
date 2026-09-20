@@ -2480,9 +2480,6 @@ body:has(.appbar-switch input:checked) .smart-preview {
 .smart-generated-card .clip-card-video {
   position: relative;
 }
-
-/* Smart results panel is scoped in smartResults.css. */
-
 .smart-score-badge {
   position: absolute;
   top: 10px;
