@@ -1010,14 +1010,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   if (expBar) expBar.style.display = "block";
   if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
 
-  if (readyCount > 0) {
-    if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
-    if (expClipsGrid) expClipsGrid.style.display = "grid";
-  } else {
-    if (expClipsGrid) expClipsGrid.style.display = "none";
-    if (expectedOutputPreviews) expectedOutputPreviews.style.display = "flex";
-  }
-
+  updateExpectedOutputCard();
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
 }
@@ -1412,6 +1405,8 @@ function updateExpectedOutputCard() {
     for (let i = 0; i < totalSlots; i++) {
       if (i < readyCount) {
         html += renderSingleClipCardHtml(state.generatedClips[i], i);
+      } else if (i === readyCount && state.isGenerating) {
+        html += `<span class="expected-preview is-generating${i === 1 ? " is-featured" : ""}"><span>▷</span></span>`;
       } else {
         html += `<span class="expected-preview${i === 1 ? " is-featured" : ""}"><span>▷</span></span>`;
       }

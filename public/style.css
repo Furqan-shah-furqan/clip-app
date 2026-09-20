@@ -2504,37 +2504,41 @@ body:has(.appbar-switch input:checked) .smart-preview {
 
 .expected-preview,
 .expected-output-card .clip-card {
-  flex: 0 0 120px;
-  width: 120px;
-  height: 230px;
+  flex: 0 0 110px;
+  width: 110px;
+  height: 210px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  border: 1.5px solid rgba(233, 172, 239, .35) !important;
-  border-radius: 35px !important;
+  border: 1.5px solid rgba(233, 172, 239, .25) !important;
+  border-radius: 25px !important;
   color: rgba(255, 255, 255, .7);
   background: rgba(22, 5, 28, .35);
   position: relative;
   overflow: hidden;
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
-              border-radius 0.3s ease,
-              width 0.3s ease,
-              height 0.3s ease,
-              box-shadow 0.3s ease,
-              border-color 0.3s ease;
+  backface-visibility: hidden;
+  will-change: transform;
+  transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+              border-radius 0.28s ease,
+              box-shadow 0.28s ease,
+              border-color 0.28s ease;
   cursor: pointer;
 }
 
 .expected-preview:hover,
 .expected-output-card .clip-card:hover {
-  transform: translateY(-50px);
-  width: 170px;
-  height: 280px;
-  border-radius: 45px !important;
+  transform: translateY(-50px) scale(1.33);
+  border-radius: 35px !important;
   border-color: rgba(240, 106, 255, .9) !important;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(222, 91, 238, 0.5);
   z-index: 10;
+}
+
+.expected-preview.is-generating {
+  border: 1.5px solid #d946ef !important;
+  box-shadow: 0 0 15px rgba(217, 70, 239, 0.6), inset 0 0 12px rgba(217, 70, 239, 0.25);
+  background: rgba(88, 28, 98, 0.45);
 }
 
 .expected-preview.is-featured { border-color: rgba(222, 91, 238, .6) !important; background: rgba(76, 25, 85, .45); }
