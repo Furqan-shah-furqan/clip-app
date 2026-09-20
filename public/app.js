@@ -1365,8 +1365,14 @@ function renderSingleClipCardHtml(clip, index) {
   `;
 }
 
-function updateExpectedOutputCard() {
+function updateExpectedOutputCard(videoId, durationMs, progress) {
   if (!expectedOutputCard) return;
+  if (typeof durationMs === "number" && durationMs > 0) {
+    state.videoDurationSeconds = durationMs > 100000 ? Math.round(durationMs / 1000) : durationMs;
+  }
+  if (typeof progress === "number") {
+    state.isGenerating = progress >= 0 && progress < 100;
+  }
   const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
   const count = getAutoSmartClipCount();
   const kicker = document.getElementById("expectedOutputKickerText");
