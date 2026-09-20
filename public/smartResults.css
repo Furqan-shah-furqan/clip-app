@@ -14,6 +14,9 @@ body.home-page #expectedOutputCard .expected-output-copy {
 }
 #expectedOutputCard .expected-output-kicker { margin:0; font-size:10px; line-height:18px; letter-spacing:.18em; }
 #expectedOutputCard .expected-output-copy p { margin:0 !important; font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+#expectedOutputCard #expectedOutputDuration { min-height:2.8em; }
+#expectedOutputCard .smart-results-progress { display:grid; align-content:start; gap:5px; min-height:40px; width:100%; padding:0; margin:0; }
+#expectedOutputCard[data-phase="neutral"] .smart-results-progress { display:none; }
 #expectedOutputCard .expected-output-copy strong { font-size:clamp(28px,4vw,52px); line-height:1.1; letter-spacing:-.04em; }
 #expectedOutputCard #expectedOutputProgressBar { margin:0 !important; }
 body.home-page #expectedOutputClipsGrid {
