@@ -2484,12 +2484,12 @@ body:has(.appbar-switch input:checked) .smart-preview {
 .expected-output-card {
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  padding: 24px 28px;
-  min-height: 200px;
-  margin: 24px 0 16px;
+  padding: 18px 22px;
+  min-height: 150px;
+  margin: 12px 0 12px;
   border-radius: 28px;
   background: linear-gradient(120deg, #311237 0%, #4b184f 58%, #51204e 100%);
   color: #fff;
@@ -2498,9 +2498,9 @@ body:has(.appbar-switch input:checked) .smart-preview {
 }
 
 .expected-output-copy {
-  flex: 0 0 15%;
-  width: 15%;
-  min-width: 0;
+  flex: 0 0 28%;
+  width: 28%;
+  min-width: 200px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -2509,8 +2509,7 @@ body:has(.appbar-switch input:checked) .smart-preview {
 .expected-output-copy p { margin: 0 0 4px; color: #d8bfd9; font-size: .78rem; line-height: 1.35; }
 .expected-output-copy strong { display: block; font-size: clamp(1.2rem, 2.2vw, 1.8rem); line-height: 1.1; letter-spacing: -.03em; }
 .expected-output-previews {
-  flex: 0 0 85%;
-  width: 85%;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2518,10 +2517,16 @@ body:has(.appbar-switch input:checked) .smart-preview {
   flex-wrap: nowrap;
   overflow-x: auto;
   padding: 10px 0;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.expected-output-previews::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 .expected-output-generated-clips {
-  flex: 0 0 85%;
-  width: 85%;
+  flex: 1;
 }
 
 .expected-preview,
@@ -2533,7 +2538,8 @@ body:has(.appbar-switch input:checked) .smart-preview {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  border: 1.5px solid rgba(233, 172, 239, .25) !important;
+  border: none !important;
+  border-color: transparent !important;
   border-radius: 25px !important;
   color: rgba(255, 255, 255, .7);
   background: rgba(22, 5, 28, .35);
@@ -2543,8 +2549,7 @@ body:has(.appbar-switch input:checked) .smart-preview {
   will-change: transform;
   transition: transform 0.28s cubic-bezier(0.175, 0.885, 0.32, 1.275),
               border-radius 0.28s ease,
-              box-shadow 0.28s ease,
-              border-color 0.28s ease;
+              box-shadow 0.28s ease;
   cursor: pointer;
 }
 
@@ -2552,29 +2557,28 @@ body:has(.appbar-switch input:checked) .smart-preview {
 .expected-output-card .clip-card:hover {
   transform: translateY(-50px) scale(1.33);
   border-radius: 35px !important;
-  border-color: rgba(240, 106, 255, .9) !important;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 25px rgba(222, 91, 238, 0.5);
   z-index: 10;
 }
 
 .expected-preview.is-generating {
-  border: 1.5px solid #d946ef !important;
-  box-shadow: 0 0 15px rgba(217, 70, 239, 0.6), inset 0 0 12px rgba(217, 70, 239, 0.25);
+  border: none !important;
+  box-shadow: inset 0 0 12px rgba(217, 70, 239, 0.25);
   background: rgba(88, 28, 98, 0.45);
 }
 
-.expected-preview.is-featured { border-color: rgba(222, 91, 238, .6) !important; background: rgba(76, 25, 85, .45); }
-.expected-preview-more { border-style: dashed !important; font-size: .85rem; font-weight: 800; }
+.expected-preview.is-featured { border: none !important; background: rgba(76, 25, 85, .45); }
+.expected-preview-more { font-size: .85rem; font-weight: 800; }
 
 @media (max-width: 760px) {
   .expected-output-card { grid-template-columns: 1fr; gap: 24px; padding: 24px; }
   .expected-output-previews { justify-content: center; }
 }
 
-body.home-page .expected-output-card { border: 1px solid rgba(240, 106, 255, .28) !important; }
-body.home-page .expected-preview { border: 1px solid rgba(233, 172, 239, .22) !important; }
-body.home-page .expected-preview.is-featured { border-color: rgba(222, 91, 238, .6) !important; }
-body.home-page .expected-preview-more { border-style: dashed !important; }
+body.home-page .expected-output-card { border: none !important; }
+body.home-page .expected-preview { border: none !important; }
+body.home-page .expected-preview.is-featured { border: none !important; }
+body.home-page .expected-preview-more { border: none !important; }
 
 .smart-score-badge {
   position: absolute;
