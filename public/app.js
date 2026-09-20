@@ -1010,7 +1010,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   if (expBar) expBar.style.display = "block";
   if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
 
-  updateExpectedOutputCard();
+  updateExpectedOutputCard(undefined, undefined, p);
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
 }
@@ -1395,7 +1395,7 @@ function updateExpectedOutputCard(videoId, durationMs, progress) {
     if (expectedOutputCount) {
       expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
     }
-  } else if (readyCount > 0) {
+  } else if (state.isGenerating || readyCount > 0) {
     if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
     if (expectedOutputDuration) {
       expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
