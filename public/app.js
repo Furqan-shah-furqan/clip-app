@@ -1273,10 +1273,103 @@ function getAutoSmartClipCount() {
   if (minutes < 8) return 2;
   if (minutes < 15) return 3;          // ~10m: 3 clips
   if (minutes < 35) return 4;          // ~30m: 4 clips
-  if (minutes < 75) return 8;          // ~60m (1hr): 8 clips
+  if (minutes < 75) return 7;          // ~60m (1hr): 7 clips
   if (minutes < 105) return 10;
   if (minutes < 140) return 13;         // ~120m (2hr): 13 clips
   return Math.min(30, Math.max(13, Math.round(minutes * (13 / 120))));
+}
+
+function renderSingleClipCardHtml(clip, index) {
+  const hook = escapeHtml(clip.hook || autoHookForClip(index));
+  const rawFn = clip.fileName || (clip.outputPath ? clip.outputPath.split(/[/\\]/).pop() : "");
+  let downloadUrl = clip.downloadUrl || "";
+  if (!downloadUrl && rawFn) {
+    downloadUrl = `/api/files/download/${encodeURIComponent(rawFn)}`;
+    clip.downloadUrl = downloadUrl;
+  }
+  const safeDownloadUrl = escapeHtml(downloadUrl);
+  const videoSrc = downloadUrl ? (downloadUrl.includes("#t=") ? downloadUrl : `${downloadUrl}#t=0.001`) : "";
+  const posterUrl = escapeHtml(clip.thumbnail || state.uploadedProject?.thumbnail || "");
+  const num = String(index + 1).padStart(2, "0");
+
+  const exactDuration =
+    clip.duration != null
+      ? formatShortDuration(clip.duration)
+      : formatShortDuration(
+          Math.max(
+            0,
+            timeToSeconds(clip.endTime || "00:00:30") -
+              timeToSeconds(clip.startTime || "00:00:00"),
+          ),
+        );
+
+  return `
+  <article class="clip-card ${clip.smartScore ? "smart-generated-card" : ""}" data-card-index="${index}" style="cursor: pointer;" title="Click to edit captions">
+    <div class="clip-card-video">
+      ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
+
+      ${
+        videoSrc
+          ? `<video src="${videoSrc}" poster="${posterUrl}" muted loop playsinline preload="auto"></video>`
+          : `<video muted controls preload="metadata"></video>`
+      }
+    </div>
+    <div class="clip-card-footer">
+      <div class="clip-card-info">
+        <span class="clip-card-num">#${num}</span>
+        <span class="clip-card-dur">${exactDuration}</span>
+        <div class="clip-card-title">${hook}</div>
+        ${clip.smartScore ? `<span class="smart-mini-meta">${escapeHtml(clip.smartReason || "Smart pick")}</span>` : ""}
+        ${clip.previewText ? `<span class="smart-preview-line">${escapeHtml(clip.previewText)}</span>` : ""}
+      </div>
+      <div class="clip-icon-btns">
+        <a
+          class="clip-icon-btn"
+          href="${safeDownloadUrl || "#"}"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-action="preview"
+          data-index="${index}"
+          title="Preview / Open in new tab"
+        >
+          ${SVG_PLAY}
+        </a>
+
+        <a
+          class="clip-icon-btn edit"
+          href="captions.html?index=${index}"
+          data-action="edit"
+          data-index="${index}"
+          title="Edit Captions"
+        >
+          ${SVG_EDIT}
+        </a>
+
+        <a
+          class="clip-icon-btn"
+          href="${safeDownloadUrl || "#"}"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-action="download"
+          data-index="${index}"
+          title="Download / Open in new tab"
+        >
+          ${SVG_DOWNLOAD}
+        </a>
+
+        <button
+          type="button"
+          class="clip-icon-btn danger"
+          data-action="delete"
+          data-index="${index}"
+          title="Delete"
+        >
+          ${SVG_DELETE}
+        </button>
+      </div>
+    </div>
+  </article>
+  `;
 }
 
 function updateExpectedOutputCard() {
@@ -1288,31 +1381,78 @@ function updateExpectedOutputCard() {
   const eta = document.getElementById("expectedOutputEtaText");
   const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
 
-  if (!state.isGenerating) {
+  const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
+  const totalSlots = Math.max(count, readyCount);
+
+  if (!state.isGenerating && readyCount === 0) {
     if (kicker) kicker.textContent = "EXPECTED OUTPUT";
     if (bar) bar.style.display = "none";
     if (eta) eta.style.display = "none";
-
-    if (state.generatedClips && state.generatedClips.length > 0) {
-      if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
-      if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
-      if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} generated`;
-      if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
-      if (expectedClipsGrid) expectedClipsGrid.style.display = "grid";
-    } else {
+    if (expectedOutputDuration) {
       expectedOutputDuration.textContent = duration
         ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
         : "Add a video to estimate your output";
+    }
+    if (expectedOutputCount) {
       expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
-      if (expectedClipsGrid) expectedClipsGrid.style.display = "none";
-      if (expectedOutputPreviews) {
-        expectedOutputPreviews.style.display = "flex";
-        const shown = Math.min(5, count);
-        expectedOutputPreviews.innerHTML = Array.from({ length: shown }, (_, index) =>
-          `<span class="expected-preview${index === 1 ? " is-featured" : ""}"><span>▷</span></span>`
-        ).join("") + (count > shown ? `<span class="expected-preview expected-preview-more">+${count - shown}</span>` : "");
+    }
+  } else if (readyCount > 0) {
+    if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+    if (expectedOutputDuration) {
+      expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
+    }
+    if (expectedOutputCount) {
+      expectedOutputCount.textContent = `${readyCount} ${readyCount === 1 ? "clip" : "clips"} ready`;
+    }
+  }
+
+  if (expectedOutputPreviews) {
+    expectedOutputPreviews.style.display = "flex";
+    let html = "";
+    for (let i = 0; i < totalSlots; i++) {
+      if (i < readyCount) {
+        html += renderSingleClipCardHtml(state.generatedClips[i], i);
+      } else {
+        html += `<span class="expected-preview${i === 1 ? " is-featured" : ""}"><span>▷</span></span>`;
       }
     }
+    expectedOutputPreviews.innerHTML = html;
+
+    // Attach card event listeners
+    expectedOutputPreviews.querySelectorAll(".clip-card").forEach((card) => {
+      const vid = card.querySelector("video");
+      const idx = Number(card.dataset.cardIndex);
+
+      if (vid) {
+        vid.addEventListener("loadedmetadata", () => {
+          if (vid.currentTime === 0) {
+            try { vid.currentTime = 0.001; } catch {}
+          }
+        });
+      }
+
+      card.addEventListener("mouseenter", () => {
+        if (vid) vid.play().catch(() => {});
+      });
+
+      card.addEventListener("mouseleave", () => {
+        if (vid) {
+          vid.pause();
+          try { vid.currentTime = 0.001; } catch {}
+        }
+      });
+
+      card.addEventListener("click", (evt) => {
+        if (evt.target.closest("[data-action]")) return;
+        if (!Number.isNaN(idx)) {
+          editClipCaptions(idx);
+        }
+      });
+    });
+  }
+
+  if (expectedClipsGrid) {
+    expectedClipsGrid.style.display = "none";
   }
 }
 
