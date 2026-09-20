@@ -995,12 +995,15 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
   const targetCount = getAutoSmartClipCount();
 
-  if (expKicker) expKicker.textContent = "✨ GENERATED CLIPS";
+  if (expKicker) expKicker.textContent = "GENERATING CLIPS";
+  const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
+  const totalCount = getAutoSmartClipCount();
   if (expectedOutputDuration) {
-    expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
+    const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
+    expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
   }
   if (expectedOutputCount) {
-    expectedOutputCount.textContent = `${readyCount} ${readyCount === 1 ? "clip" : "clips"} ready`;
+    expectedOutputCount.textContent = `~${totalCount} clips`;
   }
   if (expEta) {
     expEta.style.display = "block";
@@ -1384,24 +1387,24 @@ function updateExpectedOutputCard(videoId, durationMs, progress) {
   const totalSlots = Math.max(count, readyCount);
 
   if (!state.isGenerating && readyCount === 0) {
-    if (kicker) kicker.textContent = "EXPECTED OUTPUT";
+    if (kicker) kicker.textContent = "GENERATING CLIPS";
     if (bar) bar.style.display = "none";
     if (eta) eta.style.display = "none";
     if (expectedOutputDuration) {
-      expectedOutputDuration.textContent = duration
-        ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
-        : "Add a video to estimate your output";
+      const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
+      expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
     }
     if (expectedOutputCount) {
-      expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
+      expectedOutputCount.textContent = `~${count} clips`;
     }
   } else if (state.isGenerating || readyCount > 0) {
-    if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+    if (kicker) kicker.textContent = "GENERATING CLIPS";
     if (expectedOutputDuration) {
-      expectedOutputDuration.textContent = `Created ${readyCount} viral ${readyCount === 1 ? "clip" : "clips"} from your video`;
+      const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
+      expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
     }
     if (expectedOutputCount) {
-      expectedOutputCount.textContent = `${readyCount} ${readyCount === 1 ? "clip" : "clips"} ready`;
+      expectedOutputCount.textContent = `~${count} clips`;
     }
   }
 
