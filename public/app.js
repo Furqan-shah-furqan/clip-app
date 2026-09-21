@@ -1004,8 +1004,14 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
     const rem = etaSeconds !== null && etaSeconds !== undefined ? etaSeconds : estimateGenerationSeconds(p);
     expEta.textContent = `Generating ${expCount} clips • Estimated time remaining: ${formatEtaText(rem)}`;
   }
-  if (expClipsGrid && (!state.generatedClips || !state.generatedClips.length)) expClipsGrid.style.display = "none";
-  if (expectedOutputPreviews && (!state.generatedClips || !state.generatedClips.length)) expectedOutputPreviews.style.display = "flex";
+  if (expClipsGrid) {
+    expClipsGrid.style.display = "grid";
+    if (!state.generatedClips || !state.generatedClips.length) {
+      if (!expClipsGrid.children.length) {
+        renderPlaceholderClips(expCount);
+      }
+    }
+  }
 
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
@@ -1269,10 +1275,39 @@ function getAutoSmartClipCount() {
   return Math.min(30, Math.max(13, Math.round(minutes * (13 / 120))));
 }
 
+function renderPlaceholderClips(count) {
+  const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
+  if (!expectedClipsGrid) return;
+
+  const validCount = Math.max(0, Number(count) || 0);
+  if (validCount <= 0) {
+    expectedClipsGrid.innerHTML = "";
+    return;
+  }
+
+  const cardsHtml = Array.from({ length: validCount }, (_, index) => `
+    <article class="clip-card smart-clip-card ${index === 0 ? "is-selected" : ""}" data-card-index="${index}" data-state="placeholder">
+      <div class="smart-clip-placeholder-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>
+      </div>
+    </article>
+  `).join("");
+
+  expectedClipsGrid.style.display = "grid";
+  expectedClipsGrid.innerHTML = cardsHtml;
+
+  expectedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      expectedClipsGrid.querySelectorAll(".clip-card").forEach(c => c.classList.remove("is-selected"));
+      card.classList.add("is-selected");
+    });
+  });
+}
+
 function updateExpectedOutputCard() {
   if (!expectedOutputCard) return;
   const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
-  const count = getAutoSmartClipCount();
+  const count = typeof window.__testClipCount === "number" ? window.__testClipCount : getAutoSmartClipCount();
   const kicker = document.getElementById("expectedOutputKickerText");
   const bar = document.getElementById("expectedOutputProgressBar");
   const eta = document.getElementById("expectedOutputEtaText");
@@ -1287,21 +1322,17 @@ function updateExpectedOutputCard() {
       if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
       if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
       if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} generated`;
-      if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
-      if (expectedClipsGrid) expectedClipsGrid.style.display = "grid";
+      renderGeneratedClips();
     } else {
-      expectedOutputDuration.textContent = duration
-        ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
-        : "Add a video to estimate your output";
-      expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
-      if (expectedClipsGrid) expectedClipsGrid.style.display = "none";
-      if (expectedOutputPreviews) {
-        expectedOutputPreviews.style.display = "flex";
-        const shown = Math.min(5, count);
-        expectedOutputPreviews.innerHTML = Array.from({ length: shown }, (_, index) =>
-          `<span class="expected-preview${index === 1 ? " is-featured" : ""}"><span>▷</span></span>`
-        ).join("") + (count > shown ? `<span class="expected-preview expected-preview-more">+${count - shown}</span>` : "");
+      if (expectedOutputDuration) {
+        expectedOutputDuration.textContent = duration
+          ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
+          : "Add a video to estimate your output";
       }
+      if (expectedOutputCount) {
+        expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
+      }
+      renderPlaceholderClips(count);
     }
   }
 }
@@ -1487,11 +1518,10 @@ function generateMockCaptions(duration) {
 function applyClipsView() {
   if (!generatedClipsGrid) return;
 
-  state.clipsView = "story";
+  state.clipsView = "grid";
 
-  generatedClipsGrid.classList.remove("clips-view-grid");
-  generatedClipsGrid.classList.remove("clips-view-scroll");
-  generatedClipsGrid.classList.add("clips-story-row");
+  generatedClipsGrid.classList.remove("clips-view-scroll", "clips-view-grid", "clips-story-row");
+  generatedClipsGrid.classList.add("smart-clip-grid");
 }
 
 function deleteClip(index) {
@@ -1706,84 +1736,77 @@ function renderGeneratedClips() {
               ),
             );
 
+      const score = Math.round(Number(clip.smartScore) || (98 - (index * 3) % 45));
+
       return `
-      <article class="clip-card ${clip.smartScore ? "smart-generated-card" : ""}" data-card-index="${index}" style="cursor: pointer;" title="Click to edit captions">
-        <div class="clip-card-video">
-          ${clip.smartScore ? `<div class="smart-score-badge">${Math.round(Number(clip.smartScore) || 0)}</div>` : ""}
+      <article class="clip-card smart-clip-card ${index === 0 ? "is-selected" : ""}" data-card-index="${index}" data-state="loaded" style="cursor: pointer;" title="Click to edit captions">
+        ${
+          videoSrc
+            ? `<video class="smart-clip-media" src="${videoSrc}" poster="${posterUrl}" muted loop playsinline preload="auto"></video>`
+            : (posterUrl ? `<img class="smart-clip-media" src="${posterUrl}" alt="" />` : `<div class="smart-clip-media" style="background: #240a2c;"></div>`)
+        }
+        <div class="smart-clip-score-badge">${score}</div>
+        <div class="smart-clip-title-overlay">${hook}</div>
+        <div class="smart-clip-hover-actions">
+          <a
+            class="smart-clip-mini-btn"
+            href="${safeDownloadUrl || "#"}"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-action="preview"
+            data-index="${index}"
+            title="Preview / Open in new tab"
+          >
+            ${SVG_PLAY}
+          </a>
 
-          ${
-            videoSrc
-              ? `<video src="${videoSrc}" poster="${posterUrl}" muted loop playsinline preload="auto"></video>`
-              : `<video muted controls preload="metadata"></video>`
-          }
-        </div>
-        <div class="clip-card-footer">
-          <div class="clip-card-info">
-            <span class="clip-card-num">#${num}</span>
-            <span class="clip-card-dur">${exactDuration}</span>
-            <div class="clip-card-title">${hook}</div>
-            ${clip.smartScore ? `<span class="smart-mini-meta">${escapeHtml(clip.smartReason || "Smart pick")}</span>` : ""}
-            ${clip.previewText ? `<span class="smart-preview-line">${escapeHtml(clip.previewText)}</span>` : ""}
-          </div>
-          <div class="clip-icon-btns">
-            <a
-              class="clip-icon-btn"
-              href="${safeDownloadUrl || "#"}"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-action="preview"
-              data-index="${index}"
-              title="Preview / Open in new tab"
-            >
-              ${SVG_PLAY}
-            </a>
+          <a
+            class="smart-clip-mini-btn edit"
+            href="captions.html?index=${index}"
+            data-action="edit"
+            data-index="${index}"
+            title="Edit Captions"
+          >
+            ${SVG_EDIT}
+          </a>
 
-            <a
-              class="clip-icon-btn edit"
-              href="captions.html?index=${index}"
-              data-action="edit"
-              data-index="${index}"
-              title="Edit Captions"
-            >
-              ${SVG_EDIT}
-            </a>
+          <a
+            class="smart-clip-mini-btn"
+            href="${safeDownloadUrl || "#"}"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-action="download"
+            data-index="${index}"
+            title="Download / Open in new tab"
+          >
+            ${SVG_DOWNLOAD}
+          </a>
 
-            <a
-              class="clip-icon-btn"
-              href="${safeDownloadUrl || "#"}"
-              target="_blank"
-              rel="noopener noreferrer"
-              data-action="download"
-              data-index="${index}"
-              title="Download / Open in new tab"
-            >
-              ${SVG_DOWNLOAD}
-            </a>
-
-            <button
-              type="button"
-              class="clip-icon-btn danger"
-              data-action="delete"
-              data-index="${index}"
-              title="Delete"
-            >
-              ${SVG_DELETE}
-            </button>
-          </div>
+          <button
+            type="button"
+            class="smart-clip-mini-btn danger"
+            data-action="delete"
+            data-index="${index}"
+            title="Delete"
+          >
+            ${SVG_DELETE}
+          </button>
         </div>
       </article>
     `;
     })
     .join("");
 
-  generatedClipsGrid.innerHTML = clipsHtml;
+  if (generatedClipsGrid && generatedClipsGrid !== expectedClipsGrid) {
+    generatedClipsGrid.innerHTML = clipsHtml;
+  }
   if (expectedClipsGrid) {
     expectedClipsGrid.style.display = "grid";
     expectedClipsGrid.innerHTML = clipsHtml;
   }
 
   // Attach interactive preview and frame decode hooks to every card
-  generatedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
+  expectedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
     const vid = card.querySelector("video");
     const idx = Number(card.dataset.cardIndex);
 
@@ -1819,15 +1842,36 @@ function renderGeneratedClips() {
       }
     });
 
-    // Clicking anywhere on the card (except action buttons) opens Edit Captions
+    // Clicking anywhere on the card (except action buttons) selects it and opens Edit Captions
     card.addEventListener("click", (evt) => {
       if (evt.target.closest("[data-action]")) return;
+      expectedClipsGrid.querySelectorAll(".clip-card").forEach(c => c.classList.remove("is-selected"));
+      card.classList.add("is-selected");
       if (!Number.isNaN(idx)) {
         editClipCaptions(idx);
       }
     });
   });
 }
+
+window.testSmartClips = function(count, isLoaded = false) {
+  window.__testClipCount = count;
+  if (!isLoaded) {
+    state.generatedClips = [];
+    updateExpectedOutputCard();
+  } else {
+    state.generatedClips = Array.from({ length: count }, (_, i) => ({
+      id: `test-clip-${i}`,
+      title: `Smart Clip #${i + 1}`,
+      hook: autoHookForClip(i),
+      thumbnail: `https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80`,
+      downloadUrl: "",
+      smartScore: Math.round(98 - (i * 2.5) % 45),
+      duration: 30
+    }));
+    renderGeneratedClips();
+  }
+};
 
 generatedClipsGrid?.addEventListener("click", async (event) => {
   const btn = event.target.closest("[data-action]");
