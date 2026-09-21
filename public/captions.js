@@ -675,49 +675,46 @@ function getClipSource(clip = {}) {
     clip.assetUrl,
     clip.url,
     clip.videoUrl,
-  ];
-
-  // 1. Check for valid Cloudinary or external HTTPS URLs first
-  for (const c of candidates) {
-    if (c && typeof c === "string") {
-      const trimmed = c.trim();
-      if (/^https?:\/\//i.test(trimmed) && !trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
-        if (isPlayableVideoUrl(trimmed)) return trimmed;
-      }
-    }
-  }
-
-  // 2. If explicit fileName is provided and ends with .mp4
-  const rawFileName = clip.fileName || clip.filename;
-  if (rawFileName && typeof rawFileName === "string") {
-    const fn = rawFileName.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
-    if (fn && fn.toLowerCase().endsWith(".mp4")) {
-      return `/api/files/download/${encodeURIComponent(fn)}`;
-    }
-  }
-
-  // 3. Normalize candidates
-  for (const c of candidates) {
-    const norm = normalizeVideoUrl(c);
-    if (norm) return norm;
-  }
-
-  // 4. Check outputPath, filePath, localPath, storagePath, clipPath
-  const pathCandidates = [
     clip.outputPath,
     clip.filePath,
     clip.localPath,
     clip.storagePath,
     clip.clipPath,
     clip.sourcePath,
+    clip.fileName,
+    clip.filename,
   ];
 
-  for (const p of pathCandidates) {
-    if (p && typeof p === "string") {
-      const fn = p.replace(/\\/g, "/").split("/").pop()?.split("?")[0];
-      if (fn && fn.toLowerCase().endsWith(".mp4")) {
-        return `/api/files/download/${encodeURIComponent(fn)}`;
+  for (const c of candidates) {
+    if (!c || typeof c !== "string") continue;
+    const trimmed = c.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("blob:") || trimmed.startsWith("data:")) {
+      return trimmed;
+    }
+
+    if (!isPlayableVideoUrl(trimmed)) continue;
+
+    // Relative endpoint or server path
+    if (trimmed.startsWith("/api/files/download/") || trimmed.startsWith("/uploads/")) {
+      return trimmed;
+    }
+
+    // Absolute HTTP/HTTPS URL
+    if (/^https?:\/\//i.test(trimmed)) {
+      if (!trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
+        return trimmed;
       }
+      const pathOnly = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
+      if (pathOnly.startsWith("/api/files/download/")) return pathOnly;
+    }
+
+    // Extract filename from file path or relative string
+    const rawFn = trimmed.replace(/\\/g, "/").split("/").pop();
+    const fn = rawFn ? rawFn.split("?")[0] : "";
+    if (fn) {
+      return `/api/files/download/${encodeURIComponent(fn)}`;
     }
   }
 
