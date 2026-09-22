@@ -11,11 +11,11 @@ router.get("/download/:fileName", (req, res) => {
   const subtitlePath = path.join(subtitlesDir, fileName);
 
   if (fs.existsSync(exportPath)) {
-    return res.download(exportPath);
+    return res.sendFile(exportPath, { acceptRanges: true });
   }
 
   if (fs.existsSync(subtitlePath)) {
-    return res.download(subtitlePath);
+    return res.sendFile(subtitlePath, { acceptRanges: true });
   }
 
   return res.status(404).json({ error: "File not found" });

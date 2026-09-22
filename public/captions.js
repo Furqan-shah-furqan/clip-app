@@ -890,56 +890,109 @@ function wrapExportToBox(segments, style) {
  * current playback position within a segment.
  */
 function isSpeechActive(seg, time) {
-  if (!seg || time < Number(seg.start) || time >= Number(seg.end)) return false;
+  if (!seg) return false;
+  const t = Number.isFinite(Number(time)) ? Number(time) : 0;
+  const sStart = Number(seg.start) || 0;
+  const sEnd = Number(seg.end) || 0;
+  if (t < sStart || t > sEnd) return false;
   if (!Array.isArray(seg.words) || !seg.words.length) return true;
-  return seg.words.some(w => time >= Number(w.start) && time < Number(w.end));
+  return seg.words.some((w) => w && t >= Number(w.start) && t <= Number(w.end));
 }
 
 function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
-  if (!isSpeechActive(seg, currentTime)) return "";
+  if (!seg) return "";
   const groupSize = Math.max(1, Number(wordsPerGroup) || 1);
+  const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
   if (Array.isArray(seg.words) && seg.words.length) {
-    const index = seg.words.findIndex(w => currentTime >= Number(w.start) && currentTime < Number(w.end));
-    if (index < 0) return "";
+    let index = seg.words.findIndex(
+      (w) => w && t >= Number(w.start) && t <= Number(w.end)
+    );
+    if (index < 0) {
+      for (let i = seg.words.length - 1; i >= 0; i--) {
+        if (seg.words[i] && t >= Number(seg.words[i].start)) {
+          index = i;
+          break;
+        }
+      }
+    }
+    if (index < 0) index = 0;
     const groupStart = Math.floor(index / groupSize) * groupSize;
-    // Reveal only words whose speech has started, even in a two/five-word group.
-    return seg.words.slice(groupStart, index + 1).map(w => w.word).join(" ");
+    return seg.words
+      .slice(groupStart, index + 1)
+      .filter(Boolean)
+      .map((w) => w?.word || "")
+      .join(" ");
   }
-  const words = String(seg.text || "").trim().split(/\s+/).filter(Boolean);
+  const words = String(seg.text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
   if (!words.length) return "";
-  const progress = (currentTime - seg.start) / Math.max(0.05, seg.end - seg.start);
+  const sStart = Number(seg.start) || 0;
+  const sEnd = Number(seg.end) || sStart + 1.5;
+  const dur = Math.max(0.05, sEnd - sStart);
+  const progress = clamp((t - sStart) / dur, 0, 1);
   const index = Math.min(words.length - 1, Math.floor(progress * words.length));
-  return words.slice(Math.floor(index / groupSize) * groupSize, index + 1).join(" ");
+  return words
+    .slice(Math.floor(index / groupSize) * groupSize, index + 1)
+    .join(" ");
 }
 
 /**
  * For wordappend: returns progressively more words as video plays through segment.
  */
 function getWordAppendText(seg, currentTime) {
-  if (!isSpeechActive(seg, currentTime)) return "";
+  if (!seg) return "";
+  const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
   if (Array.isArray(seg.words) && seg.words.length) {
-    return seg.words.filter(w => currentTime >= Number(w.start)).map(w => w.word).join(" ");
+    const spoken = seg.words.filter((w) => w && t >= Number(w.start));
+    if (spoken.length === 0 && seg.words[0]) return seg.words[0]?.word || "";
+    return spoken.map((w) => w?.word || "").join(" ");
   }
-  const words = seg.text.trim().split(/\s+/).filter(Boolean);
-  const progress = Math.min(Math.max(0, currentTime - seg.start) / Math.max(0.05, seg.end - seg.start), 0.99999);
-  return words.slice(0, Math.max(1, Math.ceil(progress * words.length))).join(" ");
+  const words = String(seg.text || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return "";
+  const sStart = Number(seg.start) || 0;
+  const sEnd = Number(seg.end) || sStart + 1.5;
+  const dur = Math.max(0.05, sEnd - sStart);
+  const progress = clamp((t - sStart) / dur, 0, 0.99999);
+  return words
+    .slice(0, Math.max(1, Math.ceil(progress * words.length)))
+    .join(" ");
 }
 
 function getActiveDisplayWordIndex(seg, time, style = {}) {
   if (!seg) return 0;
+  const t = Number.isFinite(Number(time)) ? Number(time) : 0;
   const timed = Array.isArray(seg.words) && seg.words.length > 0;
-  const words = timed ? seg.words : String(seg.text || "").trim().split(/\s+/).filter(Boolean);
+  const words = timed
+    ? seg.words
+    : String(seg.text || "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
   if (!words.length) return 0;
   let index = 0;
   if (timed) {
     for (let i = 0; i < words.length; i++) {
-      if (time >= Number(words[i].start)) index = i;
+      if (words[i] && t >= Number(words[i].start)) index = i;
     }
   } else {
-    const progress = Math.max(0, time - seg.start) / Math.max(0.05, seg.end - seg.start);
+    const sStart = Number(seg.start) || 0;
+    const sEnd = Number(seg.end) || sStart + 1.5;
+    const dur = Math.max(0.05, sEnd - sStart);
+    const progress = clamp((t - sStart) / dur, 0, 1);
     index = Math.min(words.length - 1, Math.floor(progress * words.length));
   }
-  const groupSize = Number(style.wordsPerRow) || (style.animationStyle === "oneword" ? 1 : style.animationStyle === "twoword" ? 2 : 0);
+  const groupSize =
+    Number(style.wordsPerRow) ||
+    (style.animationStyle === "oneword"
+      ? 1
+      : style.animationStyle === "twoword"
+        ? 2
+        : 0);
   return groupSize > 0 ? index % groupSize : index;
 }
 
@@ -1913,9 +1966,14 @@ function selectCaptionFont(family) {
 }
 async function ensureCaptionFont(style) {
   if (!document.fonts?.load) return;
-  const name = captionFontName(style.fontFamily);
-  const faces = await document.fonts.load(`${Number(style.fontWeight) || 800} 28px "${name}"`);
-  if (!faces.length) throw new Error(`Could not load ${name}. Refresh the page and try again.`);
+  try {
+    const name = captionFontName(style?.fontFamily);
+    await document.fonts.load(
+      `${Number(style?.fontWeight) || 800} 28px "${name}"`
+    );
+  } catch (err) {
+    console.warn("ensureCaptionFont preload warning:", err);
+  }
 }
 function normalizeStyle(style = {}) {
   const merged = { ...DEFAULT_STYLE, ...(style || {}) };
@@ -2282,8 +2340,35 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
         animation.play();
       }
     }
-    span.style.color = (style.highlightMode === "word" || ["highlight", "highlightimpact", "wordcolor"].includes(style.animationStyle)) && i === activeWordIdx
-      ? style.highlightColor : "inherit";
+    const isCurrentActive = i === activeWordIdx;
+    span.classList.toggle("is-active", isCurrentActive);
+    span.classList.toggle("caption-word-active", isCurrentActive);
+
+    if (isCurrentActive) {
+      if (style.highlightMode === "pill") {
+        span.dataset.highlightMode = "pill";
+        span.style.backgroundColor = style.highlightBg || "#FFE600";
+        span.style.color = style.highlightColor || "#000000";
+        span.style.borderRadius = `${Number(style.borderRadius) || 12}px`;
+        span.style.padding = "2px 8px";
+        span.style.display = "inline-block";
+        if (style.fontStyle === "italic") span.style.fontStyle = "italic";
+      } else {
+        delete span.dataset.highlightMode;
+        span.style.backgroundColor = "transparent";
+        span.style.padding = "0px";
+        span.style.display = "inline";
+        span.style.color = style.highlightColor || "#00FF66";
+        if (style.fontStyle === "italic") span.style.fontStyle = "italic";
+      }
+    } else {
+      delete span.dataset.highlightMode;
+      span.style.backgroundColor = "transparent";
+      span.style.padding = "0px";
+      span.style.display = "inline";
+      span.style.color = "inherit";
+      span.style.fontStyle = style.fontStyle === "italic" ? "normal" : "inherit";
+    }
   });
   container.dataset.activeMotionWord = String(activeWordIdx);
 }
@@ -2608,42 +2693,51 @@ function initCaptionDragging() {
 
 function getActiveSegmentByTime(time) {
   const t = Number.isFinite(Number(time)) ? Number(time) : 0;
-  return editorState.segments.find(s => isSpeechActive(s, t)) || null;
+  if (!Array.isArray(editorState?.segments) || !editorState.segments.length) return null;
+  // Safe boundary check: find active segment within [seg.start, seg.end]
+  const activeSegment = editorState.segments.find(
+    (seg) => seg && t >= Number(seg.start) && t <= Number(seg.end)
+  );
+  return activeSegment || null;
 }
 
 function syncCaptionOverlay() {
-  if (captionEditSession) return;
-  if (!captionVideo || !captionOverlay || !captionOverlayText) return;
+  try {
+    if (captionEditSession) return;
+    if (!captionVideo || !captionOverlay || !captionOverlayText) return;
 
-  const currentTime = safeVideoTime();
-  let activeSegment = getActiveSegmentByTime(currentTime);
+    const currentTime = safeVideoTime();
+    let activeSegment = getActiveSegmentByTime(currentTime);
 
-  const nextSegId = activeSegment?.id || null;
-  const displayText = activeSegment
-    ? getParityDisplayText(activeSegment, currentTime, editorState.style)
-    : "";
+    const nextSegId = activeSegment?.id || null;
+    const displayText = activeSegment
+      ? getParityDisplayText(activeSegment, currentTime, editorState.style)
+      : "";
 
-  const hasText = Boolean(displayText && displayText.trim());
-  captionOverlay.style.opacity = hasText ? "1" : "0";
-  captionOverlay.style.visibility = hasText ? "visible" : "hidden";
-  captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
+    const hasText = Boolean(displayText && displayText.trim());
+    captionOverlay.style.opacity = hasText ? "1" : "0";
+    captionOverlay.style.visibility = hasText ? "visible" : "hidden";
+    captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
-  const activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
+    const activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
 
-  renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
+    renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
 
-  if (activeSegment && activeSegment.id !== editorState.activeSegmentId) {
-    editorState.activeSegmentId = activeSegment.id;
-    setActiveSegment(activeSegment.id, false);
-  } else if (!activeSegment && editorState.activeSegmentId !== null) {
-    editorState.activeSegmentId = null;
-    captionSegmentsList?.querySelectorAll(".caption-segment").forEach((el) => {
-      el.classList.remove("active");
-      el.closest(".timeline-entry")?.classList.remove("active-entry");
-    });
+    if (activeSegment && activeSegment.id !== editorState.activeSegmentId) {
+      editorState.activeSegmentId = activeSegment.id;
+      setActiveSegment(activeSegment.id, false);
+    } else if (!activeSegment && editorState.activeSegmentId !== null) {
+      editorState.activeSegmentId = null;
+      captionSegmentsList?.querySelectorAll(".caption-segment").forEach((el) => {
+        el.classList.remove("active");
+        el.closest(".timeline-entry")?.classList.remove("active-entry");
+      });
+    }
+
+    updateLivePreview();
+  } catch (err) {
+    console.warn("syncCaptionOverlay non-fatal warning:", err);
   }
-
-  updateLivePreview();
 }
 
 function updateLivePreview() {
@@ -2762,11 +2856,19 @@ function startCaptionSync() {
   if (!captionVideo) return;
   stopCaptionSync();
   const loop = () => {
-    syncCaptionOverlay();
-    updateLivePreview();
+    try {
+      syncCaptionOverlay();
+      updateLivePreview();
+    } catch (err) {
+      console.warn("syncCaptionOverlay frame error:", err);
+    }
     editorState.syncFrame = requestAnimationFrame(loop);
   };
-  syncCaptionOverlay();
+  try {
+    syncCaptionOverlay();
+  } catch (e) {
+    console.warn("Initial syncCaptionOverlay error:", e);
+  }
   editorState.syncFrame = requestAnimationFrame(loop);
 }
 function stopCaptionSync() {
@@ -2967,12 +3069,10 @@ function getActivePresetsList() {
 function renderPresetsUI() {
   if (!presetsGrid) return;
   const allPresets = getActivePresetsList();
-  // Display top 6 popular / trending presets as quick 1-click picks in Card 4
-  const quickPicks = allPresets
-    .filter((p) => p.quickPick || p.category === "Popular" || p.badge === "TRENDING")
-    .slice(0, 6);
+  // Display all 8 curated creator presets in Card 4
+  const quickPicks = allPresets.slice(0, 8);
 
-  const activeId = editorState.style?.activePresetId;
+  const activeId = editorState.style?.activePresetId || allPresets[0]?.id;
 
   presetsGrid.innerHTML = quickPicks.map((preset) => {
     const s = preset.style || {};
@@ -2988,10 +3088,10 @@ function renderPresetsUI() {
         <div
           class="preset-swatch"
           style="
-            background:${s.bgColor || "#111111"};
-            color:${s.highlightColor || s.textColor || "#ffffff"};
+            background:${s.highlightBg && s.highlightBg !== "transparent" ? s.highlightBg : (s.bgColor || "#111111")};
+            color:${s.highlightMode === "pill" ? (s.highlightColor || "#000000") : (s.highlightColor || s.textColor || "#ffffff")};
             font-family:${s.fontFamily || "Montserrat"}, sans-serif;
-            font-size: 12px;
+            font-size: 11px;
             font-weight:${s.fontWeight || 800};
             text-transform:${s.textTransform || "none"};
           "
@@ -3009,6 +3109,7 @@ function handlePresetSelection(event) {
   const card = event.target.closest?.("[data-preset-id]");
   if (!card) return;
   event.preventDefault();
+  event.stopPropagation();
   applyPresetFromGallery(card.dataset.presetId);
 }
 
@@ -3260,17 +3361,19 @@ function applyPresetFromGallery(id) {
     ...preservedPosition,
     curated: Boolean(s.curated),
     highlightMode: s.highlightMode || "none",
-    presetDuration: Number(s.presetDuration) || .2,
+    highlightBg: s.highlightBg || "transparent",
+    presetDuration: Number(s.presetDuration) || 0.2,
     shadowOffsetX: Number(s.shadowOffsetX) || 0,
     shadowOffsetY: Number(s.shadowOffsetY) || 0,
     fontFamily: s.fontFamily ? (s.fontFamily.includes(",") ? s.fontFamily : `'${s.fontFamily}', ${s.fontFamily === "Libre Caslon Text" ? "serif" : s.fontFamily === "Space Mono" ? "monospace" : "sans-serif"}`) : DEFAULT_STYLE.fontFamily,
     fontSize: Number(s.fontSize) || 28,
     fontWeight: s.fontWeight || 800,
+    fontStyle: s.fontStyle || "normal",
     textTransform: s.textTransform || "none",
     textColor: s.textColor || "#ffffff",
     highlightColor: s.highlightColor || "#22c55e",
     strokeColor: s.strokeColor || "#000000",
-    strokeWidth: 0,
+    strokeWidth: Number(s.strokeWidth) || 0,
     bgColor: s.bgColor !== undefined ? s.bgColor : "transparent",
     bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
     bgPadding: Number(s.bgPadding) || 12,
@@ -3292,7 +3395,7 @@ function applyPresetFromGallery(id) {
     glowIntensity: Number(s.glowIntensity) || 0,
     behindPerson: isBehind,
     activePresetId: preset.id,
-    activePresetStyle: { ...s, strokeWidth: 0, behindPerson: isBehind },
+    activePresetStyle: { ...s, strokeWidth: Number(s.strokeWidth) || 0, behindPerson: isBehind },
     assConfig: preset.assConfig || null,
   };
 
