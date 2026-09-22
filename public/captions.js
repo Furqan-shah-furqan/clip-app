@@ -4030,7 +4030,10 @@ async function init() {
 
     if (activeJobId) {
       try {
-        const jobRes = await fetch(`/api/clips/generation-jobs/${encodeURIComponent(activeJobId)}`);
+        let jobRes = await fetch(`/api/clips/generation-jobs/${encodeURIComponent(activeJobId)}`);
+        if (!jobRes.ok) {
+          jobRes = await fetch(`/api/clips/status/${encodeURIComponent(activeJobId)}`);
+        }
         if (jobRes.ok) {
           const jobData = await jobRes.json();
           const clips = Array.isArray(jobData.clips)
@@ -4052,6 +4055,51 @@ async function init() {
       } catch (jobErr) {
         console.warn("Active generation job fetch error:", jobErr);
       }
+    }
+
+    if (!session?.clip || !getClipSource(session.clip)) {
+      // Check localStorage clipflow_saved_projects or clipflow-studio-session first
+      try {
+        const studioRaw = localStorage.getItem("clipflow-studio-session");
+        if (studioRaw) {
+          const parsedStudio = JSON.parse(studioRaw);
+          const studioClips = Array.isArray(parsedStudio.generatedClips) ? parsedStudio.generatedClips : [];
+          if (studioClips[searchIdx] && getClipSource(studioClips[searchIdx])) {
+            const clip = studioClips[searchIdx];
+            session = {
+              clip,
+              index: searchIdx,
+              captions: (parsedStudio.clipCaptions && parsedStudio.clipCaptions[searchIdx]) || clip.captions || [],
+              captionStyle: parsedStudio.captionStyle || null,
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+          }
+        }
+      } catch {}
+    }
+
+    if (!session?.clip || !getClipSource(session.clip)) {
+      try {
+        const savedProjectsRaw = localStorage.getItem("clipflow_saved_projects") || localStorage.getItem("clipflow_all_projects");
+        if (savedProjectsRaw) {
+          const savedProjects = JSON.parse(savedProjectsRaw);
+          if (Array.isArray(savedProjects)) {
+            for (const p of savedProjects) {
+              if (Array.isArray(p.clips) && p.clips[searchIdx] && getClipSource(p.clips[searchIdx])) {
+                const clip = p.clips[searchIdx];
+                session = {
+                  clip,
+                  index: searchIdx,
+                  captions: (p.clipCaptions && p.clipCaptions[searchIdx]) || clip.captions || [],
+                  captionStyle: p.captionStyle || null,
+                };
+                localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                break;
+              }
+            }
+          }
+        }
+      } catch {}
     }
 
     if (!session?.clip || !getClipSource(session.clip)) {
