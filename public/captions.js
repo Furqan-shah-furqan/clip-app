@@ -696,8 +696,13 @@ function getClipSource(clip = {}) {
 
     if (!isPlayableVideoUrl(trimmed)) continue;
 
-    // Relative endpoint or server path
-    if (trimmed.startsWith("/api/files/download/") || trimmed.startsWith("/uploads/")) {
+    // Relative endpoint or server static path
+    if (
+      trimmed.startsWith("/api/files/download/") ||
+      trimmed.startsWith("/exports/") ||
+      trimmed.startsWith("/uploads/") ||
+      trimmed.startsWith("/captions/")
+    ) {
       return trimmed;
     }
 
@@ -707,12 +712,22 @@ function getClipSource(clip = {}) {
         return trimmed;
       }
       const pathOnly = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
-      if (pathOnly.startsWith("/api/files/download/")) return pathOnly;
+      if (
+        pathOnly.startsWith("/api/files/download/") ||
+        pathOnly.startsWith("/exports/") ||
+        pathOnly.startsWith("/uploads/")
+      ) {
+        return pathOnly;
+      }
     }
 
-    // Extract filename from file path or relative string
-    const rawFn = trimmed.replace(/\\/g, "/").split("/").pop();
-    const fn = rawFn ? rawFn.split("?")[0] : "";
+    // Extract clean filename from filesystem path or relative string (Linux /app/exports/... or Windows E:\...)
+    const normalized = trimmed.replace(/\\/g, "/");
+    const rawFn = normalized.split("/").pop();
+    const fn = rawFn ? rawFn.split(/[?#]/)[0] : "";
+    if (fn && fn.toLowerCase().endsWith(".mp4")) {
+      return `/api/files/download/${encodeURIComponent(fn)}`;
+    }
     if (fn) {
       return `/api/files/download/${encodeURIComponent(fn)}`;
     }
@@ -1130,7 +1145,35 @@ function loadSession() {
     return session;
   }
 
-  // Fallback 2: check all projects cache in localStorage
+  // Fallback 2: check active generation job from localStorage
+  const activeJobRaw =
+    localStorage.getItem("clipflow_active_generation_job") ||
+    localStorage.getItem("clipflow-active-generation-job");
+  if (activeJobRaw) {
+    try {
+      const jobData = JSON.parse(activeJobRaw);
+      const clips = Array.isArray(jobData.clips)
+        ? jobData.clips
+        : Array.isArray(jobData.resultJson?.clips)
+        ? jobData.resultJson.clips
+        : [];
+      if (clips[targetIdx] && getClipSource(clips[targetIdx])) {
+        const c = clips[targetIdx];
+        session = {
+          clip: c,
+          index: targetIdx,
+          captions: c.captions || [],
+          captionStyle: jobData.captionStyle || null,
+        };
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        } catch {}
+        return session;
+      }
+    } catch {}
+  }
+
+  // Fallback 3: check all projects cache in localStorage
   const projectsRaw =
     localStorage.getItem("clipflow_all_projects_v2") ||
     localStorage.getItem("clipflow_all_projects");
@@ -3966,42 +4009,84 @@ async function init() {
   const hasParamIndex = paramIndex !== null && !isNaN(parseInt(paramIndex, 10));
   const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
 
-  // If session is missing, has no playable clip source, or session index does not match requested index, fetch from projects API
+  // If session is missing, has no playable clip source, or session index does not match requested index, fetch from projects API or active generation job
   const searchIdx = requestedIdx !== null ? requestedIdx : 0;
   if (
     !session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)
   ) {
-    try {
-      const pRes = await fetch("/api/clips/projects");
-      if (pRes.ok) {
-        const pData = await pRes.json();
-        const projects = pData.projects || [];
-        for (const pSummary of projects) {
-          if (pSummary.clipCount > searchIdx) {
-            const detailRes = await fetch(`/api/clips/projects/${pSummary.id}`);
-            if (detailRes.ok) {
-              const detailData = await detailRes.json();
-              const fullProj = detailData.project;
-              if (fullProj && fullProj.clips && fullProj.clips[searchIdx]) {
-                const clip = fullProj.clips[searchIdx];
-                session = {
-                  clip,
-                  index: searchIdx,
-                  captions:
-                    (fullProj.clipCaptions && fullProj.clipCaptions[searchIdx]) ||
-                    clip.captions ||
-                    [],
-                  captionStyle: fullProj.captionStyle || null,
-                };
-                localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-                break;
+    // Check if there is an active generation job ID saved
+    const activeJobId =
+      localStorage.getItem("activeGenerationJobId") ||
+      (function () {
+        try {
+          const raw = localStorage.getItem("clipflow_active_generation_job") || localStorage.getItem("clipflow-active-generation-job");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            return parsed.id || parsed.jobId || null;
+          }
+        } catch {}
+        return null;
+      })();
+
+    if (activeJobId) {
+      try {
+        const jobRes = await fetch(`/api/clips/generation-jobs/${encodeURIComponent(activeJobId)}`);
+        if (jobRes.ok) {
+          const jobData = await jobRes.json();
+          const clips = Array.isArray(jobData.clips)
+            ? jobData.clips
+            : Array.isArray(jobData.job?.clips)
+            ? jobData.job.clips
+            : [];
+          if (clips[searchIdx]) {
+            const clip = clips[searchIdx];
+            session = {
+              clip,
+              index: searchIdx,
+              captions: clip.captions || [],
+              captionStyle: null,
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+          }
+        }
+      } catch (jobErr) {
+        console.warn("Active generation job fetch error:", jobErr);
+      }
+    }
+
+    if (!session?.clip || !getClipSource(session.clip)) {
+      try {
+        const pRes = await fetch("/api/clips/projects");
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          const projects = pData.projects || [];
+          for (const pSummary of projects) {
+            if (pSummary.clipCount > searchIdx) {
+              const detailRes = await fetch(`/api/clips/projects/${pSummary.id}`);
+              if (detailRes.ok) {
+                const detailData = await detailRes.json();
+                const fullProj = detailData.project;
+                if (fullProj && fullProj.clips && fullProj.clips[searchIdx]) {
+                  const clip = fullProj.clips[searchIdx];
+                  session = {
+                    clip,
+                    index: searchIdx,
+                    captions:
+                      (fullProj.clipCaptions && fullProj.clipCaptions[searchIdx]) ||
+                      clip.captions ||
+                      [],
+                    captionStyle: fullProj.captionStyle || null,
+                  };
+                  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+                  break;
+                }
               }
             }
           }
         }
+      } catch (err) {
+        console.warn("API project search fallback error:", err);
       }
-    } catch (err) {
-      console.warn("API project search fallback error:", err);
     }
   }
 
@@ -4086,7 +4171,14 @@ async function init() {
           updatePlaybackUI();
           return;
         }
-        if (currentSrc.includes("/exports/") && fn && !captionVideo.dataset.triedUploads) {
+        if (currentSrc.includes("/exports/") && fn && !captionVideo.dataset.triedApi) {
+          captionVideo.dataset.triedApi = "true";
+          captionVideo.src = `/api/files/download/${encodeURIComponent(fn)}`;
+          captionVideo.load();
+          updatePlaybackUI();
+          return;
+        }
+        if (fn && !captionVideo.dataset.triedUploads) {
           captionVideo.dataset.triedUploads = "true";
           captionVideo.src = `/uploads/${fn}`;
           captionVideo.load();

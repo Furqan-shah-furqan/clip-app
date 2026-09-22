@@ -15,17 +15,17 @@ body.caption-editor-page { padding:20px; background:#eaeaea !important; --font-b
 .ce-phone-screen { border-radius:18px; }
 .caption-video-wrap { height:100%; width:100%; }
 .ce-workspace { height:auto; overflow:visible; min-width:0; }
-.ce-style-grid { height:auto; overflow:visible; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto; gap:18px; align-items:start; }
-.ce-card { min-width:0; height:auto; max-height:none; overflow:visible; padding:22px !important; border-radius:26px !important; gap:14px; background:#101113 !important; box-shadow:none; }
+.ce-style-grid { height:auto; overflow:visible; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto auto; gap:14px; align-items:start; }
+.ce-card { min-width:0; height:auto; max-height:none; overflow:visible; padding:16px 18px !important; border-radius:22px !important; gap:10px; background:#101113 !important; box-shadow:none; }
 .ce-card:hover { box-shadow:none; }
 .ce-card--typo,.ce-card--placement { --text:#17181a; --muted:#54575b; --muted-2:#65686c; background:#fff !important; color:#17181a; }
-.ce-card-title { font-size:16px; letter-spacing:0; margin:0; }
+.ce-card-title { font-size:15px; letter-spacing:0; margin:0; }
 .ce-card-icon { display:none; }
-.ce-card-head { padding-bottom:8px; }
+.ce-card-head { padding-bottom:6px; }
 .ce-label { font-size:11px; letter-spacing:.02em; }
-.ce-field { gap:8px; }
-.ce-field-row { gap:16px; }
-.ce-select { height:38px; font-size:12px; }
+.ce-field { gap:6px; }
+.ce-field-row { gap:12px; }
+.ce-select { height:34px; font-size:11.5px; }
 .ce-card--typo .ce-select,.ce-card--placement .ce-select { background:#f1f2f3; color:#17181a; }
 .ce-card--typo .ce-pill-opt,.ce-card--placement .ce-pill-opt { background:#f0f1f2; color:#34363a; }
 .ce-card--typo .ce-pill-opt.is-active,.ce-card--placement .ce-pill-opt.is-active { background:#17181a; color:#fff; }
@@ -254,14 +254,14 @@ body.caption-editor-page .ce-box-toolbar { gap:5px; }
 body.caption-editor-page .ce-box-toolbar .ce-btn { min-height:28px; padding:4px 9px; }
 body.caption-editor-page .ce-coord-sliders { gap:5px; }
 @media(min-width:1000px) and (min-height:600px) {
-  body.caption-editor-page .ce-topbar { min-height:48px; height:auto; box-sizing:border-box; padding:4px 16px; flex-shrink:0; }
-  body.caption-editor-page .ce-layout { grid-template-columns:minmax(240px, 300px) minmax(0,1fr); gap:12px; height:100%; min-height:0; }
-  body.caption-editor-page .ce-preview-panel { height:100% !important; padding:8px !important; margin-block:0 !important; overflow:hidden; background:#111214 !important; border-radius:24px !important; display:flex; flex-direction:column; justify-content:center; align-items:center; }
+  body.caption-editor-page .ce-topbar { min-height:46px; height:auto; box-sizing:border-box; padding:4px 16px; flex-shrink:0; }
+  body.caption-editor-page .ce-layout { grid-template-columns:minmax(230px, 280px) minmax(0,1fr); gap:10px; height:100%; min-height:0; }
+  body.caption-editor-page .ce-preview-panel { height:100% !important; padding:8px !important; margin-block:0 !important; overflow:hidden; background:#111214 !important; border-radius:22px !important; display:flex; flex-direction:column; justify-content:center; align-items:center; }
   body.caption-editor-page .ce-phone-stage { height:100% !important; width:100%; flex:1; display:flex; justify-content:center; align-items:center; }
-  body.caption-editor-page .ce-phone-frame { width:auto; max-width:100%; height:100% !important; max-height:calc(100dvh - 100px); aspect-ratio:9/16; margin:0 auto; border-radius:24px !important; }
-  body.caption-editor-page .ce-card { padding:10px 14px !important; gap:5px; border-radius:24px !important; }
+  body.caption-editor-page .ce-phone-frame { width:auto; max-width:100%; height:100% !important; max-height:calc(100dvh - 95px); aspect-ratio:9/16; margin:0 auto; border-radius:22px !important; }
+  body.caption-editor-page .ce-card { padding:8px 12px !important; gap:4px; border-radius:20px !important; }
   body.caption-editor-page .ce-field { gap:2px; }
-  body.caption-editor-page .ce-field-row { gap:8px; }
-  body.caption-editor-page .ce-pill-opt { padding:3px 8px; font-size:11px; }
-  body.caption-editor-page .ce-btn--export-hero { min-height:36px; padding:6px; font-size:13px; line-height:20px; }
+  body.caption-editor-page .ce-field-row { gap:6px; }
+  body.caption-editor-page .ce-pill-opt { padding:2px 7px; font-size:10.5px; }
+  body.caption-editor-page .ce-btn--export-hero { min-height:34px; padding:5px 8px; font-size:12.5px; line-height:18px; }
 }
