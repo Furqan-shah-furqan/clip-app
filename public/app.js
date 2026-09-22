@@ -4306,3 +4306,89 @@ if (savedStyle) {
 // Apply initial overlay styles
 applyOverlayStyle(mainVideoCaptionText, mainVideoCaptionOverlay);
 persistStudioSession();
+
+// ─── Neomorphic Card Interactions ──────────────────────────────────────────────
+(function initNeomorphicCardInteractions() {
+  const dropdownTrigger = document.getElementById("neoFundingDropdownTrigger");
+  const dropdownContent = document.getElementById("neoFundingDropdownContent");
+  const chevron = document.getElementById("neoFundingChevron");
+  const amountInput = document.getElementById("neoTargetInput");
+  const amountBadge = document.getElementById("neoFundingAmountBadge");
+  const stepTrackFill = document.getElementById("neoStepTrackFill");
+  const stepNodes = document.querySelectorAll(".neo-step-node");
+
+  // 1. Accordion Toggle for Funding Goal
+  if (dropdownTrigger && dropdownContent) {
+    dropdownTrigger.addEventListener("click", () => {
+      const isOpen = dropdownContent.classList.contains("is-open");
+      if (isOpen) {
+        dropdownContent.classList.remove("is-open");
+        dropdownTrigger.setAttribute("aria-expanded", "false");
+        if (chevron) chevron.style.transform = "rotate(0deg)";
+      } else {
+        dropdownContent.classList.add("is-open");
+        dropdownTrigger.setAttribute("aria-expanded", "true");
+        if (chevron) chevron.style.transform = "rotate(180deg)";
+      }
+    });
+  }
+
+  // 2. Real-time Target Amount sync
+  if (amountInput && amountBadge) {
+    amountInput.addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      amountBadge.textContent = val || "$0";
+    });
+  }
+
+  // 3. Step Progress Bar Interactivity
+  if (stepNodes.length > 0) {
+    stepNodes.forEach((node) => {
+      node.addEventListener("click", () => {
+        const stepNum = parseInt(node.getAttribute("data-step"), 10);
+        if (isNaN(stepNum)) return;
+
+        // Update node classes
+        stepNodes.forEach((n) => {
+          const s = parseInt(n.getAttribute("data-step"), 10);
+          n.classList.remove("is-completed", "is-active", "is-inactive");
+          if (s < stepNum) {
+            n.classList.add("is-completed");
+            n.querySelector(".neo-step-circle").innerHTML = `
+              <svg class="neo-check-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+              </svg>
+            `;
+          } else if (s === stepNum) {
+            n.classList.add("is-active");
+            n.querySelector(".neo-step-circle").innerHTML = `<span class="neo-pulse-dot"></span>`;
+          } else {
+            n.classList.add("is-inactive");
+            n.querySelector(".neo-step-circle").innerHTML = `<span class="neo-plus-sign">+</span>`;
+          }
+        });
+
+        // Update progress track fill
+        if (stepTrackFill) {
+          const pct = Math.min(100, Math.max(0, ((stepNum - 1) / (stepNodes.length - 1)) * 100));
+          stepTrackFill.style.width = `${pct}%`;
+        }
+      });
+    });
+  }
+
+  // 4. Update YouTube thumbnail in Funding Goal when a link is parsed or video metadata is loaded
+  const ytInput = document.getElementById("ytUrlInput");
+  const fundingThumb = document.getElementById("neoFundingThumb");
+  const tileTitle = document.getElementById("neoTileTitle");
+  if (ytInput && fundingThumb) {
+    ytInput.addEventListener("input", () => {
+      const val = ytInput.value.trim();
+      const ytMatch = val.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+      if (ytMatch && ytMatch[1]) {
+        fundingThumb.src = `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+        if (tileTitle) tileTitle.textContent = "YouTube Video Preview";
+      }
+    });
+  }
+})();

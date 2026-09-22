@@ -6922,3 +6922,679 @@ body.home-page {
   margin: 3px 0 0;
 }
 
+/* ==========================================================================
+   NEOMORPHIC BASE CARD & SMART GENERATION PANEL
+   ========================================================================== */
+
+.neomorphic-base-card {
+  background: #ffffff !important;
+  border-radius: 32px !important;
+  padding: 32px !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.03), inset 0 1px 1px rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid #f1f5f9 !important;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.neomorphic-card-header {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.neomorphic-title {
+  font-size: 1.75rem !important;
+  font-weight: 800 !important;
+  color: #0f172a !important;
+  letter-spacing: -0.025em;
+  margin: 0 0 6px !important;
+}
+
+.neomorphic-subtitle {
+  font-size: 0.85rem !important;
+  color: #64748b !important;
+  font-weight: 500;
+  margin: 0 !important;
+}
+
+/* ── 1. Floating Dropdown Box ────────────────────────────────────────── */
+.neo-dropdown-box {
+  width: 100%;
+  margin-bottom: 24px;
+  border-radius: 20px;
+  background: rgba(248, 250, 252, 0.85);
+  border: 1px solid #e2e8f0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.neo-dropdown-trigger {
+  width: 100%;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.2s;
+}
+
+.neo-dropdown-trigger:hover {
+  background: rgba(241, 245, 249, 0.7);
+}
+
+.neo-trigger-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.neo-trigger-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: #eef2ff;
+  border: 1px solid rgba(199, 210, 254, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.neo-trigger-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #1e293b;
+  display: block;
+}
+
+.neo-trigger-subtitle {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+  display: block;
+}
+
+.neo-trigger-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.neo-target-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.neo-chevron-icon {
+  width: 18px;
+  height: 18px;
+  color: #64748b;
+  transition: transform 0.3s ease;
+}
+
+.neo-dropdown-content {
+  overflow: hidden;
+  transition: max-height 0.35s ease, opacity 0.3s ease, padding 0.3s ease;
+}
+
+.neo-dropdown-content.is-open {
+  max-height: 500px;
+  opacity: 1;
+  padding: 0 16px 16px;
+}
+
+.neo-dropdown-content:not(.is-open) {
+  max-height: 0;
+  opacity: 0;
+  padding: 0 16px 0;
+}
+
+.neo-dropdown-content:not(.is-open) .neo-chevron-icon {
+  transform: rotate(0deg);
+}
+
+.neo-dropdown-content.is-open ~ * .neo-chevron-icon,
+.neo-dropdown-trigger[aria-expanded="true"] .neo-chevron-icon {
+  transform: rotate(180deg);
+}
+
+/* ── ListTile & 200px x 150px Thumbnail ──────────────────────────────── */
+.neo-list-tile {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid #f1f5f9;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+@media (max-width: 640px) {
+  .neo-list-tile {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.neo-thumb-wrapper {
+  position: relative;
+  width: 200px !important;
+  height: 150px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #0f172a;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .neo-thumb-wrapper {
+    margin: 0 auto;
+  }
+}
+
+.neo-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.neo-thumb-wrapper:hover .neo-thumb-img {
+  transform: scale(1.05);
+}
+
+.neo-thumb-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(220, 38, 38, 0.9);
+  backdrop-filter: blur(4px);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.neo-play-circle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+.neo-play-circle svg {
+  width: 36px;
+  height: 36px;
+  color: #ffffff;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+  transition: transform 0.2s ease;
+}
+
+.neo-thumb-wrapper:hover .neo-play-circle svg {
+  transform: scale(1.1);
+}
+
+.neo-tile-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.neo-tile-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.neo-tile-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.neo-tile-sub {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin: 2px 0 0;
+}
+
+.neo-live-media-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #059669;
+  background: #ecfdf5;
+  border: 1px solid rgba(167, 243, 208, 0.8);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.neo-allocation-field {
+  margin-top: 12px;
+}
+
+.neo-field-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.neo-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 6px 12px;
+  transition: border-color 0.2s;
+}
+
+.neo-input-wrapper:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.neo-currency-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-right: 8px;
+}
+
+.neo-target-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e293b;
+  outline: none;
+}
+
+.neo-tile-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.neo-link-btn {
+  color: #4f46e5;
+  font-weight: 700;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.neo-link-btn:hover {
+  color: #4338ca;
+}
+
+/* ── 2. Interactive Step Progress Bar ────────────────────────────────── */
+.neo-step-progress-wrapper {
+  position: relative;
+  width: 100%;
+  padding: 16px 4px 20px;
+}
+
+.neo-step-track-line {
+  position: absolute;
+  top: 36px;
+  left: 24px;
+  right: 24px;
+  height: 5px;
+  background: #f1f5f9;
+  border-radius: 9999px;
+  z-index: 1;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.neo-step-track-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #14b8a6 50%, #6366f1 100%);
+  border-radius: 9999px;
+  transition: width 0.4s ease;
+}
+
+.neo-step-nodes-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+}
+
+.neo-step-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  outline: none;
+  transition: transform 0.2s;
+}
+
+.neo-step-node:hover {
+  transform: translateY(-2px);
+}
+
+.neo-step-circle {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  transition: all 0.3s ease;
+}
+
+/* Steps 1-3: Completed state with dark/green glowing nodes */
+.neo-step-node.is-completed .neo-step-circle {
+  background: #10b981;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.55);
+}
+
+.neo-check-svg {
+  width: 18px;
+  height: 18px;
+  stroke: #ffffff;
+}
+
+/* Step 4: Semi-active state with ring */
+.neo-step-node.is-active .neo-step-circle {
+  background: #ffffff;
+  color: #6366f1;
+  border: 2px solid #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2), 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+.neo-pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6366f1;
+  animation: neoDotPulse 1.5s infinite;
+}
+
+@keyframes neoDotPulse {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Step 5: Inactive (+) */
+.neo-step-node.is-inactive .neo-step-circle {
+  background: #f8fafc;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+}
+
+.neo-plus-sign {
+  font-size: 1.1rem;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.neo-step-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.neo-step-node.is-completed .neo-step-name {
+  color: #059669;
+  font-weight: 700;
+}
+
+.neo-step-node.is-active .neo-step-name {
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+/* ── 3. Compact Progress Card with Purple Accent Boxes ──────────────── */
+.neo-compact-progress {
+  margin-top: 20px;
+  background: rgba(248, 250, 252, 0.8);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s ease;
+}
+
+.neo-compact-progress.is-hidden {
+  display: none !important;
+}
+
+.neo-compact-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.neo-compact-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.neo-compact-percent {
+  font-size: 0.78rem;
+  font-family: monospace;
+  font-weight: 800;
+  color: #6366f1;
+}
+
+.neo-compact-track {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.neo-compact-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #9333ea);
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+/* Purple Accent Box Elements with small text sizing: text-xs / text-sm */
+.neo-purple-accents-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.neo-purple-box {
+  background: rgba(243, 232, 255, 0.8);
+  border: 1px solid rgba(216, 180, 254, 0.7);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.neo-purple-box-flex {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.neo-purple-title {
+  font-size: 0.75rem !important; /* text-xs */
+  font-weight: 700 !important;
+  color: #581c87 !important;
+  margin: 0 !important;
+  line-height: 1.2;
+}
+
+.neo-purple-sub {
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  color: #7e22ce !important;
+  margin: 2px 0 0 !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.neo-purple-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a855f7;
+  animation: neoPurplePing 1.5s infinite;
+}
+
+@keyframes neoPurplePing {
+  0%, 100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+  }
+}
+
+/* ── 4. Same-row Clip Generation & Cancel Button Row ────────────────── */
+.neo-cta-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  width: 100%;
+}
+
+.cancel-generation-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 18px;
+  border-radius: 18px !important;
+  background: #fff1f2 !important;
+  border: 1px solid #fecdd3 !important;
+  color: #e11d48 !important;
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cancel-generation-btn:hover {
+  background: #ffe4e6 !important;
+  color: #be123c !important;
+  transform: translateY(-1px);
+}
+
+.cancel-generation-btn.is-hidden {
+  display: none !important;
+}
+
+.neo-cancel-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.neo-main-cta-btn {
+  flex: 1;
+  height: 52px;
+  padding: 0 24px;
+}
+
+/* ── 5. Tip Footer Pill ─────────────────────────────────────────────── */
+.neo-tip-footer {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.neo-tip-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.neo-tip-badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #d1fae5;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+  border: 1px solid #a7f3d0;
+  flex-shrink: 0;
+}
+

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import ProgressCard from "./ProgressCard";
+import NeomorphicCard from "./NeomorphicCard";
 
 export default function GenerateClips({
   onStartGeneration = () => {},
@@ -357,79 +358,93 @@ export default function GenerateClips({
             </div>
           </section>
         ) : (
-          /* ─── Clean Input Container Card ─── */
-          <div className="bg-white dark:bg-[#12141A] rounded-3xl p-6 md:p-8 shadow-xl border border-gray-100 dark:border-white/10 max-w-2xl mx-auto transition-all">
-            {/* Primary Input: Pill container with link icon, input field, and clear (X) button */}
-            <div className="relative flex items-center bg-slate-50 dark:bg-[#1A1D24] border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3.5 focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all shadow-inner">
-              <span className="text-slate-400 text-lg mr-3">🔗</span>
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleGenerateClick()}
-                placeholder="Paste YouTube link here..."
-                className="w-full bg-transparent text-slate-900 dark:text-white text-sm sm:text-base placeholder:text-slate-400 focus:outline-none"
-              />
-              {url && (
-                <button
-                  type="button"
-                  onClick={handleClear}
-                  className="w-6 h-6 rounded-full bg-slate-200 dark:bg-white/15 hover:bg-slate-300 dark:hover:bg-white/25 text-slate-600 dark:text-gray-300 text-xs flex items-center justify-center transition-colors ml-2 shrink-0"
-                  title="Clear input"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Hidden File Input */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelected}
-              accept="video/*"
-              className="hidden"
+          <div className="space-y-6">
+            {/* ─── Neomorphic Card Presentation ─── */}
+            <NeomorphicCard
+              isGeneratingProp={isGenerating}
+              generationProgress={progress || 45}
+              onGenerate={handleGenerateClick}
+              onCancel={handleResetToNew}
+              thumbnailProp={
+                videoMetadata?.thumbnail ||
+                "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80"
+              }
             />
 
-            {/* Source Selectors: Two rounded selection pills underneath */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1D24] hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all hover:border-slate-300 shadow-sm"
-              >
-                <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                </svg>
-                <span>Upload: Video file (MP4, MOV, etc.)</span>
-              </button>
+            {/* ─── Clean Input Container Card ─── */}
+            <div className="bg-white dark:bg-[#12141A] rounded-3xl p-6 md:p-8 shadow-xl border border-gray-100 dark:border-white/10 max-w-2xl mx-auto transition-all">
+              {/* Primary Input: Pill container with link icon, input field, and clear (X) button */}
+              <div className="relative flex items-center bg-slate-50 dark:bg-[#1A1D24] border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3.5 focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all shadow-inner">
+                <span className="text-slate-400 text-lg mr-3">🔗</span>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGenerateClick()}
+                  placeholder="Paste YouTube link here..."
+                  className="w-full bg-transparent text-slate-900 dark:text-white text-sm sm:text-base placeholder:text-slate-400 focus:outline-none"
+                />
+                {url && (
+                  <button
+                    type="button"
+                    onClick={handleClear}
+                    className="w-6 h-6 rounded-full bg-slate-200 dark:bg-white/15 hover:bg-slate-300 dark:hover:bg-white/25 text-slate-600 dark:text-gray-300 text-xs flex items-center justify-center transition-colors ml-2 shrink-0"
+                    title="Clear input"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
 
+              {/* Hidden File Input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelected}
+                accept="video/*"
+                className="hidden"
+              />
+
+              {/* Source Selectors: Two rounded selection pills underneath */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1D24] hover:bg-slate-50 dark:hover:bg-white/5 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all hover:border-slate-300 shadow-sm"
+                >
+                  <svg className="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <span>Upload: Video file (MP4, MOV, etc.)</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1D24] text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all shadow-sm opacity-60 cursor-not-allowed"
+                  disabled
+                >
+                  <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm4.87 0l6.55 11.5h-6.86L5.72 3.5h6.86zm7.71 12.5L16.86 21H3.14l3.43-5h13.72z" />
+                  </svg>
+                  <span>Google Drive: Import from your Drive</span>
+                </button>
+              </div>
+
+              {/* CTA Button: Full-width vibrant gradient button */}
               <button
                 type="button"
-                className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1A1D24] text-slate-700 dark:text-slate-300 text-xs font-semibold transition-all shadow-sm opacity-60 cursor-not-allowed"
-                disabled
+                onClick={handleGenerateClick}
+                disabled={!url.trim()}
+                className={`w-full mt-6 py-4 rounded-2xl font-semibold text-white text-base shadow-lg transition-all duration-300 flex items-center justify-center gap-2 ${
+                  url.trim()
+                    ? "bg-gradient-to-r from-purple-600 via-indigo-500 to-cyan-400 hover:opacity-95 hover:shadow-indigo-500/25 active:scale-[0.99] cursor-pointer"
+                    : "bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-60"
+                }`}
               >
-                <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm4.87 0l6.55 11.5h-6.86L5.72 3.5h6.86zm7.71 12.5L16.86 21H3.14l3.43-5h13.72z" />
-                </svg>
-                <span>Google Drive: Import from your Drive</span>
+                <span>✨ Generate Clips</span>
+                <span>→</span>
               </button>
             </div>
-
-            {/* CTA Button: Full-width vibrant gradient button */}
-            <button
-              type="button"
-              onClick={handleGenerateClick}
-              disabled={!url.trim()}
-              className={`w-full mt-6 py-4 rounded-2xl font-semibold text-white text-base shadow-lg transition-all duration-300 flex items-center justify-center gap-2 ${
-                url.trim()
-                  ? "bg-gradient-to-r from-purple-600 via-indigo-500 to-cyan-400 hover:opacity-95 hover:shadow-indigo-500/25 active:scale-[0.99] cursor-pointer"
-                  : "bg-slate-300 dark:bg-slate-700 cursor-not-allowed opacity-60"
-              }`}
-            >
-              <span>✨ Generate Clips</span>
-              <span>→</span>
-            </button>
           </div>
         )}
       </main>
