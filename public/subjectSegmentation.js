@@ -175,6 +175,9 @@
     return {
       start: start,
       stop: stop,
+      isActive: function () {
+        return Boolean(isRunning);
+      },
       processSingleFrame: processSingleFrame,
       destroy: stop,
     };

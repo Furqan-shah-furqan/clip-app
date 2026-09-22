@@ -662,6 +662,7 @@ app.use("/uploads", express.static(uploadsDir));
 // API routes
 app.use("/api/clips", clipsRouter);
 app.use("/api/captions", captionsRouter);
+app.post("/api/render-clip", (req, res, next) => captionsRouter(req, res, next));
 app.use("/api/youtube", youtubeRouter);
 app.use("/api/schedules", schedulesRouter);
 app.use("/api/auth", authRouter);

@@ -198,6 +198,7 @@ export function createSubjectSegmentation({
   return {
     start,
     stop,
+    isActive: () => Boolean(isRunning),
     processSingleFrame,
     destroy: stop,
   };

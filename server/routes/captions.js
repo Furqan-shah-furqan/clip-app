@@ -14,6 +14,8 @@ const { getPythonCandidates } = require("../utils/pythonRuntime");
 
 const { createCaptionJobQueue } = require("../services/captionJobService");
 const { allowedCaptionSource, restoreCaptionSource } = require("../services/captionSourceService");
+const { isRemotionAvailable, renderWithRemotion } = require("../services/remotionService");
+const { FONT_REGISTRY, resolveFont } = require("../services/fontRegistry");
 const router = express.Router();
 
 const TRANSCRIBE_SCRIPT = path.join(rootDir, "python", "transcribe_whisper.py");
@@ -339,6 +341,98 @@ router.post("/burn", async (req, res) => {
     console.error("CAPTION BURN ERROR:", error);
     return res.status(500).json({ error: "Caption burn failed", details: error.message });
   }
+});
+
+/**
+ * High-End Studio Render Endpoint: /api/captions/render-clip (also mounted at /api/render-clip)
+ * Programmatically renders viral animated captions with Moonshot yellow highlight pills & spring physics.
+ * Uses Remotion when dependencies are available, or seamlessly falls back to high-speed FFmpeg ASS.
+ */
+router.post("/render-clip", async (req, res) => {
+  try {
+    const { videoUrl, captionData, segments: rawSegments, style = {}, engine = "auto" } = req.body || {};
+    const segments = (captionData?.segments || rawSegments || []);
+
+    if (!segments || !segments.length) {
+      return res.status(400).json({ error: "No caption segments provided for rendering" });
+    }
+
+    const resolvedPath = await resolveBurnVideo(null, videoUrl);
+    const effectiveVideoUrl = resolvedPath || videoUrl;
+
+    if (!effectiveVideoUrl) {
+      return res.status(404).json({ error: "Input videoUrl could not be resolved" });
+    }
+
+    // Check if Remotion engine should and can be used
+    const remotionReady = isRemotionAvailable();
+    const useRemotion = (engine === "remotion" || engine === "auto") && remotionReady;
+
+    if (useRemotion) {
+      console.log("EXECUTING REMOTION RENDER PIPELINE...");
+      const renderResult = await renderWithRemotion({
+        videoUrl: effectiveVideoUrl,
+        segments,
+        style,
+      });
+
+      const downloadUrl = `/api/files/download/${renderResult.fileName}`;
+      const directUrl = `/exports/${renderResult.fileName}`;
+
+      return res.json({
+        success: true,
+        engine: "remotion",
+        fileName: renderResult.fileName,
+        outputPath: renderResult.outputPath,
+        downloadUrl,
+        directUrl,
+        fps: renderResult.fps,
+        durationInFrames: renderResult.durationInFrames,
+      });
+    }
+
+    // High-performance fallback: FFmpeg ASS karaoke with dynamic font registry mapping
+    console.log("REMOTION NOT ACTIVE — EXECUTING NATIVE FFMPEG ASS ENGINE PIPELINE...");
+    const font = resolveFont(style.fontFamily);
+    const enhancedStyle = {
+      ...style,
+      fontFamily: font.cssFamily,
+      highlightBg: style.highlightBg || "#FFE600",
+      highlightColor: style.highlightColor || "#000000",
+    };
+
+    const result = await burnSubtitles({
+      inputPath: resolvedPath || effectiveVideoUrl,
+      segments,
+      style: enhancedStyle,
+    });
+
+    const downloadUrl = `/api/files/download/${result.fileName}`;
+    const directUrl = `/exports/${result.fileName}`;
+
+    return res.json({
+      success: true,
+      engine: "ffmpeg-ass",
+      fileName: result.fileName,
+      outputPath: result.outputPath,
+      downloadUrl,
+      directUrl,
+      note: remotionReady ? undefined : "Executed via high-speed native FFmpeg ASS engine. Install @remotion packages to enable headless React render.",
+    });
+  } catch (error) {
+    console.error("RENDER-CLIP ERROR:", error);
+    return res.status(500).json({ error: "Failed to render clip with captions", details: error.message });
+  }
+});
+
+/**
+ * Font registry inspection endpoint
+ */
+router.get("/fonts", (req, res) => {
+  return res.json({
+    success: true,
+    fonts: FONT_REGISTRY,
+  });
 });
 
 function registerCaptionStream(wss) {

@@ -3321,12 +3321,18 @@ function applyPresetFromGallery(id) {
         canvas: captionSubjectCanvas,
       });
     }
-    if (subjectSegmentationInstance && !subjectSegmentationInstance.isActive()) {
-      subjectSegmentationInstance.start();
+    const isSegActive = typeof subjectSegmentationInstance?.isActive === "function"
+      ? subjectSegmentationInstance.isActive()
+      : Boolean(subjectSegmentationInstance?.isActive);
+    if (subjectSegmentationInstance && !isSegActive) {
+      subjectSegmentationInstance?.start?.();
     }
   } else {
-    if (subjectSegmentationInstance && subjectSegmentationInstance.isActive()) {
-      subjectSegmentationInstance.stop();
+    const isSegActive = typeof subjectSegmentationInstance?.isActive === "function"
+      ? subjectSegmentationInstance.isActive()
+      : Boolean(subjectSegmentationInstance?.isActive);
+    if (subjectSegmentationInstance && isSegActive) {
+      subjectSegmentationInstance?.stop?.();
     }
   }
 
@@ -4201,7 +4207,7 @@ async function init() {
         captionVideoWrap?.classList.add("is-behind-person");
         if (captionOverlay) captionOverlay.style.zIndex = "2";
         if (captionSubjectCanvas) captionSubjectCanvas.style.zIndex = "3";
-        subjectSegmentationInstance?.start();
+        subjectSegmentationInstance?.start?.();
       }
     } else {
       console.warn("No video source found for clip:", session.clip);

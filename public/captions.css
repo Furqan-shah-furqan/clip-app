@@ -377,17 +377,15 @@ body.caption-editor-page .scene-grid {
 .ce-phone-frame {
   position: relative;
   width: 100%;
-  max-width: 340px;
+  max-width: 390px;
   height: 100% !important;
   max-height: none !important;
   margin: 0px !important;
   padding: 0px !important;
-  border-radius: 48px !important;
-  border: 10px solid #1C1F26 !important;
+  border-radius: 35px !important;
+  border: 0 !important;
   background: #000000;
-  box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.9),
-    0 0 40px rgba(0, 229, 255, 0.08);
+  box-shadow: none !important;
   overflow: hidden;
   display: flex;
   flex-direction: column;
