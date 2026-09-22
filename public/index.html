@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClipFlow Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="style.css" />
-    <link rel="stylesheet" href="dropdowns.css?v=1" />
+    <link rel="stylesheet" href="style.css?v=20260922" />
+    <link rel="stylesheet" href="dropdowns.css?v=20260922" />
   </head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
@@ -325,6 +325,21 @@
             </div>
 
             <div class="expected-output-card" id="expectedOutputCard">
+              <!-- Left Summary Column -->
+              <div class="expected-output-summary" id="expectedOutputSummary">
+                <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span id="expectedOutputKickerText">EXPECTED OUTPUT</span></div>
+                <p id="expectedOutputDuration">Add a video to estimate your output</p>
+                <strong id="expectedOutputCount">5 clips</strong>
+                <div id="expectedOutputProgressBar" style="display: none; width: 100%; max-width: 480px; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; margin-top: 12px; overflow: hidden;">
+                  <div id="expectedOutputProgressFill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ec4899, #a855f7); transition: width 0.3s ease;"></div>
+                </div>
+                <p id="expectedOutputEtaText" style="display: none; margin-top: 8px; font-size: 0.88rem; color: #f2c4f5; font-weight: 600;"></p>
+              </div>
+
+              <!-- Right Grid Column -->
+              <div class="expected-output-grid-col" id="expectedOutputGridCol">
+                <div class="smart-clip-grid" id="expectedOutputClipsGrid"></div>
+              </div>
             </div>
 
             <!-- Generated clips render directly inside expectedOutputCard / expectedOutputClipsGrid above -->
@@ -637,8 +652,8 @@
       </div>
     </div>
 
-    <script src="captionClient.js?v=1"></script>
-    <script src="app.js?v=caption-recovery-1"></script>
-    <script src="dropdowns.js?v=1"></script>
+    <script src="captionClient.js?v=20260922"></script>
+    <script src="app.js?v=20260922"></script>
+    <script src="dropdowns.js?v=20260922"></script>
   </body>
 </html>

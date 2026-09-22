@@ -992,26 +992,27 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const expFill = document.getElementById("expectedOutputProgressFill");
   const expEta = document.getElementById("expectedOutputEtaText");
   const expClipsGrid = document.getElementById("expectedOutputClipsGrid");
-  const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
-  const targetCount = getAutoSmartClipCount();
+  const expCount = getAutoSmartClipCount();
 
-  if (expKicker) expKicker.textContent = "GENERATING CLIPS";
-  const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
-  const totalCount = getAutoSmartClipCount();
-  if (expectedOutputDuration) {
-    const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
-    expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
-  }
-  if (expectedOutputCount) {
-    expectedOutputCount.textContent = `~${totalCount} clips`;
-  }
+  if (expKicker) expKicker.textContent = "⚡ GENERATING CLIPS...";
+  if (expectedOutputDuration) expectedOutputDuration.textContent = label || `Generating ${expCount} viral clips with AI...`;
+  if (expectedOutputCount) expectedOutputCount.textContent = `Clip generation in progress (${Math.round(p)}%)`;
+  if (expBar) expBar.style.display = "block";
+  if (expFill) expFill.style.width = `${Math.max(2, Math.min(100, p))}%`;
   if (expEta) {
     expEta.style.display = "block";
     const rem = etaSeconds !== null && etaSeconds !== undefined ? etaSeconds : estimateGenerationSeconds(p);
-    expEta.textContent = `${formatEtaText(rem)} remaining`;
+    expEta.textContent = `Generating ${expCount} clips • Estimated time remaining: ${formatEtaText(rem)}`;
+  }
+  if (expClipsGrid) {
+    expClipsGrid.style.display = "grid";
+    if (!state.generatedClips || !state.generatedClips.length) {
+      if (!expClipsGrid.children.length) {
+        renderPlaceholderClips(expCount);
+      }
+    }
   }
 
-  updateExpectedOutputCard(undefined, undefined, p);
   updateSteppedProgressUI(p, label);
   updateActiveProjectProgressCard();
 }
@@ -1266,21 +1267,45 @@ function getAutoSmartClipCount() {
   if (minutes <= 3) return 1;
   if (minutes < 8) return 2;
   if (minutes < 15) return 3;          // ~10m: 3 clips
-  if (minutes < 35) return 4;          // ~30m: 4 clips
-  if (minutes < 75) return 7;          // ~60m (1hr): 7 clips
+  if (minutes < 25) return 5;          // ~20m: 5 clips
+  if (minutes < 45) return 6;          // ~30m: 6 clips
+  if (minutes < 75) return 8;          // ~60m (1hr): 7-8 clips
   if (minutes < 105) return 10;
-  if (minutes < 140) return 13;         // ~120m (2hr): 13 clips
+  if (minutes < 140) return 13;         // ~120m (2hr): 12-13 clips
   return Math.min(30, Math.max(13, Math.round(minutes * (13 / 120))));
 }
 
+function renderPlaceholderClips(count) {
+  const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
+  if (!expectedClipsGrid) return;
 
+  const validCount = Math.max(0, Number(count) || 0);
+  if (validCount <= 0) {
+    expectedClipsGrid.innerHTML = "";
+    return;
+  }
+
+  const cardsHtml = Array.from({ length: validCount }, (_, index) => `
+    <article class="clip-card smart-clip-card ${index === 0 ? "is-selected" : ""}" data-card-index="${index}" data-state="placeholder">
+      <div class="smart-clip-placeholder-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24"><polygon points="7,4 20,12 7,20"/></svg>
+      </div>
+    </article>
+  `).join("");
+
+  expectedClipsGrid.style.display = "grid";
+  expectedClipsGrid.innerHTML = cardsHtml;
+
+  expectedClipsGrid.querySelectorAll(".clip-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      expectedClipsGrid.querySelectorAll(".clip-card").forEach(c => c.classList.remove("is-selected"));
+      card.classList.add("is-selected");
+    });
+  });
+}
+
+function updateExpectedOutputCard() {
   if (!expectedOutputCard) return;
-  if (typeof durationMs === "number" && durationMs > 0) {
-    state.videoDurationSeconds = durationMs > 100000 ? Math.round(durationMs / 1000) : durationMs;
-  }
-  if (typeof progress === "number") {
-    state.isGenerating = progress >= 0 && progress < 100;
-  }
   const duration = Number(state.videoDurationSeconds || state.uploadedProject?.duration || 0);
   const count = typeof window.__testClipCount === "number" ? window.__testClipCount : getAutoSmartClipCount();
   const kicker = document.getElementById("expectedOutputKickerText");
@@ -1288,70 +1313,27 @@ function getAutoSmartClipCount() {
   const eta = document.getElementById("expectedOutputEtaText");
   const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
 
-  const readyCount = Array.isArray(state.generatedClips) ? state.generatedClips.length : 0;
-  const totalSlots = Math.max(count, readyCount);
-
-  if (!state.isGenerating && readyCount === 0) {
-    if (kicker) kicker.textContent = "GENERATING CLIPS";
+  if (!state.isGenerating) {
+    if (kicker) kicker.textContent = "EXPECTED OUTPUT";
     if (bar) bar.style.display = "none";
     if (eta) eta.style.display = "none";
-    if (expectedOutputDuration) {
-      const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
-      expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
-    }
-    if (expectedOutputCount) {
-      expectedOutputCount.textContent = `~${count} clips`;
-    }
-  } else if (state.isGenerating || readyCount > 0) {
-    if (kicker) kicker.textContent = "GENERATING CLIPS";
-    if (expectedOutputDuration) {
-      const mins = duration ? Math.max(1, Math.round(duration / 60)) : 16;
-      expectedOutputDuration.textContent = `This ${mins}-minute video is estimated to produce`;
-    }
-    if (expectedOutputCount) {
-      expectedOutputCount.textContent = `~${count} clips`;
-    }
-  }
+
+    if (state.generatedClips && state.generatedClips.length > 0) {
+      if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+      if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
+      if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} generated`;
+      renderGeneratedClips();
+    } else {
+      if (expectedOutputDuration) {
+        expectedOutputDuration.textContent = duration
+          ? `This ${Math.max(1, Math.round(duration / 60))}-minute video should produce`
+          : "Add a video to estimate your output";
+      }
+      if (expectedOutputCount) {
+        expectedOutputCount.textContent = `${count} ${count === 1 ? "clip" : "clips"}`;
       }
       renderPlaceholderClips(count);
     }
-    expectedOutputPreviews.innerHTML = html;
-
-    // Attach card event listeners
-    expectedOutputPreviews.querySelectorAll(".clip-card").forEach((card) => {
-      const vid = card.querySelector("video");
-      const idx = Number(card.dataset.cardIndex);
-
-      if (vid) {
-        vid.addEventListener("loadedmetadata", () => {
-          if (vid.currentTime === 0) {
-            try { vid.currentTime = 0.001; } catch {}
-          }
-        });
-      }
-
-      card.addEventListener("mouseenter", () => {
-        if (vid) vid.play().catch(() => {});
-      });
-
-      card.addEventListener("mouseleave", () => {
-        if (vid) {
-          vid.pause();
-          try { vid.currentTime = 0.001; } catch {}
-        }
-      });
-
-      card.addEventListener("click", (evt) => {
-        if (evt.target.closest("[data-action]")) return;
-        if (!Number.isNaN(idx)) {
-          editClipCaptions(idx);
-        }
-      });
-    });
-  }
-
-  if (expectedClipsGrid) {
-    expectedClipsGrid.style.display = "none";
   }
 }
 
@@ -1723,11 +1705,9 @@ function renderGeneratedClips() {
   syncActiveClipToCaptionSession(0);
 
   if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
-  if (!state.isGenerating) {
-    if (bar) bar.style.display = "none";
-    if (eta) eta.style.display = "none";
-  }
-  if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral ${state.generatedClips.length === 1 ? "clip" : "clips"} from your video`;
+  if (bar) bar.style.display = "none";
+  if (eta) eta.style.display = "none";
+  if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
   if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} ready`;
   if (expectedOutputPreviews) expectedOutputPreviews.style.display = "none";
 
@@ -3536,7 +3516,6 @@ async function pollGenerationJob(jobId, onProgress, requestVersion) {
         displayProgress,
         displayStage,
         estimateGenerationSeconds(displayProgress, elapsedSeconds),
-        Array.isArray(clips) ? clips : []
       );
     }
 
@@ -3578,14 +3557,10 @@ function startGenerationPolling(jobId) {
 
   pollGenerationJob(
     jobId,
-    (progress, stage, etaSeconds, clips) => {
+    (progress, stage, etaSeconds) => {
       if (currentVersion !== pollGenerationVersion || state.activeGenerationJobId !== jobId) {
         console.log("[GenerationUI] Poll response ignored because job changed");
         return;
-      }
-      if (Array.isArray(clips) && clips.length > 0) {
-        state.generatedClips = clips;
-        renderGeneratedClips();
       }
       updateProgress(progress, stage, etaSeconds);
       renderGenerationControls("active", etaSeconds);

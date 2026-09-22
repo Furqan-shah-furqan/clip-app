@@ -2659,7 +2659,28 @@ body.home-page .expected-output-card {
   width: 24px;
   height: 24px;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.smart-clip-placeholder-icon svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+  opacity: 0.4;
+}
 
+/* Card — loaded state (thumbnail) */
+.smart-clip-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px !important;
+}
 
 .smart-clip-score-badge {
   position: absolute;
@@ -2675,6 +2696,62 @@ body.home-page .expected-output-card {
   line-height: 1.1;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
   pointer-events: none;
+}
+
+.smart-clip-title-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  background: linear-gradient(to top, rgba(12, 4, 16, 0.92) 0%, rgba(12, 4, 16, 0.6) 70%, transparent 100%);
+  padding: 16px 8px 8px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+/* Action hover buttons for loaded cards */
+.smart-clip-hover-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.expected-output-card .clip-card:hover .smart-clip-hover-actions,
+.expected-output-card .smart-clip-card:hover .smart-clip-hover-actions {
+  opacity: 1;
+}
+
+.smart-clip-mini-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+.smart-clip-mini-btn:hover {
+  background: #cc44ff;
+}
+.smart-clip-mini-btn.danger:hover {
+  background: #ff4d4f;
 }
 
 .smart-score-badge {
@@ -6844,3 +6921,4 @@ body.home-page {
   color: #64748b;
   margin: 3px 0 0;
 }
+
