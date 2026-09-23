@@ -268,9 +268,9 @@ body.caption-editor-page {
 }
 
 .ce-card-title {
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
-  line-height: 16px !important;
+  line-height: 15px !important;
   color: #FFFFFF !important;
   margin: 0 !important;
   letter-spacing: 0.01em !important;
@@ -835,11 +835,11 @@ body.caption-editor-page {
   justify-content: center !important;
 }
 
-/* Expanded Phone Frame: +30px width (330px), +100px height (~635px / calc(100vh - 90px)) */
+/* Phone Frame: 300px width, 615px height (reduced 30px width, 20px height) */
 .ce-phone-frame {
-  width: 330px !important;
-  max-width: 330px !important;
-  height: 635px !important;
+  width: 300px !important;
+  max-width: 300px !important;
+  height: 615px !important;
   max-height: calc(100vh - 95px) !important;
   aspect-ratio: auto !important;
   border-radius: 35px !important;
@@ -854,7 +854,15 @@ body.caption-editor-page {
   box-sizing: border-box !important;
 }
 
-.ce-phone-bezel,
+.ce-phone-bezel {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 35px !important;
+  overflow: hidden !important;
+  border: none !important;
+  background: #000000 !important;
+}
+
 .ce-phone-screen {
   width: 100% !important;
   height: 100% !important;
@@ -862,6 +870,7 @@ body.caption-editor-page {
   overflow: hidden !important;
   border: none !important;
   background: #000000 !important;
+  position: relative !important;
 }
 
 .caption-video-wrap {
@@ -891,6 +900,7 @@ body.caption-editor-page {
   height: 100% !important;
   pointer-events: none !important;
   z-index: 20 !important;
+  overflow: visible !important;
 }
 
 .caption-video-overlay {
@@ -995,7 +1005,9 @@ body.caption-editor-page {
   align-items: center !important;
   padding: 0 10px !important;
   gap: 8px !important;
-  z-index: 25 !important;
+  z-index: 30 !important;
+  pointer-events: auto !important;
+  cursor: default !important;
 }
 
 .ce-video-bar-play-btn {
@@ -1011,18 +1023,22 @@ body.caption-editor-page {
 
 .ce-video-scrubber-track {
   flex: 1 !important;
-  height: 4px !important;
-  background: rgba(255, 255, 255, 0.25) !important;
+  height: 6px !important;
+  background: rgba(255, 255, 255, 0.3) !important;
   border-radius: 5px !important;
   position: relative !important;
   cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: none !important;
 }
 
 .ce-video-scrubber-progress {
   height: 100% !important;
-  background: #38BDF8 !important;
+  background: linear-gradient(90deg, #38BDF8, #60A5FA) !important;
   border-radius: 5px !important;
   width: 0% !important;
+  transition: width 0.05s linear !important;
+  pointer-events: none !important;
 }
 
 .ce-video-time-display {

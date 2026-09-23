@@ -11,8 +11,8 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
-    <link rel="stylesheet" href="captions.css?v=editor-1" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-4" />
+    <link rel="stylesheet" href="captions.css?v=editor-2" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-5" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -599,7 +599,7 @@
                   <div class="ce-phone-notch">
                     <div class="ce-phone-island"></div>
                   </div>
-                  <div class="ce-phone-screen">
+                  <div class="ce-phone-screen" style="position: relative;">
                     <div class="caption-video-wrap" id="captionVideoWrap">
                       <!-- ✦ 4K Quality Toggle -->
                       <div class="ce-quality-badge-wrap">
@@ -637,36 +637,37 @@
                         <span class="ce-video-time-display" id="videoTimeDisplay">00:00 / 00:30</span>
                       </div>
 
-                      <!-- CAPTION OVERLAY LAYER DIRECTLY ABOVE VIDEO (Z-INDEX 20, POINTER-EVENTS NONE) -->
-                      <div class="caption-layer" id="captionLayer" style="position: absolute; inset: 0; pointer-events: none; z-index: 20;">
-                        <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
-                        <div
-                          class="caption-video-overlay"
-                          id="captionOverlay"
-                          title="Drag center to move · Drag corners to increase or decrease box size"
-                          style="pointer-events: auto;"
-                        >
-                          <!-- CapCut Bounding Box Frame & Corner Handles -->
-                          <div class="cap-box-frame" id="capBoxFrame">
-                            <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
-                              <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
-                            </div>
-                            <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
-                            <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
-                            <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
-                            <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
-                              <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
-                            </div>
-                            <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
-                            <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
-                          </div>
-
-                          <span class="caption-video-text" id="captionOverlayText"></span>
-                        </div>
-                      </div>
-
                       <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
                       <canvas id="captionSubjectCanvas" class="caption-subject-canvas"></canvas>
+                    </div>
+
+                    <!-- CAPTION OVERLAY LAYER — SIBLING OF caption-video-wrap, NOT CLIPPED BY IT -->
+                    <!-- Kept inside ce-phone-screen for correct coordinate reference; ce-phone-screen clips at 35px radius -->
+                    <div class="caption-layer" id="captionLayer" style="position: absolute; inset: 0; pointer-events: none; z-index: 20; overflow: visible;">
+                      <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
+                      <div
+                        class="caption-video-overlay"
+                        id="captionOverlay"
+                        title="Drag center to move · Drag corners to increase or decrease box size"
+                        style="pointer-events: auto;"
+                      >
+                        <!-- CapCut Bounding Box Frame & Corner Handles -->
+                        <div class="cap-box-frame" id="capBoxFrame">
+                          <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
+                            <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
+                            <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
+                          <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
+                        </div>
+
+                        <span class="caption-video-text" id="captionOverlayText"></span>
+                      </div>
                     </div>
                   </div>
                   <div class="ce-phone-home-bar"></div>
