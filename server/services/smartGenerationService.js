@@ -168,8 +168,21 @@ async function getYouTubeSmartTranscript(sourceUrl) {
   if (!sourceUrl || !isValidYouTubeUrl(sourceUrl)) throw new Error("Valid YouTube source URL is required");
   const videoId = extractYouTubeId(sourceUrl);
   if (!videoId) throw new Error("Could not extract YouTube video ID");
+
+  // 1. Try real YouTube transcript via youtubeTranscriptService first
+  try {
+    const { fetchYouTubeTranscript } = require("./youtubeTranscriptService");
+    const transcript = await fetchYouTubeTranscript(videoId);
+    if (Array.isArray(transcript) && transcript.length) {
+      console.log(`[SmartGenerationService] Retrieved ${transcript.length} transcript segments via youtubeTranscriptService for ${videoId}`);
+      return transcript;
+    }
+  } catch (ytErr) {
+    console.warn(`[SmartGenerationService] youtubeTranscriptService fetch notice for ${videoId}:`, ytErr.message);
+  }
+
   const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) throw new Error("YOUTUBE_API_KEY not set");
+  if (!apiKey) return generateFallbackSegments();
 
   try {
     const captionsRes = await axios.get(
@@ -429,6 +442,11 @@ function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSou
   const persistentUrl = options.storageUrl || null;
   const localDownloadUrl = `/api/files/download/${result.fileName}`;
   const accessibleUrl = persistentUrl || localDownloadUrl;
+  const captions = Array.isArray(options.captions)
+    ? options.captions
+    : Array.isArray(suggestion.captions)
+    ? suggestion.captions
+    : [];
 
   return {
     message: "Smart clip generated successfully",
@@ -454,6 +472,8 @@ function buildSmartGeneratedClipPayload(result, suggestion, index, normalizedSou
     reason: suggestion.reason || "Smart transcript moment",
     signals: suggestion.signals || [],
     previewText: suggestion.previewText || suggestion.text || "",
+    captions,
+    captionSchemaVersion: captions.length > 0 ? 2 : undefined,
   };
 }
 
@@ -735,7 +755,29 @@ async function runSmartGeneration({
           }
         }
 
-        const clipPayload = buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl });
+        const clipCaptions = Array.isArray(transcriptSegments) && transcriptSegments.length
+          ? transcriptSegments
+              .filter((seg) => seg && seg.end > startSec && seg.start < endSec)
+              .map((seg) => ({
+                start: Math.max(0, Number((seg.start - startSec).toFixed(3))),
+                end: Math.max(0.1, Number((seg.end - startSec).toFixed(3))),
+                text: seg.text,
+                words: Array.isArray(seg.words)
+                  ? seg.words
+                      .filter((w) => w && w.end > startSec && w.start < endSec)
+                      .map((w) => ({
+                        ...w,
+                        start: Math.max(0, Number((w.start - startSec).toFixed(3))),
+                        end: Math.max(0.05, Number((w.end - startSec).toFixed(3))),
+                      }))
+                  : undefined,
+              }))
+          : [];
+
+        const clipPayload = buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, {
+          storageUrl,
+          captions: clipCaptions,
+        });
         clips.push(clipPayload);
         if (onClipGenerated) {
           try { await onClipGenerated(clipPayload, clips); } catch (e) {}
@@ -856,7 +898,29 @@ async function runSmartGeneration({
           }
         }
 
-        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, { storageUrl }));
+        const localClipCaptions = Array.isArray(transcriptSegments) && transcriptSegments.length
+          ? transcriptSegments
+              .filter((seg) => seg && seg.end > startSec && seg.start < endSec)
+              .map((seg) => ({
+                start: Math.max(0, Number((seg.start - startSec).toFixed(3))),
+                end: Math.max(0.1, Number((seg.end - startSec).toFixed(3))),
+                text: seg.text,
+                words: Array.isArray(seg.words)
+                  ? seg.words
+                      .filter((w) => w && w.end > startSec && w.start < endSec)
+                      .map((w) => ({
+                        ...w,
+                        start: Math.max(0, Number((w.start - startSec).toFixed(3))),
+                        end: Math.max(0.05, Number((w.end - startSec).toFixed(3))),
+                      }))
+                  : undefined,
+              }))
+          : [];
+
+        clips.push(buildSmartGeneratedClipPayload(result, suggestion, i, normalizedSourceType, {
+          storageUrl,
+          captions: localClipCaptions,
+        }));
       }
     } finally {
       if (downloadedRemoteSource) {

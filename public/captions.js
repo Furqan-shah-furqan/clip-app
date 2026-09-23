@@ -242,6 +242,76 @@ const editorState = {
   style: { ...DEFAULT_STYLE },
 };
 window.editorState = editorState;
+const captionData = editorState;
+window.captionData = editorState;
+
+function getClipStartTimeSeconds(clip = {}) {
+  if (!clip) return 0;
+  if (Number.isFinite(Number(clip.startSec))) return Math.max(0, Number(clip.startSec));
+  if (Number.isFinite(Number(clip.clipStartTime))) return Math.max(0, Number(clip.clipStartTime));
+  if (Number.isFinite(Number(clip.offset))) return Math.max(0, Number(clip.offset));
+  if (typeof clip.startTime === "string") {
+    const parts = clip.startTime.split(":").map(Number);
+    if (parts.length === 3 && !parts.some(isNaN)) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2 && !parts.some(isNaN)) return parts[0] * 60 + parts[1];
+  } else if (Number.isFinite(Number(clip.startTime))) {
+    return Math.max(0, Number(clip.startTime));
+  }
+  if (typeof clip.start === "string") {
+    const parts = clip.start.split(":").map(Number);
+    if (parts.length === 3 && !parts.some(isNaN)) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    if (parts.length === 2 && !parts.some(isNaN)) return parts[0] * 60 + parts[1];
+  } else if (Number.isFinite(Number(clip.start))) {
+    return Math.max(0, Number(clip.start));
+  }
+  return 0;
+}
+
+function calibrateSegmentsToClip(segments = [], clip = editorState?.clip) {
+  if (!Array.isArray(segments) || !segments.length) return [];
+  const clipStartTime = getClipStartTimeSeconds(clip);
+  const firstStart = Number(segments[0]?.start) || 0;
+
+  // Calibrate transcription data to start at 00:00:00 relative to the current trimmed clip.
+  // If timestamps were generated from the source video, calculate offset: relativeWordStart = word.start - clipStartTime
+  let offset = 0;
+  if (clipStartTime > 0 && (firstStart >= clipStartTime || Math.abs(firstStart - clipStartTime) <= 3)) {
+    offset = clipStartTime;
+  } else if (clipStartTime > 0 && firstStart > 2) {
+    offset = clipStartTime;
+  } else if (firstStart > 5 && (!clip?.durationSec || firstStart > (clip.durationSec * 0.4))) {
+    offset = firstStart;
+  }
+
+  return segments.map((seg) => {
+    const rawStart = Number(seg.start) || 0;
+    const rawEnd = Number(seg.end) || 0;
+    const segStart = Math.max(0, rawStart - offset);
+    const segEnd = Math.max(segStart + 0.1, rawEnd - offset);
+
+    let words = undefined;
+    if (Array.isArray(seg.words) && seg.words.length) {
+      words = seg.words.map((w) => {
+        const wStart = Number(w.start) || 0;
+        const wEnd = Number(w.end) || 0;
+        const relativeWordStart = Math.max(0, wStart - offset);
+        const relativeWordEnd = Math.max(relativeWordStart + 0.05, wEnd - offset);
+        return {
+          ...w,
+          start: Number(relativeWordStart.toFixed(3)),
+          end: Number(relativeWordEnd.toFixed(3)),
+        };
+      });
+    }
+
+    return {
+      ...seg,
+      start: Number(segStart.toFixed(3)),
+      end: Number(segEnd.toFixed(3)),
+      ...(words ? { words } : {}),
+    };
+  });
+}
 
 let _lastRenderedSegId = null;
 let _lastRenderedText = null;
@@ -1494,14 +1564,16 @@ function isPlaceholderOrMockCaptions(segments, clip) {
   const combined = segments.map(s => normalizeCaptionCompareText(s.text)).join(" ");
   const metadata = [clip?.hook, clip?.description, clip?.title, clip?.summary];
   if (metadata.some(value => value && normalizeCaptionCompareText(value) === combined)) return true;
-  // Exact legacy demo strings only; never reject real speech just for being short.
-  return segments.some(s => /^(welcome to this video\.|today we'll explore something new\.|robert greene reveals that true mastery begins)/i.test(s.text || ""));
+  // Strict prevention of default mock transcript files ("How to stop burning out...", "This is a powerful moment...", etc.)
+  const mockPattern = /^(how to stop burning out|this is a powerful moment|welcome to this video|today we'll explore|robert greene reveals|here is where the key insight|this part has strong engagement|the speaker makes an important point|this moment has high viral|a compelling story unfolds|this is the emotional peak|the audience reacts strongly|in this video|sample caption|placeholder caption)/i;
+  return segments.some(s => mockPattern.test(s.text || "") || mockPattern.test(normalizeCaptionCompareText(s.text || "")));
 }
 
 async function fetchServerCaptions(clip) {
   const inputPaths = getClipPathCandidates(clip);
   const data = await ClipCaptionClient.generate({ inputPath: inputPaths[0], inputPaths });
-  return extractSegmentsFromPayload(data);
+  const rawSegments = extractSegmentsFromPayload(data);
+  return calibrateSegmentsToClip(rawSegments, clip);
 }
 
 // Do not overwrite edits made while a background transcription was running.
@@ -1511,16 +1583,19 @@ function captionContentSignature(segments) {
 
 async function syncAudioTranscript() {
   const clip = editorState.clip;
+  if (!clip) return [];
   // Auto sync and the Sync Audio button must share the same application step.
   if (editorState.captionSync?.clip === clip) return editorState.captionSync.promise;
   const before = captionContentSignature(editorState.segments);
   const operation = { clip };
   operation.promise = (async () => {
-    const segments = await fetchServerCaptions(clip);
+    const rawSegments = await fetchServerCaptions(clip);
     if (editorState.clip !== clip || captionContentSignature(editorState.segments) !== before) {
       throw new Error("Captions were edited while syncing. Click Sync Audio again to replace those edits.");
     }
-    editorState.segments = normalizeSegments(segments);
+    const calibrated = calibrateSegmentsToClip(normalizeSegments(rawSegments), clip);
+    editorState.segments = calibrated;
+    captionData.segments = calibrated;
     editorState.captionSchemaVersion = 2;
     clip.captionSchemaVersion = 2;
     editorState.activeSegmentId = editorState.segments[0]?.id || null;
@@ -1528,7 +1603,7 @@ async function syncAudioTranscript() {
     renderTimeline();
     syncCaptionOverlay();
     updateLivePreview();
-    return segments;
+    return calibrated;
   })().finally(() => {
     if (editorState.captionSync === operation) editorState.captionSync = null;
   });
@@ -2692,13 +2767,11 @@ function initCaptionDragging() {
 }
 
 function getActiveSegmentByTime(time) {
-  const t = Number.isFinite(Number(time)) ? Number(time) : 0;
-  if (!Array.isArray(editorState?.segments) || !editorState.segments.length) return null;
-  // Safe boundary check: find active segment within [seg.start, seg.end]
-  const activeSegment = editorState.segments.find(
-    (seg) => seg && t >= Number(seg.start) && t <= Number(seg.end)
-  );
-  return activeSegment || null;
+  const currentTime = Number.isFinite(Number(time)) ? Number(time) : (captionVideo?.currentTime || 0);
+  if (!Array.isArray(captionData?.segments) || !captionData.segments.length) return null;
+  return captionData.segments.find(
+    (seg) => seg && currentTime >= Number(seg.start) && currentTime <= Number(seg.end)
+  ) || null;
 }
 
 function syncCaptionOverlay() {
@@ -2706,8 +2779,14 @@ function syncCaptionOverlay() {
     if (captionEditSession) return;
     if (!captionVideo || !captionOverlay || !captionOverlayText) return;
 
-    const currentTime = safeVideoTime();
-    let activeSegment = getActiveSegmentByTime(currentTime);
+    // Strict boundary checks driven by video.currentTime
+    const currentTime = isFiniteNumber(captionVideo.currentTime) ? Number(captionVideo.currentTime) : 0;
+    const activeSegment = captionData.segments.find(
+      (seg) => seg && currentTime >= Number(seg.start) && currentTime <= Number(seg.end)
+    );
+    const activeWord = activeSegment?.words?.find(
+      (w) => w && currentTime >= Number(w.start) && currentTime <= Number(w.end)
+    );
 
     const nextSegId = activeSegment?.id || null;
     const displayText = activeSegment
@@ -2719,7 +2798,13 @@ function syncCaptionOverlay() {
     captionOverlay.style.visibility = hasText ? "visible" : "hidden";
     captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
-    const activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
+    let activeWordIndex = -1;
+    if (activeSegment?.words?.length && activeWord) {
+      activeWordIndex = activeSegment.words.indexOf(activeWord);
+    }
+    if (activeWordIndex === -1 && activeSegment) {
+      activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
+    }
 
     renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
 
@@ -4367,13 +4452,15 @@ async function init() {
     }
   }
 
-  // Old sessions may contain fabricated title/hook captions with synthetic words.
-  // Revalidate them once, retaining plausible existing text until audio is ready.
-  const savedSegments = normalizeSegments(session.captions || []);
-  const trusted = session.captionSchemaVersion === 2;
+  // Ensure the transcription data loaded into captionData.segments is calibrated to start at 00:00:00 relative to the current trimmed clip.
+  // Prevent fallback to default mock transcript files ("How to stop burning out...", "This is a powerful moment...", etc.)
+  const rawSaved = session.captions || [];
+  const isMock = isPlaceholderOrMockCaptions(rawSaved, session.clip);
+  const calibratedSaved = !isMock ? calibrateSegmentsToClip(normalizeSegments(rawSaved), session.clip) : [];
+  const trusted = !isMock && session.captionSchemaVersion === 2 && calibratedSaved.length > 0;
   editorState.captionSchemaVersion = trusted ? 2 : undefined;
-  // Unverified legacy captions may be fabricated metadata; do not display them.
-  editorState.segments = trusted ? savedSegments : [];
+  editorState.segments = trusted ? calibratedSaved : [];
+  captionData.segments = editorState.segments;
   editorState.activeSegmentId = editorState.segments[0]?.id || null;
   applyStyleToOverlay();
   renderTimeline();

@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
     <link rel="stylesheet" href="captions.css?v=editor-1" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-1" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-2" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -109,96 +109,12 @@
           </button>
         </div>
 
-        <!-- MAIN LAYOUT: Phone on Left, Style Controls directly on Right -->
+        <!-- MAIN LAYOUT: 80% Left Controls Workspace / 20% Right Mobile Frame -->
         <div class="ce-layout" id="editorShell">
-          <!-- LEFT: MOBILE PREVIEW PANEL (246px x 535px) -->
-          <aside class="ce-preview-panel">
-            <div class="ce-phone-stage">
-              <div class="ce-phone-frame">
-                <div class="ce-phone-bezel">
-                  <div class="ce-phone-notch">
-                    <div class="ce-phone-island"></div>
-                  </div>
-                  <div class="ce-phone-screen">
-                    <div class="caption-video-wrap" id="captionVideoWrap">
-                      <!-- ✦ 4K Quality Toggle -->
-                      <div class="ce-quality-badge-wrap">
-                        <button class="ce-quality-enhancer is-active" id="qualityEnhancerBtn" type="button" title="4K Quality (Click to toggle)">4K</button>
-                      </div>
-
-                      <video
-                        id="captionVideo"
-                        class="caption-editor-video"
-                        crossorigin="anonymous"
-                        playsinline
-                        preload="auto"
-                      ></video>
-
-                      <!-- Center Play/Pause Floating Button Overlay -->
-                      <button class="ce-video-play-btn" id="videoPlayOverlayBtn" type="button" aria-label="Play / Pause Video">
-                        <svg class="ce-play-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
-                          <polygon points="6 3 20 12 6 21 6 3" />
-                        </svg>
-                        <svg class="ce-pause-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" style="display:none;">
-                          <rect x="5" y="4" width="4" height="16" rx="1" />
-                          <rect x="15" y="4" width="4" height="16" rx="1" />
-                        </svg>
-                      </button>
-
-                      <!-- Bottom Video Playback Mini Bar -->
-                      <div class="ce-video-controls-bar" id="videoControlsBar">
-                        <button class="ce-video-bar-play-btn" id="barPlayBtn" type="button" aria-label="Play/Pause">
-                          <svg class="bar-icon-play" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                          <svg class="bar-icon-pause" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:none;"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
-                        </button>
-                        <div class="ce-video-scrubber-track" id="videoScrubberTrack">
-                          <div class="ce-video-scrubber-progress" id="videoScrubberProgress"></div>
-                        </div>
-                        <span class="ce-video-time-display" id="videoTimeDisplay">00:00 / 00:30</span>
-                      </div>
-
-                      <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
-                      <div
-                        class="caption-video-overlay"
-                        id="captionOverlay"
-                        title="Drag center to move · Drag corners to increase or decrease box size"
-                      >
-                        <!-- CapCut Bounding Box Frame & Corner Handles -->
-                        <div class="cap-box-frame" id="capBoxFrame">
-                          <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
-                            <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
-                          </div>
-                          <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
-                            <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
-                          </div>
-                          <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
-                          <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
-                        </div>
-
-                        <span class="caption-video-text" id="captionOverlayText"></span>
-                      </div>
-
-                      <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
-                      <canvas id="captionSubjectCanvas" class="caption-subject-canvas"></canvas>
-                    </div>
-                  </div>
-                  <div class="ce-phone-home-bar"></div>
-                </div>
-                <!-- Phone buttons -->
-                <div class="ce-phone-btn ce-phone-btn--vol-up"></div>
-                <div class="ce-phone-btn ce-phone-btn--vol-down"></div>
-                <div class="ce-phone-btn ce-phone-btn--power"></div>
-              </div>
-            </div>
-          </aside>
-
-          <!-- COLUMN 2 (CENTER): CARD 1 (TOP) & CARD 2 (BOTTOM) -->
-          <div class="ce-column ce-column--center ce-workspace">
-            <!-- CARD 1: TYPOGRAPHY & MOTION -->
-            <section class="ce-card ce-card--typo">
+          <!-- LEFT CONTAINER: 80% CONTROLS WORKSPACE (2x2 Grid) -->
+          <div class="ce-controls-workspace ce-workspace" id="controlsWorkspace">
+            <!-- TOP-LEFT: CARD 1 (Typography & Motion) -->
+            <section class="ce-card ce-card--typo" id="cardTypography">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🔤</span>
@@ -357,100 +273,8 @@
               </div>
             </section>
 
-            <!-- CARD 2: TEXT BOX & POSITION (Bottom) -->
-            <section class="ce-card ce-card--placement">
-              <div class="ce-card-head">
-                <div class="ce-card-title-group">
-                  <span class="ce-card-icon">📍</span>
-                  <h4 class="ce-card-title">Text Box &amp; Position</h4>
-                </div>
-                <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
-              </div>
-
-              <div class="ce-position-alignment-row">
-                <div class="ce-placement-presets" id="positionBtns" role="group" aria-label="Caption position">
-                  <button class="duration-btn" data-pos="top" data-x="50" data-y="12" type="button" aria-label="Top" title="Top"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M8 8h8v5H8zM12 16v4"/></svg></button>
-                  <button class="duration-btn" data-pos="center" data-x="50" data-y="50" type="button" aria-label="Center" title="Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h3m10 0h3M8 9h8v6H8z"/></svg></button>
-                  <button class="duration-btn active" data-pos="bottom" data-x="50" data-y="82" type="button" aria-label="Bottom" title="Bottom"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14M8 11h8v5H8zM12 4v4"/></svg></button>
-                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="15" type="button" aria-label="Top-Left" title="Top-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14V4h10M8 8h8v5H8z"/></svg></button>
-                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="82" type="button" aria-label="Bottom-Left" title="Bottom-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v10h10M8 11h8v5H8z"/></svg></button>
-                  <button class="duration-btn" data-pos="custom" data-x="50" data-y="82" id="resetCenterBtn" type="button" aria-label="Reset Center" title="Reset Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a8 8 0 1 1-1 7M5 3v5h5M9 10h6v4H9z"/></svg></button>
-                </div>
-
-                <div class="ce-align-buttons" role="group" aria-label="Caption text alignment">
-                  <button type="button" class="ce-align-btn" data-text-align="left" aria-label="Align left" title="Align left" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M3 10h12M3 15h18M3 20h12"/></svg></button>
-                  <button type="button" class="ce-align-btn" data-text-align="center" aria-label="Align center" title="Align center" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button>
-                  <button type="button" class="ce-align-btn" data-text-align="right" aria-label="Align right" title="Align right" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M9 10h12M3 15h18M9 20h12"/></svg></button>
-                </div>
-              </div>
-
-              <div class="ce-box-toolbar">
-                <button type="button" class="ce-btn" id="capEditWords">Edit words</button>
-                <button type="button" class="ce-btn" id="capDoneEditing" hidden>Done</button>
-              </div>
-              <p id="capBoxHint" class="ce-box-hint" aria-live="polite" hidden></p>
-
-              <div class="ce-field-row">
-                <div class="ce-field"><label for="capBoxWidth" class="ce-label">Box width <span id="capBoxWidthVal">88%</span></label><input class="ce-range" type="range" id="capBoxWidth" min="15" max="100" value="88" /></div>
-                <div class="ce-field"><label for="capBoxHeight" class="ce-label">Box height <span id="capBoxHeightVal">Auto</span></label><input class="ce-range" type="range" id="capBoxHeight" min="0" max="90" value="0" /></div>
-              </div>
-
-              <!-- X and Y Sliders -->
-              <div class="ce-coord-sliders">
-                <div class="ce-field ce-field--compact">
-                  <div class="ce-label-with-val">
-                    <label class="ce-label" for="capPosX">Horizontal (X)</label>
-                    <span class="ce-val-tag" id="capPosXVal">50%</span>
-                  </div>
-                  <input
-                    class="ce-range"
-                    type="range"
-                    id="capPosX"
-                    min="5"
-                    max="95"
-                    value="50"
-                  />
-                </div>
-
-                <div class="ce-field ce-field--compact">
-                  <div class="ce-label-with-val">
-                    <label class="ce-label" for="capPosY">Vertical (Y)</label>
-                    <span class="ce-val-tag" id="capPosYVal">82%</span>
-                  </div>
-                  <input
-                    class="ce-range"
-                    type="range"
-                    id="capPosY"
-                    min="5"
-                    max="95"
-                    value="82"
-                  />
-                </div>
-              </div>
-
-              <!-- ROTATION / TILT ANGLE -->
-              <div class="ce-field ce-field--compact" style="margin-top: 4px;">
-                <div class="ce-label-with-val">
-                  <label class="ce-label" for="capRotateAngle">Rotation</label>
-                  <span class="ce-val-tag"><span id="capRotateAngleVal">0</span>°</span>
-                </div>
-                <input
-                  class="ce-range"
-                  type="range"
-                  id="capRotateAngle"
-                  min="-360"
-                  max="360"
-                  step="1"
-                  value="0"
-                />
-              </div>
-            </section>
-          </div>
-
-          <!-- COLUMN 3 (RIGHT): CARD 3 (TOP) & CARD 4 (BOTTOM) -->
-          <div class="ce-column ce-column--right ce-workspace">
-            <!-- CARD 3: COLORS & OUTLINE -->
-            <section class="ce-card ce-card--colors">
+            <!-- TOP-RIGHT: CARD 3 (Colors & Outline) -->
+            <section class="ce-card ce-card--colors" id="cardColors">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🎨</span>
@@ -638,8 +462,97 @@
               </div>
             </section>
 
-            <!-- CARD 4: PRESETS & EXPORT ACTIONS (Bottom) -->
-            <section class="ce-card ce-card--presets">
+            <!-- BOTTOM-LEFT: CARD 2 (Text Box & Position) -->
+            <section class="ce-card ce-card--placement" id="cardPlacement">
+              <div class="ce-card-head">
+                <div class="ce-card-title-group">
+                  <span class="ce-card-icon">📍</span>
+                  <h4 class="ce-card-title">Text Box &amp; Position</h4>
+                </div>
+                <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
+              </div>
+
+              <div class="ce-position-alignment-row">
+                <div class="ce-placement-presets" id="positionBtns" role="group" aria-label="Caption position">
+                  <button class="duration-btn" data-pos="top" data-x="50" data-y="12" type="button" aria-label="Top" title="Top"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M8 8h8v5H8zM12 16v4"/></svg></button>
+                  <button class="duration-btn" data-pos="center" data-x="50" data-y="50" type="button" aria-label="Center" title="Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h3m10 0h3M8 9h8v6H8z"/></svg></button>
+                  <button class="duration-btn active" data-pos="bottom" data-x="50" data-y="82" type="button" aria-label="Bottom" title="Bottom"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20h14M8 11h8v5H8zM12 4v4"/></svg></button>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="15" type="button" aria-label="Top-Left" title="Top-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14V4h10M8 8h8v5H8z"/></svg></button>
+                  <button class="duration-btn" data-pos="custom" data-x="25" data-y="82" type="button" aria-label="Bottom-Left" title="Bottom-Left"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v10h10M8 11h8v5H8z"/></svg></button>
+                  <button class="duration-btn" data-pos="custom" data-x="50" data-y="82" id="resetCenterBtn" type="button" aria-label="Reset Center" title="Reset Center"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8a8 8 0 1 1-1 7M5 3v5h5M9 10h6v4H9z"/></svg></button>
+                </div>
+
+                <div class="ce-align-buttons" role="group" aria-label="Caption text alignment">
+                  <button type="button" class="ce-align-btn" data-text-align="left" aria-label="Align left" title="Align left" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M3 10h12M3 15h18M3 20h12"/></svg></button>
+                  <button type="button" class="ce-align-btn" data-text-align="center" aria-label="Align center" title="Align center" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button>
+                  <button type="button" class="ce-align-btn" data-text-align="right" aria-label="Align right" title="Align right" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M9 10h12M3 15h18M9 20h12"/></svg></button>
+                </div>
+              </div>
+
+              <div class="ce-box-toolbar">
+                <button type="button" class="ce-btn" id="capEditWords">Edit words</button>
+                <button type="button" class="ce-btn" id="capDoneEditing" hidden>Done</button>
+              </div>
+              <p id="capBoxHint" class="ce-box-hint" aria-live="polite" hidden></p>
+
+              <div class="ce-field-row">
+                <div class="ce-field"><label for="capBoxWidth" class="ce-label">Box width <span id="capBoxWidthVal">88%</span></label><input class="ce-range" type="range" id="capBoxWidth" min="15" max="100" value="88" /></div>
+                <div class="ce-field"><label for="capBoxHeight" class="ce-label">Box height <span id="capBoxHeightVal">Auto</span></label><input class="ce-range" type="range" id="capBoxHeight" min="0" max="90" value="0" /></div>
+              </div>
+
+              <!-- X and Y Sliders -->
+              <div class="ce-coord-sliders">
+                <div class="ce-field ce-field--compact">
+                  <div class="ce-label-with-val">
+                    <label class="ce-label" for="capPosX">Horizontal (X)</label>
+                    <span class="ce-val-tag" id="capPosXVal">50%</span>
+                  </div>
+                  <input
+                    class="ce-range"
+                    type="range"
+                    id="capPosX"
+                    min="5"
+                    max="95"
+                    value="50"
+                  />
+                </div>
+
+                <div class="ce-field ce-field--compact">
+                  <div class="ce-label-with-val">
+                    <label class="ce-label" for="capPosY">Vertical (Y)</label>
+                    <span class="ce-val-tag" id="capPosYVal">82%</span>
+                  </div>
+                  <input
+                    class="ce-range"
+                    type="range"
+                    id="capPosY"
+                    min="5"
+                    max="95"
+                    value="82"
+                  />
+                </div>
+              </div>
+
+              <!-- ROTATION / TILT ANGLE -->
+              <div class="ce-field ce-field--compact" style="margin-top: 4px;">
+                <div class="ce-label-with-val">
+                  <label class="ce-label" for="capRotateAngle">Rotation</label>
+                  <span class="ce-val-tag"><span id="capRotateAngleVal">0</span>°</span>
+                </div>
+                <input
+                  class="ce-range"
+                  type="range"
+                  id="capRotateAngle"
+                  min="-360"
+                  max="360"
+                  step="1"
+                  value="0"
+                />
+              </div>
+            </section>
+
+            <!-- BOTTOM-RIGHT: CARD 4 (Presets & Export) -->
+            <section class="ce-card ce-card--presets" id="cardPresets">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">⚡</span>
@@ -677,6 +590,90 @@
               </div>
             </section>
           </div>
+
+          <!-- RIGHT CONTAINER: 20% MOBILE PREVIEW FRAME -->
+          <aside class="ce-preview-panel" id="previewPanel">
+            <div class="ce-phone-stage">
+              <div class="ce-phone-frame">
+                <div class="ce-phone-bezel">
+                  <div class="ce-phone-notch">
+                    <div class="ce-phone-island"></div>
+                  </div>
+                  <div class="ce-phone-screen">
+                    <div class="caption-video-wrap" id="captionVideoWrap">
+                      <!-- ✦ 4K Quality Toggle -->
+                      <div class="ce-quality-badge-wrap">
+                        <button class="ce-quality-enhancer is-active" id="qualityEnhancerBtn" type="button" title="4K Quality (Click to toggle)">4K</button>
+                      </div>
+
+                      <video
+                        id="captionVideo"
+                        class="caption-editor-video"
+                        crossorigin="anonymous"
+                        playsinline
+                        preload="auto"
+                      ></video>
+
+                      <!-- Center Play/Pause Floating Button Overlay -->
+                      <button class="ce-video-play-btn" id="videoPlayOverlayBtn" type="button" aria-label="Play / Pause Video">
+                        <svg class="ce-play-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor">
+                          <polygon points="6 3 20 12 6 21 6 3" />
+                        </svg>
+                        <svg class="ce-pause-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" style="display:none;">
+                          <rect x="5" y="4" width="4" height="16" rx="1" />
+                          <rect x="15" y="4" width="4" height="16" rx="1" />
+                        </svg>
+                      </button>
+
+                      <!-- Bottom Video Playback Mini Bar -->
+                      <div class="ce-video-controls-bar" id="videoControlsBar">
+                        <button class="ce-video-bar-play-btn" id="barPlayBtn" type="button" aria-label="Play/Pause">
+                          <svg class="bar-icon-play" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                          <svg class="bar-icon-pause" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:none;"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
+                        </button>
+                        <div class="ce-video-scrubber-track" id="videoScrubberTrack">
+                          <div class="ce-video-scrubber-progress" id="videoScrubberProgress"></div>
+                        </div>
+                        <span class="ce-video-time-display" id="videoTimeDisplay">00:00 / 00:30</span>
+                      </div>
+
+                      <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
+                      <div
+                        class="caption-video-overlay"
+                        id="captionOverlay"
+                        title="Drag center to move · Drag corners to increase or decrease box size"
+                      >
+                        <!-- CapCut Bounding Box Frame & Corner Handles -->
+                        <div class="cap-box-frame" id="capBoxFrame">
+                          <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
+                            <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
+                          <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
+                            <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
+                          </div>
+                          <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
+                          <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
+                        </div>
+
+                        <span class="caption-video-text" id="captionOverlayText"></span>
+                      </div>
+
+                      <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
+                      <canvas id="captionSubjectCanvas" class="caption-subject-canvas"></canvas>
+                    </div>
+                  </div>
+                  <div class="ce-phone-home-bar"></div>
+                </div>
+                <!-- Phone buttons -->
+                <div class="ce-phone-btn ce-phone-btn--vol-up"></div>
+                <div class="ce-phone-btn ce-phone-btn--vol-down"></div>
+                <div class="ce-phone-btn ce-phone-btn--power"></div>
+              </div>
+            </div>
+          </aside>
         </div>
       </main>
     </div>
@@ -740,7 +737,7 @@
     <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-7"></script>
+    <script src="captions.js?v=editor-8"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>

@@ -6,29 +6,40 @@ body.caption-editor-page { padding:20px; background:#eaeaea !important; --font-b
 .ce-topbar-left,.ce-topbar-right { flex-wrap:wrap; gap:12px; }
 .ce-topbar .ce-status-chip { max-width:270px; }
 .ce-shell { height:auto; min-height:0; overflow:visible; padding:0; }
-/* ─── 3-COLUMN STUDIO GRID ARCHITECTURE ─── */
+/* ─── 80/20 INVERTED STUDIO GRID ARCHITECTURE ─── */
 .ce-layout {
   display: grid !important;
-  grid-template-columns: minmax(280px, 330px) minmax(320px, 1fr) minmax(320px, 1fr) !important;
+  grid-template-columns: minmax(0, 4fr) minmax(260px, 1fr) !important;
   gap: 16px !important;
-  align-items: stretch !important;
+  align-items: start !important;
   height: auto;
   min-height: calc(100vh - 80px);
   padding: 0;
   background: transparent;
   width: 100%;
+  max-width: 1750px;
+  margin: 0 auto;
   box-sizing: border-box;
 }
 
-/* Column 1 (Left): Sticky Video Player Preview Container (9:16 aspect ratio) */
+/* Left Container (80% Width): Dedicated Controls Workspace (2x2 Grid) */
+.ce-controls-workspace {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Right Container (20% Width): Dedicated Mobile Preview Frame */
 .ce-preview-panel {
   position: sticky !important;
   top: 16px !important;
   height: fit-content !important;
   max-height: calc(100vh - 32px);
   overflow: visible !important;
-  background: #111214 !important;
-  border-radius: 24px !important;
+  background: #16191E !important;
+  border-radius: 35px !important;
   padding: 16px !important;
   gap: 16px;
   display: flex !important;
@@ -37,6 +48,8 @@ body.caption-editor-page { padding:20px; background:#eaeaea !important; --font-b
   justify-content: flex-start !important;
   margin: 0 !important;
   box-sizing: border-box;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
 }
 
 .ce-phone-stage {
@@ -52,29 +65,17 @@ body.caption-editor-page { padding:20px; background:#eaeaea !important; --font-b
   max-width: 300px;
   height: auto !important;
   aspect-ratio: 9 / 16 !important;
-  border: 0 !important;
-  border-radius: 18px !important;
-  box-shadow: none !important;
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 35px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
   overflow: hidden;
   background: #000;
   box-sizing: border-box;
 }
 
-.ce-phone-screen, .ce-phone-bezel { height: 100%; min-height: 0; }
+.ce-phone-screen, .ce-phone-bezel { height: 100%; min-height: 0; border-radius: 35px; }
 .ce-phone-notch, .ce-phone-home-bar, .ce-phone-btn { display: none; }
-.ce-phone-screen { border-radius: 18px; }
 .caption-video-wrap { height: 100%; width: 100%; }
-
-/* Column 2 & 3: Vertical Flex Columns with Standardized 16px Gap */
-.ce-column {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 16px !important;
-  height: 100% !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-}
 
 .ce-workspace { height: auto; overflow: visible; min-width: 0; }
 .ce-style-grid { height: auto; overflow: visible; display: contents; }
@@ -84,15 +85,16 @@ body.caption-editor-page { padding:20px; background:#eaeaea !important; --font-b
   min-width: 0;
   height: auto;
   overflow: visible;
-  padding: 18px 20px !important;
-  border-radius: 22px !important;
+  padding: 16px 18px !important;
+  border-radius: 35px !important;
   gap: 12px;
-  background: #101113 !important;
-  box-shadow: none !important;
+  background: #16191E !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
   margin: 0 !important;
   box-sizing: border-box;
 }
-.ce-card:hover { box-shadow: none; }
+.ce-card:hover { box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35) !important; }
 
 /* Card Headers Aligned Horizontally across Column 2 (Card 1) and Column 3 (Card 3) */
 .ce-card-head {
@@ -198,85 +200,136 @@ body.caption-editor-page.theme-light .ce-card--presets .preset-name { color:#fff
 body.caption-editor-page .ce-card--placement .ce-drag-hint { color:#59616b; background:#f1f2f3 !important; }
 body.caption-editor-page.theme-light .ce-card--presets .preset-card.preset-card--active { border:2px solid #fff !important; box-shadow:0 0 0 1px #fff !important; }
 
-/* Size-based corners, scoped to editor controls (not the caption artwork). */
+/* ─── STRICT DESIGN TOKENS & COMPONENT SIZING ─── */
+/* 1. Border Radiuses */
+/* Big Components (35px): Outer 4 card containers, main mobile phone preview shell, and header pill wrapper */
+body.caption-editor-page .ce-topbar,
 body.caption-editor-page .ce-card,
 body.caption-editor-page .ce-preview-panel,
-body.caption-editor-page .presets-drawer-panel { border-radius:35px !important; }
-body.caption-editor-page .ce-topbar,
-body.caption-editor-page .ce-phone-frame,
-body.caption-editor-page .ce-phone-screen,
-body.caption-editor-page .preset-card,
-body.caption-editor-page .preset-gallery-card,
-body.caption-editor-page .ce-placement-presets { border-radius:25px !important; }
-body.caption-editor-page .ce-btn,
-body.caption-editor-page .ce-select,
-body.caption-editor-page .ce-pill-opt,
-body.caption-editor-page .ce-align-btn,
-body.caption-editor-page .ce-align-buttons,
-body.caption-editor-page .preset-swatch,
-body.caption-editor-page .preset-category-pill,
-body.caption-editor-page .presets-search-input,
-body.caption-editor-page .presets-drawer-close { border-radius:15px !important; }
-body.caption-editor-page .presets-drawer-backdrop {
-  background:transparent;
-  backdrop-filter:none;
-  -webkit-backdrop-filter:none;
-}
-body.caption-editor-page .presets-drawer-panel { box-shadow:none; }
-body.caption-editor-page .preset-gallery-card { font:inherit; color:inherit; text-align:left; cursor:pointer; }
-body.caption-editor-page .preset-gallery-card.is-active,
-body.caption-editor-page .preset-card.preset-card--active {
-  border:2px solid white !important;
-  box-shadow:0 0 0 1px white !important;
-}
-
-/* One palette for the editor chrome; caption artwork keeps its own colors. */
-body.caption-editor-page {
-  --editor-bg:#0b0c0e; --editor-panel:#16181c; --editor-control:#25282e;
-  --editor-text:#f5f6f8; --editor-muted:#b4bac4; --editor-line:#414650;
-  padding:5px;
-  background:var(--editor-bg) !important;
-  color:var(--editor-text);
-  color-scheme:dark;
-}
-body.caption-editor-page.theme-light {
-  --editor-bg:#eceef1; --editor-panel:#ffffff; --editor-control:#e7eaf0;
-  --editor-text:#191d25; --editor-muted:#535d6d; --editor-line:#c3cad5;
-  color-scheme:light;
-}
-body.caption-editor-page .ce-layout { gap: 16px !important; margin: 0 !important; }
-body.caption-editor-page .ce-topbar { margin-bottom: 16px !important; border-radius: 20px !important; }
-body.caption-editor-page .ce-preview-panel { margin: 0 !important; border-radius: 24px !important; }
-body.caption-editor-page .ce-card { margin: 0 !important; border-radius: 20px !important; }
-body.caption-editor-page .presets-drawer-panel { border-radius: 24px !important; }
 body.caption-editor-page .ce-phone-frame,
 body.caption-editor-page .ce-phone-screen,
 body.caption-editor-page .ce-phone-bezel,
 body.caption-editor-page .caption-video-wrap,
-body.caption-editor-page #capAnimStyle { border-radius: 18px !important; }
+body.caption-editor-page .presets-drawer-panel {
+  border-radius: 35px !important;
+}
 
-body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card,.ce-topbar,.ce-preview-panel,.presets-drawer-panel) {
-  --text:var(--editor-text); --muted:var(--editor-muted); --muted-2:var(--editor-muted);
-  --panel:var(--editor-panel); --panel-2:var(--editor-control); --line:var(--editor-line);
-  background:var(--editor-panel) !important; color:var(--editor-text) !important;
+/* Medium Components (15px): Input containers, dropdown select boxes, preset chips/buttons, segmented radio tabs, primary export button */
+body.caption-editor-page .ce-select,
+body.caption-editor-page .ce-btn,
+body.caption-editor-page .ce-btn--export-hero,
+body.caption-editor-page .ce-btn--browse-presets,
+body.caption-editor-page .preset-card,
+body.caption-editor-page .preset-gallery-card,
+body.caption-editor-page .ce-placement-presets,
+body.caption-editor-page .duration-btn,
+body.caption-editor-page .ce-pill-group,
+body.caption-editor-page .ce-pill-opt,
+body.caption-editor-page .ce-align-buttons,
+body.caption-editor-page .ce-align-btn,
+body.caption-editor-page .presets-search-input,
+body.caption-editor-page .preset-category-pill,
+body.caption-editor-page .presets-drawer-close,
+body.caption-editor-page .ce-input,
+body.caption-editor-page .ce-box-toolbar .ce-btn {
+  border-radius: 15px !important;
 }
-body.caption-editor-page:is(.theme-dark,.theme-light) :is(.ce-card-title,.ce-label,.ce-field-label,.ce-clip-title,.ce-status-label,.ce-hint,.ce-box-hint,.presets-drawer-title,.presets-drawer-subtitle) {
-  color:var(--editor-text) !important;
+
+/* Small Components (5px): Range slider thumbs/tracks, toggle switches, color picker swatches, small metric tags */
+body.caption-editor-page .ce-range,
+body.caption-editor-page .ce-range::-webkit-slider-runnable-track,
+body.caption-editor-page .ce-range::-webkit-slider-thumb,
+body.caption-editor-page .color-circle-btn,
+body.caption-editor-page .color-swatch-btn,
+body.caption-editor-page .preset-swatch,
+body.caption-editor-page .ce-val-tag,
+body.caption-editor-page .ce-badge,
+body.caption-editor-page .preset-browse-badge,
+body.caption-editor-page .quality-toggle,
+body.caption-editor-page .dnt-thumb,
+body.caption-editor-page .publish-dot,
+body.caption-editor-page .ce-status-chip,
+body.caption-editor-page .ce-video-scrubber-progress {
+  border-radius: 5px !important;
 }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card :is(.ce-select,.ce-input,.ce-pill-group,.ce-pill-opt,.ce-val-tag,.ce-align-buttons,.ce-align-btn,.ce-drag-hint),
-body.caption-editor-page:is(.theme-dark,.theme-light) :is(.presets-search-input,.preset-category-pill,.presets-drawer-close) {
-  background:var(--editor-control) !important; color:var(--editor-text) !important;
+
+body.caption-editor-page .presets-drawer-backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-select option {
-  background:var(--editor-control); color:var(--editor-text);
+body.caption-editor-page .presets-drawer-panel { box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+body.caption-editor-page .preset-gallery-card { font:inherit; color:inherit; text-align:left; cursor:pointer; }
+body.caption-editor-page .preset-gallery-card.is-active,
+body.caption-editor-page .preset-card.preset-card--active {
+  border: 2px solid #FFE600 !important;
+  box-shadow: 0 0 14px rgba(255, 230, 0, 0.4) !important;
 }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card :is(.ce-pill-opt,.ce-align-btn).is-active,
-body.caption-editor-page:is(.theme-dark,.theme-light) .preset-category-pill.is-active {
-  background:var(--editor-text) !important; color:var(--editor-panel) !important;
+
+/* Strict Color Palette & Studio Surface System */
+body.caption-editor-page {
+  --editor-bg: #0D0F12;
+  --editor-panel: #16191E;
+  --editor-control: #232730;
+  --editor-text: #FFFFFF;
+  --editor-muted: #94A3B8;
+  --editor-line: rgba(255, 255, 255, 0.08);
+  padding: 14px;
+  background: var(--editor-bg) !important;
+  color: var(--editor-text);
+  color-scheme: dark;
 }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range { accent-color:var(--editor-text); background:var(--editor-control); }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range::-webkit-slider-runnable-track { background:var(--editor-control); }
-body.caption-editor-page:is(.theme-dark,.theme-light) .ce-card .ce-range::-webkit-slider-thumb { background:var(--editor-text); box-shadow:0 0 0 3px var(--editor-panel); }
+body.caption-editor-page.theme-light {
+  --editor-bg: #eceef1;
+  --editor-panel: #ffffff;
+  --editor-control: #e7eaf0;
+  --editor-text: #191d25;
+  --editor-muted: #535d6d;
+  --editor-line: #c3cad5;
+  color-scheme: light;
+}
+
+body.caption-editor-page:is(.theme-dark, .theme-light) :is(.ce-card, .ce-topbar, .ce-preview-panel, .presets-drawer-panel) {
+  --text: var(--editor-text);
+  --muted: var(--editor-muted);
+  --muted-2: var(--editor-muted);
+  --panel: var(--editor-panel);
+  --panel-2: var(--editor-control);
+  --line: var(--editor-line);
+  background: var(--editor-panel) !important;
+  color: var(--editor-text) !important;
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) :is(.ce-card-title, .ce-clip-title, .presets-drawer-title) {
+  color: #FFFFFF !important;
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) :is(.ce-label, .ce-field-label, .ce-status-label, .ce-hint, .ce-box-hint, .presets-drawer-subtitle) {
+  color: #94A3B8 !important;
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-card :is(.ce-select, .ce-input, .ce-pill-group, .ce-pill-opt, .ce-val-tag, .ce-align-buttons, .ce-align-btn, .ce-drag-hint),
+body.caption-editor-page:is(.theme-dark, .theme-light) :is(.presets-search-input, .preset-category-pill, .presets-drawer-close) {
+  background: var(--editor-control) !important;
+  color: var(--editor-text) !important;
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-select option {
+  background: var(--editor-control);
+  color: var(--editor-text);
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-card :is(.ce-pill-opt, .ce-align-btn).is-active,
+body.caption-editor-page:is(.theme-dark, .theme-light) .preset-category-pill.is-active {
+  background: #3B82F6 !important;
+  color: #FFFFFF !important;
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-card .ce-range {
+  accent-color: #38BDF8;
+  background: var(--editor-control);
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-card .ce-range::-webkit-slider-runnable-track {
+  background: var(--editor-control);
+}
+body.caption-editor-page:is(.theme-dark, .theme-light) .ce-card .ce-range::-webkit-slider-thumb {
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px var(--editor-panel);
+}
 
 /* Reference typography scale */
 body.caption-editor-page { font-size:13px; line-height:20px; }
@@ -426,26 +479,15 @@ body.caption-editor-page :is(.ce-phone-screen,.ce-phone-bezel,.caption-video-wra
   border-radius: 8px;
 }
 
-/* Responsive Studio Grid */
-@media (max-width: 1240px) {
+/* Responsive 80/20 Studio Grid */
+@media (max-width: 1180px) {
   body.caption-editor-page .ce-layout {
-    grid-template-columns: minmax(260px, 300px) minmax(280px, 1fr) minmax(280px, 1fr) !important;
+    grid-template-columns: minmax(0, 3.2fr) minmax(260px, 1.2fr) !important;
     gap: 14px !important;
   }
 }
 
-@media (max-width: 980px) {
-  body.caption-editor-page .ce-layout {
-    grid-template-columns: minmax(260px, 320px) 1fr !important;
-    gap: 16px !important;
-  }
-  body.caption-editor-page .ce-column--right {
-    grid-column: 1 / -1;
-  }
-}
-
-@media (max-width: 720px) {
-  body.caption-editor-page { padding: 10px; }
+@media (max-width: 900px) {
   body.caption-editor-page .ce-layout {
     grid-template-columns: 1fr !important;
     gap: 16px !important;
@@ -456,8 +498,19 @@ body.caption-editor-page :is(.ce-phone-screen,.ce-phone-bezel,.caption-video-wra
     width: 100%;
     max-width: 340px;
     margin: 0 auto !important;
+    order: -1;
   }
-  body.caption-editor-page .ce-column--right {
-    grid-column: auto;
+  body.caption-editor-page .ce-controls-workspace {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 640px) {
+  body.caption-editor-page { padding: 10px; }
+  body.caption-editor-page .ce-controls-workspace {
+    grid-template-columns: 1fr !important;
+  }
+  body.caption-editor-page .ce-card {
+    padding: 14px !important;
   }
 }
