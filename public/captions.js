@@ -3322,17 +3322,33 @@ function initPresetsGallery() {
   }
   if (closePresetsGalleryBtn) {
     closePresetsGalleryBtn.addEventListener("click", closePresetsGallery);
+    closePresetsGalleryBtn.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      closePresetsGallery(e);
+    });
   }
   if (presetsGalleryDrawer) {
     presetsGalleryDrawer.addEventListener("click", (e) => {
       if (e.target === presetsGalleryDrawer) {
-        closePresetsGallery();
+        closePresetsGallery(e);
       }
     });
   }
+
+  // Dismiss when clicking anywhere outside the drawer panel
+  document.addEventListener("mousedown", (e) => {
+    if (!presetsGalleryDrawer) return;
+    const isOpen = presetsGalleryDrawer.classList.contains("is-open") || (presetsGalleryDrawer.style.display && presetsGalleryDrawer.style.display !== "none");
+    if (!isOpen) return;
+    const panel = presetsGalleryDrawer.querySelector(".presets-drawer-panel");
+    if (panel && !panel.contains(e.target) && !openPresetsGalleryBtn?.contains(e.target)) {
+      closePresetsGallery(e);
+    }
+  });
+
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && presetsGalleryDrawer && presetsGalleryDrawer.style.display !== "none") {
-      closePresetsGallery();
+    if (e.key === "Escape") {
+      closePresetsGallery(e);
     }
   });
 
@@ -3356,21 +3372,32 @@ function initPresetsGallery() {
   }
 
   renderPresetsGalleryCategories();
+  // Ensure gallery starts completely closed
+  closePresetsGallery();
 }
 
-function openPresetsGallery() {
+function openPresetsGallery(e) {
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (!presetsGalleryDrawer) presetsGalleryDrawer = document.getElementById("presetsGalleryDrawer");
   if (!presetsGalleryDrawer) return;
-  presetsGalleryDrawer.style.display = "flex";
+  presetsGalleryDrawer.classList.add("is-open");
+  presetsGalleryDrawer.style.setProperty("display", "flex", "important");
   renderPresetsGalleryGrid();
   if (presetSearchInput) {
     setTimeout(() => presetSearchInput.focus(), 80);
   }
 }
 
-function closePresetsGallery() {
+function closePresetsGallery(e) {
+  if (e && typeof e.stopPropagation === "function") e.stopPropagation();
+  if (!presetsGalleryDrawer) presetsGalleryDrawer = document.getElementById("presetsGalleryDrawer");
   if (!presetsGalleryDrawer) return;
-  presetsGalleryDrawer.style.display = "none";
+  presetsGalleryDrawer.classList.remove("is-open");
+  presetsGalleryDrawer.style.setProperty("display", "none", "important");
 }
+
+window.openPresetsGallery = openPresetsGallery;
+window.closePresetsGallery = closePresetsGallery;
 
 function renderPresetsGalleryCategories() {
   if (!presetCategoryStrip) return;
@@ -3492,7 +3519,10 @@ function renderPresetsGalleryGrid() {
             class="preset-card-rendered-text"
             style="
               font-family: ${s.fontFamily || "Montserrat"}, sans-serif;
-              font-size: ${Math.max(13, Math.round(Number(s.fontSize || 28) * 0.58))}px;
+              font-size: ${Math.max(11, Math.min(15, Math.round(Number(s.fontSize || 28) * 0.44)))}px;
+              line-height: 1.2;
+              word-break: normal;
+              overflow-wrap: break-word;
               font-weight: ${s.fontWeight || 800};
               text-transform: ${s.textTransform || "uppercase"};
               letter-spacing: ${Number(s.letterSpacing) || 0}px;

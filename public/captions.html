@@ -685,20 +685,11 @@
     <!-- ─── PRESETS GALLERY MODAL DRAWER (24 STYLES) ──────── -->
     <div class="presets-drawer-backdrop" id="presetsGalleryDrawer" style="display: none;">
       <div class="presets-drawer-panel" role="dialog" aria-modal="true" aria-label="Caption Presets Library">
-        <!-- Header -->
+        <!-- Header: Clean 30px Title without icon or subtitle -->
         <div class="presets-drawer-header">
-          <div class="presets-drawer-title-wrap">
-            <div class="presets-drawer-icon">✦</div>
-            <div>
-              <h3 class="presets-drawer-title">Caption Presets Library</h3>
-              <p class="presets-drawer-subtitle">
-                Clean typography, readable contrast, subtle motion
-                <span class="presets-count-pill" id="presetsCountBadge">8 Styles Available</span>
-              </p>
-            </div>
-          </div>
-          <button class="presets-drawer-close" id="closePresetsGalleryBtn" type="button" aria-label="Close Presets Gallery">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <h2 class="presets-drawer-title">Caption Presets Library</h2>
+          <button class="presets-drawer-close" id="closePresetsGalleryBtn" type="button" aria-label="Close Presets Gallery" onclick="if(typeof closePresetsGallery==='function'){closePresetsGallery(event);}">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
 
