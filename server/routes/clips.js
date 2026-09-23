@@ -808,4 +808,101 @@ router.get("/suggest", (req, res) => {
   res.json({ message: "Use POST /api/clips/smart-suggest with a source video.", suggestions: [] });
 });
 
+router.get("/:idOrIndex", (req, res) => {
+  try {
+    const idOrIndex = String(req.params.idOrIndex || "").trim();
+    if (!idOrIndex || ["diag", "generation-health", "cookies-status", "projects", "suggest"].includes(idOrIndex)) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const isNum = /^\d+$/.test(idOrIndex);
+    const idx = isNum ? parseInt(idOrIndex, 10) : null;
+
+    // Check saved projects
+    const projects = readProjects();
+    for (const project of projects) {
+      if (Array.isArray(project.clips)) {
+        if (idx !== null && project.clips[idx]) {
+          const clip = project.clips[idx];
+          return res.json({
+            success: true,
+            clip,
+            captions: clip.captions || [],
+            segments: clip.captions || [],
+          });
+        }
+        const found = project.clips.find(
+          (c) => c && (String(c.id) === idOrIndex || c.fileName === idOrIndex)
+        );
+        if (found) {
+          return res.json({
+            success: true,
+            clip: found,
+            captions: found.captions || [],
+            segments: found.captions || [],
+          });
+        }
+      }
+    }
+
+    // Check exports directory for indexed mp4 files
+    if (fs.existsSync(exportsDir)) {
+      const files = fs
+        .readdirSync(exportsDir)
+        .filter((f) => f.endsWith(".mp4"))
+        .sort((a, b) => {
+          try {
+            return fs.statSync(path.join(exportsDir, b)).mtimeMs - fs.statSync(path.join(exportsDir, a)).mtimeMs;
+          } catch {
+            return 0;
+          }
+        });
+
+      if (idx !== null && files[idx]) {
+        const fileName = files[idx];
+        const clip = {
+          id: `clip_${idx}`,
+          index: idx,
+          fileName,
+          title: `Clip #${idx + 1}`,
+          downloadUrl: `/api/files/download/${encodeURIComponent(fileName)}`,
+          previewUrl: `/api/files/download/${encodeURIComponent(fileName)}`,
+          outputPath: path.join(exportsDir, fileName),
+        };
+        return res.json({
+          success: true,
+          clip,
+          captions: [],
+          segments: [],
+        });
+      }
+
+      const matchFile = files.find(
+        (f) => f === idOrIndex || f.startsWith(idOrIndex) || f.includes(idOrIndex)
+      );
+      if (matchFile) {
+        const clip = {
+          id: matchFile,
+          fileName: matchFile,
+          title: matchFile,
+          downloadUrl: `/api/files/download/${encodeURIComponent(matchFile)}`,
+          previewUrl: `/api/files/download/${encodeURIComponent(matchFile)}`,
+          outputPath: path.join(exportsDir, matchFile),
+        };
+        return res.json({
+          success: true,
+          clip,
+          captions: [],
+          segments: [],
+        });
+      }
+    }
+
+    return res.status(404).json({ success: false, error: "Clip not found" });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.readProjects = readProjects;
 module.exports = router;
+module.exports.readProjects = readProjects;

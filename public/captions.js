@@ -1205,14 +1205,32 @@ function loadSession() {
     } catch {}
   }
 
-  // Check URL search params (?index=X)
+  // Parse Clip Index & Load Real Clip Data
   const urlParams = new URLSearchParams(window.location.search);
-  const paramIndex = urlParams.get("index");
-  const hasParamIndex = paramIndex !== null && !isNaN(parseInt(paramIndex, 10));
-  const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
+  const clipIndex = urlParams.get("index") || urlParams.get("id");
+  const hasParamIndex = clipIndex !== null && !isNaN(parseInt(clipIndex, 10));
+  const requestedIdx = hasParamIndex ? parseInt(clipIndex, 10) : null;
   const targetIdx = requestedIdx !== null ? requestedIdx : (session?.index != null ? Number(session.index) : 0);
 
-  // Check studio session
+  // 1. Check currentClips from localStorage
+  let currentClips = null;
+  try {
+    const rawCurrent = localStorage.getItem("currentClips");
+    if (rawCurrent) currentClips = JSON.parse(rawCurrent);
+  } catch {}
+
+  let clipFromStorage = null;
+  if (Array.isArray(currentClips) && currentClips.length) {
+    if (requestedIdx !== null && currentClips[requestedIdx]) {
+      clipFromStorage = currentClips[requestedIdx];
+    } else if (clipIndex) {
+      clipFromStorage = currentClips.find(
+        (c) => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)
+      );
+    }
+  }
+
+  // 2. Check clipflow-studio-session
   let studio = null;
   let studioClip = null;
   const studioRaw = localStorage.getItem("clipflow-studio-session");
@@ -1222,23 +1240,37 @@ function loadSession() {
       const clips = Array.isArray(studio.generatedClips)
         ? studio.generatedClips
         : [];
-      studioClip = clips[targetIdx] || (requestedIdx === null ? (clips[0] || studio.generatedClip) : null);
+      if (requestedIdx !== null && clips[requestedIdx]) {
+        studioClip = clips[requestedIdx];
+      } else if (clipIndex) {
+        studioClip = clips.find(
+          (c) => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)
+        );
+      }
+      if (!studioClip && requestedIdx === null) {
+        studioClip = clips[0] || studio.generatedClip || null;
+      }
     } catch {}
   }
 
-  // If studio has a clip, check if it's different/newer than the stored caption session
-  if (studioClip && getClipSource(studioClip)) {
-    const sessionFn = session?.clip ? (session.clip.fileName || session.clip.downloadUrl || session.clip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0] : "";
-    const studioFn = (studioClip.fileName || studioClip.downloadUrl || studioClip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0];
+  const activeFoundClip = clipFromStorage || studioClip;
 
-    // If requested index is different, or session has no clip, or session clip points to a different/old file
-    if (!session?.clip || (requestedIdx !== null && Number(session.index) !== requestedIdx) || (sessionFn && studioFn && sessionFn !== studioFn)) {
+  if (activeFoundClip && getClipSource(activeFoundClip)) {
+    const sessionFn = session?.clip
+      ? (session.clip.fileName || session.clip.downloadUrl || session.clip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0]
+      : "";
+    const activeFn = (activeFoundClip.fileName || activeFoundClip.downloadUrl || activeFoundClip.outputPath || "").split(/[/\\]/).pop()?.split("?")[0];
+
+    // If requested index is different, or session has no clip, or session clip points to a different file
+    const indexMismatch = clipIndex !== null && (requestedIdx !== null ? Number(session?.index) !== requestedIdx : String(session?.clip?.id) !== String(clipIndex));
+    if (!session?.clip || indexMismatch || (sessionFn && activeFn && sessionFn !== activeFn)) {
+      const initialCaptions = (studio?.clipCaptions && studio.clipCaptions[targetIdx]) || activeFoundClip.captions || [];
+      const cleanCaptions = isPlaceholderOrMockCaptions(initialCaptions, activeFoundClip) ? [] : initialCaptions;
       session = {
-        clip: studioClip,
+        clip: activeFoundClip,
         index: targetIdx,
-        captions:
-          (studio.clipCaptions && studio.clipCaptions[targetIdx]) || studioClip.captions || [],
-        captionStyle: studio.captionStyle || null,
+        captions: cleanCaptions,
+        captionStyle: studio?.captionStyle || session?.captionStyle || null,
       };
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -1247,20 +1279,32 @@ function loadSession() {
     }
   }
 
-  // If session has a clip and matches requestedIdx (or no index was requested), return it
+  // If session has a clip and matches requestedIdx / clipIndex:
   if (session?.clip && getClipSource(session.clip)) {
-    if (requestedIdx === null || Number(session.index) === requestedIdx) {
+    const indexMatches =
+      clipIndex === null ||
+      (requestedIdx !== null && Number(session.index) === requestedIdx) ||
+      (String(session.clip.id) === String(clipIndex) || session.clip.fileName === clipIndex);
+
+    if (indexMatches) {
+      if (isPlaceholderOrMockCaptions(session.captions, session.clip)) {
+        session.captions = [];
+        try {
+          localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+        } catch {}
+      }
       return session;
     }
   }
 
-  if (studioClip && getClipSource(studioClip)) {
+  if (activeFoundClip && getClipSource(activeFoundClip)) {
+    const initialCaptions = (studio?.clipCaptions && studio.clipCaptions[targetIdx]) || activeFoundClip.captions || [];
+    const cleanCaptions = isPlaceholderOrMockCaptions(initialCaptions, activeFoundClip) ? [] : initialCaptions;
     session = {
-      clip: studioClip,
+      clip: activeFoundClip,
       index: targetIdx,
-      captions:
-        (studio.clipCaptions && studio.clipCaptions[targetIdx]) || studioClip.captions || [],
-      captionStyle: studio.captionStyle || null,
+      captions: cleanCaptions,
+      captionStyle: studio?.captionStyle || null,
     };
     try {
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -1268,7 +1312,7 @@ function loadSession() {
     return session;
   }
 
-  // Fallback 2: check active generation job from localStorage
+  // Fallback 1: check active generation job from localStorage
   const activeJobRaw =
     localStorage.getItem("clipflow_active_generation_job") ||
     localStorage.getItem("clipflow-active-generation-job");
@@ -1280,12 +1324,13 @@ function loadSession() {
         : Array.isArray(jobData.resultJson?.clips)
         ? jobData.resultJson.clips
         : [];
-      if (clips[targetIdx] && getClipSource(clips[targetIdx])) {
-        const c = clips[targetIdx];
+      const targetClip = clips[targetIdx] || (clipIndex ? clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
+      if (targetClip && getClipSource(targetClip)) {
+        const cleanCaptions = isPlaceholderOrMockCaptions(targetClip.captions, targetClip) ? [] : (targetClip.captions || []);
         session = {
-          clip: c,
+          clip: targetClip,
           index: targetIdx,
-          captions: c.captions || [],
+          captions: cleanCaptions,
           captionStyle: jobData.captionStyle || null,
         };
         try {
@@ -1296,8 +1341,9 @@ function loadSession() {
     } catch {}
   }
 
-  // Fallback 3: check all projects cache in localStorage
+  // Fallback 2: check all projects cache in localStorage
   const projectsRaw =
+    localStorage.getItem("clipflow_saved_projects") ||
     localStorage.getItem("clipflow_all_projects_v2") ||
     localStorage.getItem("clipflow_all_projects");
   if (projectsRaw) {
@@ -1306,12 +1352,14 @@ function loadSession() {
       if (Array.isArray(projects) && projects.length) {
         for (const proj of projects) {
           const clips = Array.isArray(proj.clips) ? proj.clips : [];
-          if (clips[targetIdx]) {
+          const targetClip = clips[targetIdx] || (clipIndex ? clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
+          if (targetClip && getClipSource(targetClip)) {
+            const initialCaptions = (proj.clipCaptions && proj.clipCaptions[targetIdx]) || targetClip.captions || [];
+            const cleanCaptions = isPlaceholderOrMockCaptions(initialCaptions, targetClip) ? [] : initialCaptions;
             return {
-              clip: clips[targetIdx],
+              clip: targetClip,
               index: targetIdx,
-              captions:
-                (proj.clipCaptions && proj.clipCaptions[targetIdx]) || clips[targetIdx].captions || [],
+              captions: cleanCaptions,
               captionStyle: proj.captionStyle || null,
             };
           }
@@ -1559,17 +1607,58 @@ function buildSegmentsFromWords(words = []) {
   return normalizeSegments(segments);
 }
 
+function hasWordLevelTimestamps(segments = []) {
+  if (!Array.isArray(segments) || !segments.length) return false;
+  return segments.some(
+    (seg) =>
+      (Array.isArray(seg?.words) &&
+        seg.words.length > 0 &&
+        seg.words.every((w) => w && Number.isFinite(Number(w.start)) && Number.isFinite(Number(w.end)))) ||
+      (typeof seg?.word === "string" && Number.isFinite(Number(seg.start)) && Number.isFinite(Number(seg.end)))
+  );
+}
+
 function isPlaceholderOrMockCaptions(segments, clip) {
   if (!Array.isArray(segments) || !segments.length) return true;
-  const combined = segments.map(s => normalizeCaptionCompareText(s.text)).join(" ");
+  const combined = segments.map((s) => normalizeCaptionCompareText(s.text || s.word || "")).join(" ");
   const metadata = [clip?.hook, clip?.description, clip?.title, clip?.summary];
-  if (metadata.some(value => value && normalizeCaptionCompareText(value) === combined)) return true;
-  // Strict prevention of default mock transcript files ("How to stop burning out...", "This is a powerful moment...", etc.)
-  const mockPattern = /^(how to stop burning out|this is a powerful moment|welcome to this video|today we'll explore|robert greene reveals|here is where the key insight|this part has strong engagement|the speaker makes an important point|this moment has high viral|a compelling story unfolds|this is the emotional peak|the audience reacts strongly|in this video|sample caption|placeholder caption)/i;
-  return segments.some(s => mockPattern.test(s.text || "") || mockPattern.test(normalizeCaptionCompareText(s.text || "")));
+  if (metadata.some((value) => value && normalizeCaptionCompareText(value) === combined)) return true;
+  // Strict prevention of default mock transcript files ("How to stop burning out...", "They just choose differently", etc.)
+  const mockPattern = /(how to stop burning out|this is a powerful moment|welcome to this video|today we'll explore|robert greene reveals|here is where the key insight|this part has strong engagement|the speaker makes an important point|this moment has high viral|a compelling story unfolds|this is the emotional peak|the audience reacts strongly|in this video|sample caption|placeholder caption|they just choose differently|choose differently|burning out)/i;
+  return segments.some(
+    (s) =>
+      mockPattern.test(s.text || s.word || "") ||
+      mockPattern.test(normalizeCaptionCompareText(s.text || s.word || ""))
+  );
 }
 
 async function fetchServerCaptions(clip) {
+  // First attempt direct /api/transcribe endpoint
+  try {
+    const directRes = await fetch("/api/transcribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clip,
+        clipIndex: editorState.clipIndex,
+        inputPath: getClipSource(clip),
+        videoUrl: getClipSource(clip),
+        clipStartTime: getClipStartTimeSeconds(clip),
+      }),
+    });
+    if (directRes.ok) {
+      const directData = await directRes.json();
+      if (Array.isArray(directData.segments) && directData.segments.length) {
+        return calibrateSegmentsToClip(directData.segments, clip);
+      }
+      if (Array.isArray(directData.words) && directData.words.length) {
+        return calibrateSegmentsToClip(buildSegmentsFromWords(directData.words), clip);
+      }
+    }
+  } catch (directErr) {
+    console.warn("Direct /api/transcribe attempt error, falling back to ClipCaptionClient:", directErr.message);
+  }
+
   const inputPaths = getClipPathCandidates(clip);
   const data = await ClipCaptionClient.generate({ inputPath: inputPaths[0], inputPaths });
   const rawSegments = extractSegmentsFromPayload(data);
@@ -1588,6 +1677,12 @@ async function syncAudioTranscript() {
   if (editorState.captionSync?.clip === clip) return editorState.captionSync.promise;
   const before = captionContentSignature(editorState.segments);
   const operation = { clip };
+
+  const statusLabel = document.getElementById("captionStatusLabel");
+  const segmentBadge = document.getElementById("segmentCountBadge");
+  if (statusLabel) statusLabel.textContent = "Transcribing audio with Whisper...";
+  if (segmentBadge) segmentBadge.textContent = "Transcribing with Whisper...";
+
   operation.promise = (async () => {
     const rawSegments = await fetchServerCaptions(clip);
     if (editorState.clip !== clip || captionContentSignature(editorState.segments) !== before) {
@@ -1603,6 +1698,8 @@ async function syncAudioTranscript() {
     renderTimeline();
     syncCaptionOverlay();
     updateLivePreview();
+    if (statusLabel) statusLabel.textContent = `Audio transcribed (${calibrated.length} segments)`;
+    if (segmentBadge) segmentBadge.textContent = `${calibrated.length} segments`;
     return calibrated;
   })().finally(() => {
     if (editorState.captionSync === operation) editorState.captionSync = null;
@@ -4199,16 +4296,66 @@ async function init() {
   let session = loadSession();
 
   const urlParams = new URLSearchParams(window.location.search);
-  const paramIndex = urlParams.get("index");
-  const hasParamIndex = paramIndex !== null && !isNaN(parseInt(paramIndex, 10));
-  const requestedIdx = hasParamIndex ? parseInt(paramIndex, 10) : null;
+  const clipIndex = urlParams.get("index") || urlParams.get("id");
+  const hasParamIndex = clipIndex !== null && !isNaN(parseInt(clipIndex, 10));
+  const requestedIdx = hasParamIndex ? parseInt(clipIndex, 10) : null;
+  const searchIdx = requestedIdx !== null ? requestedIdx : (session?.index != null ? Number(session.index) : 0);
 
-  // If session is missing, has no playable clip source, or session index does not match requested index, fetch from projects API or active generation job
-  const searchIdx = requestedIdx !== null ? requestedIdx : 0;
+  // If clipIndex is provided or session is missing/mismatched, search currentClips, backend API, studio session, etc.
   if (
-    !session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)
+    !session?.clip ||
+    !getClipSource(session.clip) ||
+    (clipIndex !== null && (requestedIdx !== null ? Number(session.index) !== requestedIdx : String(session.clip?.id) !== String(clipIndex)))
   ) {
-    // Check if there is an active generation job ID saved
+    // 1. Check currentClips in localStorage
+    try {
+      const rawCurrent = localStorage.getItem("currentClips");
+      if (rawCurrent) {
+        const parsedCurrent = JSON.parse(rawCurrent);
+        if (Array.isArray(parsedCurrent) && parsedCurrent.length) {
+          const matched =
+            requestedIdx !== null
+              ? parsedCurrent[requestedIdx]
+              : parsedCurrent.find(
+                  (c) => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)
+                );
+          if (matched && getClipSource(matched)) {
+            session = {
+              clip: matched,
+              index: requestedIdx !== null ? requestedIdx : (matched.index ?? clipIndex),
+              captions: isPlaceholderOrMockCaptions(matched.captions, matched) ? [] : (matched.captions || []),
+              captionStyle: session?.captionStyle || null,
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+          }
+        }
+      }
+    } catch {}
+
+    // 2. Fetch directly from backend /api/clips/:idOrIndex
+    if ((!session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)) && clipIndex !== null) {
+      try {
+        const clipRes = await fetch(`/api/clips/${encodeURIComponent(clipIndex)}`);
+        if (clipRes.ok) {
+          const clipData = await clipRes.json();
+          if (clipData.clip && getClipSource(clipData.clip)) {
+            session = {
+              clip: clipData.clip,
+              index: requestedIdx !== null ? requestedIdx : (clipData.clip.index ?? clipIndex),
+              captions: isPlaceholderOrMockCaptions(clipData.captions || clipData.segments, clipData.clip)
+                ? []
+                : (clipData.captions || clipData.segments || []),
+              captionStyle: session?.captionStyle || null,
+            };
+            localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+          }
+        }
+      } catch (backendErr) {
+        console.warn("Backend /api/clips/:idOrIndex fetch error:", backendErr);
+      }
+    }
+
+    // 3. Check if there is an active generation job ID saved
     const activeJobId =
       localStorage.getItem("activeGenerationJobId") ||
       (function () {
@@ -4222,7 +4369,7 @@ async function init() {
         return null;
       })();
 
-    if (activeJobId) {
+    if (activeJobId && (!session?.clip || !getClipSource(session.clip))) {
       try {
         let jobRes = await fetch(`/api/clips/generation-jobs/${encodeURIComponent(activeJobId)}`);
         if (!jobRes.ok) {
@@ -4235,12 +4382,12 @@ async function init() {
             : Array.isArray(jobData.job?.clips)
             ? jobData.job.clips
             : [];
-          if (clips[searchIdx]) {
-            const clip = clips[searchIdx];
+          const targetClip = clips[searchIdx] || (clipIndex ? clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
+          if (targetClip && getClipSource(targetClip)) {
             session = {
-              clip,
+              clip: targetClip,
               index: searchIdx,
-              captions: clip.captions || [],
+              captions: isPlaceholderOrMockCaptions(targetClip.captions, targetClip) ? [] : (targetClip.captions || []),
               captionStyle: null,
             };
             localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -4252,18 +4399,19 @@ async function init() {
     }
 
     if (!session?.clip || !getClipSource(session.clip)) {
-      // Check localStorage clipflow_saved_projects or clipflow-studio-session first
+      // Check localStorage clipflow_saved_projects or clipflow-studio-session
       try {
         const studioRaw = localStorage.getItem("clipflow-studio-session");
         if (studioRaw) {
           const parsedStudio = JSON.parse(studioRaw);
           const studioClips = Array.isArray(parsedStudio.generatedClips) ? parsedStudio.generatedClips : [];
-          if (studioClips[searchIdx] && getClipSource(studioClips[searchIdx])) {
-            const clip = studioClips[searchIdx];
+          const targetClip = studioClips[searchIdx] || (clipIndex ? studioClips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
+          if (targetClip && getClipSource(targetClip)) {
+            const rawCaps = (parsedStudio.clipCaptions && parsedStudio.clipCaptions[searchIdx]) || targetClip.captions || [];
             session = {
-              clip,
+              clip: targetClip,
               index: searchIdx,
-              captions: (parsedStudio.clipCaptions && parsedStudio.clipCaptions[searchIdx]) || clip.captions || [],
+              captions: isPlaceholderOrMockCaptions(rawCaps, targetClip) ? [] : rawCaps,
               captionStyle: parsedStudio.captionStyle || null,
             };
             localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -4279,12 +4427,13 @@ async function init() {
           const savedProjects = JSON.parse(savedProjectsRaw);
           if (Array.isArray(savedProjects)) {
             for (const p of savedProjects) {
-              if (Array.isArray(p.clips) && p.clips[searchIdx] && getClipSource(p.clips[searchIdx])) {
-                const clip = p.clips[searchIdx];
+              const targetClip = (Array.isArray(p.clips) && p.clips[searchIdx]) || (Array.isArray(p.clips) && clipIndex ? p.clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
+              if (targetClip && getClipSource(targetClip)) {
+                const rawCaps = (p.clipCaptions && p.clipCaptions[searchIdx]) || targetClip.captions || [];
                 session = {
-                  clip,
+                  clip: targetClip,
                   index: searchIdx,
-                  captions: (p.clipCaptions && p.clipCaptions[searchIdx]) || clip.captions || [],
+                  captions: isPlaceholderOrMockCaptions(rawCaps, targetClip) ? [] : rawCaps,
                   captionStyle: p.captionStyle || null,
                 };
                 localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -4356,9 +4505,10 @@ async function init() {
 
   if (clipTitleDisplay) {
     clipTitleDisplay.textContent =
-      session.clip.hook ||
-      session.clip.originalName ||
       session.clip.title ||
+      session.clip.hook ||
+      session.clip.fileName ||
+      session.clip.originalName ||
       `Clip #${editorState.clipIndex + 1}`;
   }
 
@@ -4453,11 +4603,12 @@ async function init() {
   }
 
   // Ensure the transcription data loaded into captionData.segments is calibrated to start at 00:00:00 relative to the current trimmed clip.
-  // Prevent fallback to default mock transcript files ("How to stop burning out...", "This is a powerful moment...", etc.)
+  // Prevent fallback to default mock transcript files ("How to stop burning out...", "This is a powerful moment...", "They just choose differently", etc.)
   const rawSaved = session.captions || [];
   const isMock = isPlaceholderOrMockCaptions(rawSaved, session.clip);
-  const calibratedSaved = !isMock ? calibrateSegmentsToClip(normalizeSegments(rawSaved), session.clip) : [];
-  const trusted = !isMock && session.captionSchemaVersion === 2 && calibratedSaved.length > 0;
+  const hasWords = hasWordLevelTimestamps(rawSaved);
+  const calibratedSaved = (!isMock && hasWords) ? calibrateSegmentsToClip(normalizeSegments(rawSaved), session.clip) : [];
+  const trusted = !isMock && hasWords && session.captionSchemaVersion === 2 && calibratedSaved.length > 0;
   editorState.captionSchemaVersion = trusted ? 2 : undefined;
   editorState.segments = trusted ? calibratedSaved : [];
   captionData.segments = editorState.segments;
@@ -4468,14 +4619,23 @@ async function init() {
   startCaptionSync();
   updateLivePreview();
 
-  if (session.clip && (!trusted || !editorState.segments.length)) {
-    const statusLabel = document.getElementById("captionStatusLabel");
-    if (statusLabel) statusLabel.textContent = "Transcribing audio — you can continue editing styles…";
-    syncAudioTranscript().then(segments => {
-      if (statusLabel) statusLabel.textContent = `Audio transcribed (${segments.length} segments)`;
-    }).catch(error => {
+  const statusLabel = document.getElementById("captionStatusLabel");
+  const segmentBadge = document.getElementById("segmentCountBadge");
+
+  if (trusted && editorState.segments.length > 0) {
+    if (statusLabel) statusLabel.textContent = `Audio transcribed (${editorState.segments.length} segments)`;
+    if (segmentBadge) segmentBadge.textContent = `${editorState.segments.length} segments`;
+  } else if (session.clip) {
+    if (statusLabel) statusLabel.textContent = "Transcribing audio with Whisper...";
+    if (segmentBadge) segmentBadge.textContent = "Transcribing audio with Whisper...";
+    syncAudioTranscript().then((segments) => {
+      const segs = Array.isArray(segments) ? segments : [];
+      if (statusLabel) statusLabel.textContent = `Audio transcribed (${segs.length} segments)`;
+      if (segmentBadge) segmentBadge.textContent = `${segs.length} segments`;
+    }).catch((error) => {
       console.error("Caption transcription failed:", error);
       if (statusLabel) statusLabel.textContent = error.message || "Transcription failed. Click Sync Audio to retry.";
+      if (segmentBadge) segmentBadge.textContent = "Transcription failed";
     });
   }
 

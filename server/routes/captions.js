@@ -285,6 +285,176 @@ router.get("/jobs/:id", (req, res) => {
   return res.json(jobResponse(job));
 });
 
+router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
+  try {
+    const body = req.body || {};
+    const candidates = [
+      body.videoPath,
+      body.inputPath,
+      body.filePath,
+      body.localPath,
+      body.url,
+      body.videoUrl,
+      body.previewUrl,
+      body.downloadUrl,
+      body.clip?.outputPath,
+      body.clip?.filePath,
+      body.clip?.localPath,
+      body.clip?.downloadUrl,
+      body.clip?.previewUrl,
+      body.clip?.storageUrl,
+      ...(Array.isArray(body.inputPaths) ? body.inputPaths : []),
+    ];
+
+    let resolvedVideoPath = candidates
+      .filter((v) => typeof v === "string" && v.trim())
+      .map(resolveInputVideo)
+      .find(Boolean);
+
+    // If not found directly by path, check clipIndex or id
+    const idOrIndex =
+      body.clipIndex ??
+      body.index ??
+      body.id ??
+      body.clip?.id ??
+      body.clip?.index;
+
+    if (!resolvedVideoPath && idOrIndex !== undefined && idOrIndex !== null) {
+      const isNum = /^\d+$/.test(String(idOrIndex));
+      const idx = isNum ? parseInt(idOrIndex, 10) : null;
+      try {
+        const { readProjects } = require("./clips");
+        const projects = typeof readProjects === "function" ? readProjects() : [];
+        for (const p of projects) {
+          if (Array.isArray(p.clips)) {
+            if (idx !== null && p.clips[idx]) {
+              const c = p.clips[idx];
+              resolvedVideoPath = resolveInputVideo(
+                c.outputPath || c.filePath || c.localPath || c.downloadUrl
+              );
+              if (resolvedVideoPath) break;
+            }
+            const found = p.clips.find(
+              (c) =>
+                c && (String(c.id) === String(idOrIndex) || c.fileName === idOrIndex)
+            );
+            if (found) {
+              resolvedVideoPath = resolveInputVideo(
+                found.outputPath || found.filePath || found.localPath || found.downloadUrl
+              );
+              if (resolvedVideoPath) break;
+            }
+          }
+        }
+      } catch (projErr) {
+        console.warn("[Captions] Error reading projects for transcribe:", projErr.message);
+      }
+
+      if (!resolvedVideoPath && fs.existsSync(exportsDir)) {
+        const files = fs
+          .readdirSync(exportsDir)
+          .filter((f) => f.endsWith(".mp4"))
+          .sort((a, b) => {
+            try {
+              return (
+                fs.statSync(path.join(exportsDir, b)).mtimeMs -
+                fs.statSync(path.join(exportsDir, a)).mtimeMs
+              );
+            } catch {
+              return 0;
+            }
+          });
+
+        if (idx !== null && files[idx]) {
+          resolvedVideoPath = path.join(exportsDir, files[idx]);
+        } else if (typeof idOrIndex === "string" && idOrIndex.trim()) {
+          const matched = files.find(
+            (f) => f === idOrIndex || f.startsWith(idOrIndex)
+          );
+          if (matched) resolvedVideoPath = path.join(exportsDir, matched);
+        }
+      }
+    }
+
+    const remoteUrl = candidates.map(allowedCaptionSource).find(Boolean);
+    if (!resolvedVideoPath && !remoteUrl) {
+      return res.status(404).json({
+        error: "Clip video file not found on server for transcription. Ensure video is exported or uploaded.",
+      });
+    }
+
+    const targetVideo = resolvedVideoPath || (await restoreCaptionSource(remoteUrl));
+    console.log(`[Captions] Running Whisper transcription on: ${targetVideo}`);
+    const result = await ensureCaptionFiles(targetVideo);
+
+    const clipStartSec = Math.max(
+      0,
+      Number(
+        body.clipStartTime ||
+          body.startSec ||
+          body.clip?.startSec ||
+          body.clip?.startTime ||
+          0
+      )
+    );
+    const rawSegments = result.segments || [];
+
+    // Calibrate all segments so timestamps start at 0.00s relative to the clip
+    const calibratedSegments = rawSegments.map((seg, segIdx) => {
+      const segStart = Math.max(0, Number((seg.start - clipStartSec).toFixed(3)));
+      const segEnd = Math.max(segStart + 0.1, Number((seg.end - clipStartSec).toFixed(3)));
+      let words = undefined;
+      if (Array.isArray(seg.words) && seg.words.length) {
+        words = seg.words.map((w) => ({
+          word: String(w.word || "").trim(),
+          start: Math.max(0, Number((w.start - clipStartSec).toFixed(3))),
+          end: Math.max(0.05, Number((w.end - clipStartSec).toFixed(3))),
+        }));
+      }
+      return {
+        id: seg.id || `seg-${segIdx + 1}`,
+        start: segStart,
+        end: segEnd,
+        text: String(seg.text || "").trim(),
+        ...(words ? { words } : {}),
+      };
+    });
+
+    const flattenedWords = [];
+    calibratedSegments.forEach((seg) => {
+      if (Array.isArray(seg.words) && seg.words.length) {
+        seg.words.forEach((w) => {
+          if (w.word) flattenedWords.push({ word: w.word, start: w.start, end: w.end });
+        });
+      } else if (seg.text) {
+        const parts = seg.text.split(/\s+/).filter(Boolean);
+        const dur = (seg.end - seg.start) / Math.max(parts.length, 1);
+        parts.forEach((p, i) =>
+          flattenedWords.push({
+            word: p,
+            start: Number((seg.start + i * dur).toFixed(3)),
+            end: Number((seg.start + (i + 1) * dur).toFixed(3)),
+          })
+        );
+      }
+    });
+
+    res.set("Cache-Control", "no-store");
+    return res.json({
+      success: true,
+      source: "whisper",
+      trackUrl: `/captions/${path.basename(result.vttPath)}`,
+      segments: calibratedSegments,
+      words: flattenedWords,
+    });
+  } catch (error) {
+    console.error("[Captions] Transcription endpoint error:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Whisper transcription failed" });
+  }
+});
+
 async function resolveBurnVideo(clip = {}, videoUrl = "") {
   const candidates = [
     clip?.outputPath, clip?.filePath, clip?.localPath,

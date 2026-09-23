@@ -145,23 +145,9 @@ function parseTranscriptVtt(vttText = "") {
 }
 
 async function getFallbackSegmentsFromVideoMeta(videoId, apiKey) {
-  const res = await axios.get(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${apiKey}`
-  );
-  const item = res.data.items?.[0];
-  if (!item) throw new Error("Video not found");
-  const description = item.snippet.description || "";
-  const title = item.snippet.title || "";
-  const lines = [title, ...description.split(/\n+/)].filter((l) => l.trim().length > 20);
-  const segments = [];
-  let t = 0;
-  for (const line of lines.slice(0, 30)) {
-    const dur = 4 + Math.random() * 6;
-    segments.push({ start: t, end: t + dur, text: line.trim() });
-    t += dur + 1;
-  }
-  if (!segments.length) throw new Error("No usable content found for this video");
-  return segments;
+  // Do NOT fabricate timed captions from video metadata.
+  // Return empty array so real audio transcription pipeline is used.
+  return [];
 }
 
 async function getYouTubeSmartTranscript(sourceUrl) {
@@ -215,26 +201,9 @@ function resolveSmartInputVideo(inputPath = "") {
 }
 
 function generateFallbackSegments() {
-  const MOCK_PHRASES = [
-    "This is a powerful moment worth clipping.",
-    "Here is where the key insight happens.",
-    "This part has strong engagement potential.",
-    "The speaker makes an important point here.",
-    "This moment has high viral potential.",
-    "A compelling story unfolds here.",
-    "This is the emotional peak of the content.",
-    "The audience reacts strongly to this part.",
-  ];
-  const segments = [];
-  let t = 0;
-  let idx = 0;
-  while (t < 300) {
-    const dur = 3 + Math.random() * 4;
-    segments.push({ start: t, end: t + dur, text: MOCK_PHRASES[idx % MOCK_PHRASES.length] });
-    t += dur + 1;
-    idx++;
-  }
-  return segments;
+  // Do NOT return mock phrases ("This is a powerful moment...", etc.).
+  // Only real audio transcription is allowed.
+  return [];
 }
 
 async function getLocalSmartTranscript(inputPath) {
