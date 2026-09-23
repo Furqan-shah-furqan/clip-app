@@ -848,7 +848,11 @@ function formatWordsIntoRows(text, wordsPerRow = 0) {
 }
 
 function getParityDisplayText(segment, currentTime, style = editorState.style) {
-  if (!isSpeechActive(segment, currentTime)) return "";
+  if (!segment) return "";
+  const sStart = Number(segment.start) || 0;
+  const sEnd = Number(segment.end) || 0;
+  const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
+  if (t < (sStart - 0.05) || t > (sEnd + 0.05)) return "";
 
   const anim = style.animationStyle || "none";
   const wordsPerRow = Number(style.wordsPerRow) || 0;
@@ -866,7 +870,6 @@ function getParityDisplayText(segment, currentTime, style = editorState.style) {
     return getWordAppendText(segment, currentTime);
   }
 
-  if (Array.isArray(segment.words) && segment.words.length) text = getWordAppendText(segment, currentTime);
   return wrapCaptionText(text, getPreviewCharsPerLine(style));
 }
 
@@ -964,9 +967,7 @@ function isSpeechActive(seg, time) {
   const t = Number.isFinite(Number(time)) ? Number(time) : 0;
   const sStart = Number(seg.start) || 0;
   const sEnd = Number(seg.end) || 0;
-  if (t < sStart || t > sEnd) return false;
-  if (!Array.isArray(seg.words) || !seg.words.length) return true;
-  return seg.words.some((w) => w && t >= Number(w.start) && t <= Number(w.end));
+  return t >= (sStart - 0.05) && t <= (sEnd + 0.05);
 }
 
 function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
@@ -2284,6 +2285,7 @@ function applyTextBoxVisuals(element, style) {
     computedTextShadow = getShadowCss(merged);
     element.style.removeProperty("filter");
   } else {
+    computedTextShadow = "0 2px 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.95)";
     element.style.removeProperty("filter");
   }
   element.style.textShadow = computedTextShadow;
@@ -2639,7 +2641,7 @@ function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
 
 function updatePositionUI() {
   const posX = clamp(Number(editorState.style.positionX ?? 50), 5, 95);
-  const posY = clamp(Number(editorState.style.positionY ?? 82), 5, 95);
+  const posY = clamp(Number(editorState.style.positionY ?? 82), 10, 85);
 
   if (capPosX) capPosX.value = String(posX);
   if (capPosY) capPosY.value = String(posY);
@@ -2675,7 +2677,7 @@ function applyStyleToOverlay() {
   if (captionEditSession) captionOverlay.classList.add("is-editing");
 
   const posX = clamp(Number(s.positionX ?? 50), 5, 95);
-  const posY = clamp(Number(s.positionY ?? 82), 5, 95);
+  const posY = clamp(Number(s.positionY ?? 82), 10, 85);
 
   captionOverlay.style.left = `${posX}%`;
   captionOverlay.style.top = `${posY}%`;
@@ -2818,7 +2820,7 @@ function initCaptionDragging() {
       if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
     } else {
       s.positionX = clamp(g.style.positionX + dx / g.bounds.width * 100, 5, 95);
-      s.positionY = clamp(g.style.positionY + dy / g.bounds.height * 100, 5, 95);
+      s.positionY = clamp(g.style.positionY + dy / g.bounds.height * 100, 10, 85);
       s.position = "custom";
     }
     applyStyleToOverlay();
@@ -2865,9 +2867,12 @@ function initCaptionDragging() {
 
 function getActiveSegmentByTime(time) {
   const currentTime = Number.isFinite(Number(time)) ? Number(time) : (captionVideo?.currentTime || 0);
-  if (!Array.isArray(captionData?.segments) || !captionData.segments.length) return null;
-  return captionData.segments.find(
-    (seg) => seg && currentTime >= Number(seg.start) && currentTime <= Number(seg.end)
+  const segments = (captionData && Array.isArray(captionData.segments) && captionData.segments.length)
+    ? captionData.segments
+    : (editorState.segments || []);
+  if (!segments.length) return null;
+  return segments.find(
+    (seg) => seg && currentTime >= (Number(seg.start) - 0.05) && currentTime <= (Number(seg.end) + 0.05)
   ) || null;
 }
 
@@ -2876,18 +2881,22 @@ function syncCaptionOverlay() {
     if (captionEditSession) return;
     if (!captionVideo || !captionOverlay || !captionOverlayText) return;
 
-    // Strict boundary checks driven by video.currentTime
+    // Strict boundary checks driven by video.currentTime with 0.05s tolerance
     const currentTime = isFiniteNumber(captionVideo.currentTime) ? Number(captionVideo.currentTime) : 0;
-    const activeSegment = captionData.segments.find(
-      (seg) => seg && currentTime >= Number(seg.start) && currentTime <= Number(seg.end)
+    const segments = (captionData && Array.isArray(captionData.segments) && captionData.segments.length)
+      ? captionData.segments
+      : (editorState.segments || []);
+
+    const activeSegment = segments.find(
+      (seg) => seg && currentTime >= (Number(seg.start) - 0.05) && currentTime <= (Number(seg.end) + 0.05)
     );
     const activeWord = activeSegment?.words?.find(
-      (w) => w && currentTime >= Number(w.start) && currentTime <= Number(w.end)
+      (w) => w && currentTime >= (Number(w.start) - 0.05) && currentTime <= (Number(w.end) + 0.05)
     );
 
     const nextSegId = activeSegment?.id || null;
-    const displayText = activeSegment
-      ? getParityDisplayText(activeSegment, currentTime, editorState.style)
+    let displayText = activeSegment
+      ? (getParityDisplayText(activeSegment, currentTime, editorState.style) || activeSegment.text || "")
       : "";
 
     const hasText = Boolean(displayText && displayText.trim());
@@ -2896,8 +2905,20 @@ function syncCaptionOverlay() {
     captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
     let activeWordIndex = -1;
-    if (activeSegment?.words?.length && activeWord) {
-      activeWordIndex = activeSegment.words.indexOf(activeWord);
+    if (activeSegment?.words?.length) {
+      const wIdx = activeSegment.words.findIndex(
+        (w) => w && currentTime >= (Number(w.start) - 0.05) && currentTime <= (Number(w.end) + 0.05)
+      );
+      if (wIdx !== -1) {
+        activeWordIndex = wIdx;
+      } else {
+        for (let i = activeSegment.words.length - 1; i >= 0; i--) {
+          if (activeSegment.words[i] && currentTime >= (Number(activeSegment.words[i].start) - 0.05)) {
+            activeWordIndex = i;
+            break;
+          }
+        }
+      }
     }
     if (activeWordIndex === -1 && activeSegment) {
       activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
@@ -3168,7 +3189,7 @@ function syncStyleFromControls(options = {}) {
   editorState.style.animationStyle = capAnimStyle?.value || "none";
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
-  editorState.style.positionY = clamp(Number(capPosY?.value || 82), 5, 95);
+  editorState.style.positionY = clamp(Number(capPosY?.value || 82), 10, 85);
 
   editorState.style.presetDuration = clamp(
     parseFloat(capPresetDuration?.value || "0.6"),
@@ -4227,13 +4248,31 @@ function bindControls() {
     resetCaptionRenderCache();
     syncCaptionOverlay();
   });
-  captionVideo?.addEventListener("pause", updatePlaybackUI);
-  captionVideo?.addEventListener("timeupdate", updatePlaybackUI);
-  captionVideo?.addEventListener("loadedmetadata", updatePlaybackUI);
+  captionVideo?.addEventListener("pause", () => {
+    updatePlaybackUI();
+    syncCaptionOverlay();
+  });
+  captionVideo?.addEventListener("timeupdate", () => {
+    updatePlaybackUI();
+    syncCaptionOverlay();
+  });
+  captionVideo?.addEventListener("seeking", () => {
+    updatePlaybackUI();
+    syncCaptionOverlay();
+  });
+  captionVideo?.addEventListener("seeked", () => {
+    updatePlaybackUI();
+    syncCaptionOverlay();
+  });
+  captionVideo?.addEventListener("loadedmetadata", () => {
+    updatePlaybackUI();
+    syncCaptionOverlay();
+  });
   captionVideo?.addEventListener("ended", () => {
     if (captionVideo) {
       captionVideo.currentTime = 0;
       updatePlaybackUI();
+      syncCaptionOverlay();
     }
   });
 
@@ -4258,6 +4297,7 @@ function bindControls() {
     const ratio = Math.min(1, Math.max(0, clickX / rect.width));
     captionVideo.currentTime = ratio * dur;
     updatePlaybackUI();
+    syncCaptionOverlay();
   });
 
   captionVideoWrap?.addEventListener("click", (e) => {

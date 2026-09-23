@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
     <link rel="stylesheet" href="captions.css?v=editor-1" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-2" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-4" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -526,8 +526,8 @@
                     class="ce-range"
                     type="range"
                     id="capPosY"
-                    min="5"
-                    max="95"
+                    min="10"
+                    max="85"
                     value="82"
                   />
                 </div>
@@ -637,28 +637,32 @@
                         <span class="ce-video-time-display" id="videoTimeDisplay">00:00 / 00:30</span>
                       </div>
 
-                      <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
-                      <div
-                        class="caption-video-overlay"
-                        id="captionOverlay"
-                        title="Drag center to move · Drag corners to increase or decrease box size"
-                      >
-                        <!-- CapCut Bounding Box Frame & Corner Handles -->
-                        <div class="cap-box-frame" id="capBoxFrame">
-                          <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
-                            <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
+                      <!-- CAPTION OVERLAY LAYER DIRECTLY ABOVE VIDEO (Z-INDEX 20, POINTER-EVENTS NONE) -->
+                      <div class="caption-layer" id="captionLayer" style="position: absolute; inset: 0; pointer-events: none; z-index: 20;">
+                        <!-- DRAGGABLE CAPTION OVERLAY WITH CAPCUT RESIZE BOX -->
+                        <div
+                          class="caption-video-overlay"
+                          id="captionOverlay"
+                          title="Drag center to move · Drag corners to increase or decrease box size"
+                          style="pointer-events: auto;"
+                        >
+                          <!-- CapCut Bounding Box Frame & Corner Handles -->
+                          <div class="cap-box-frame" id="capBoxFrame">
+                            <div class="cap-resize-handle" data-handle="mt" title="Resize height"></div><div class="cap-resize-handle" data-handle="mb" title="Resize height"></div><div class="cap-box-info" id="capBoxInfo">
+                              <span class="cap-box-size-label" id="capBoxSizeLabel">28px</span>
+                            </div>
+                            <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
+                            <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
+                            <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
+                            <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
+                              <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
+                            </div>
+                            <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
+                            <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
                           </div>
-                          <div class="cap-resize-handle cap-handle-tl" data-handle="tl" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-tr" data-handle="tr" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-bl" data-handle="bl" title="Drag to resize box"></div>
-                          <div class="cap-resize-handle cap-handle-br" data-handle="br" title="Drag to scale box size">
-                            <svg viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M15 9l5-5m0 0h-4m4 0v4M9 15l-5 5m0 0h4m-4 0v-4"/></svg>
-                          </div>
-                          <div class="cap-resize-handle cap-handle-ml" data-handle="ml" title="Drag to adjust width"></div>
-                          <div class="cap-resize-handle cap-handle-mr" data-handle="mr" title="Drag to adjust width"></div>
-                        </div>
 
-                        <span class="caption-video-text" id="captionOverlayText"></span>
+                          <span class="caption-video-text" id="captionOverlayText"></span>
+                        </div>
                       </div>
 
                       <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
@@ -737,7 +741,7 @@
     <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-8"></script>
+    <script src="captions.js?v=editor-10"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>
