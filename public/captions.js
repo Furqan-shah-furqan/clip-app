@@ -965,6 +965,13 @@ function wrapExportToBox(segments, style) {
 function isSpeechActive(seg, time) {
   if (!seg) return false;
   const t = Number.isFinite(Number(time)) ? Number(time) : 0;
+  if (Array.isArray(seg.words) && seg.words.length) {
+    return seg.words.some((w) => {
+      const wStart = Number(w.start);
+      const wEnd = Number(w.end);
+      return t >= (wStart - 0.05) && t <= (wEnd + 0.05);
+    });
+  }
   const sStart = Number(seg.start) || 0;
   const sEnd = Number(seg.end) || 0;
   return t >= (sStart - 0.05) && t <= (sEnd + 0.05);
@@ -975,18 +982,10 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
   const groupSize = Math.max(1, Number(wordsPerGroup) || 1);
   const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
   if (Array.isArray(seg.words) && seg.words.length) {
-    let index = seg.words.findIndex(
-      (w) => w && t >= Number(w.start) && t <= Number(w.end)
+    const index = seg.words.findIndex(
+      (w) => w && t >= (Number(w.start) - 0.05) && t <= (Number(w.end) + 0.05)
     );
-    if (index < 0) {
-      for (let i = seg.words.length - 1; i >= 0; i--) {
-        if (seg.words[i] && t >= Number(seg.words[i].start)) {
-          index = i;
-          break;
-        }
-      }
-    }
-    if (index < 0) index = 0;
+    if (index < 0) return "";
     const groupStart = Math.floor(index / groupSize) * groupSize;
     return seg.words
       .slice(groupStart, index + 1)
@@ -994,6 +993,7 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
       .map((w) => w?.word || "")
       .join(" ");
   }
+  if (!isSpeechActive(seg, t)) return "";
   const words = String(seg.text || "")
     .trim()
     .split(/\s+/)
@@ -1015,9 +1015,10 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
 function getWordAppendText(seg, currentTime) {
   if (!seg) return "";
   const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
+  if (!isSpeechActive(seg, t)) return "";
   if (Array.isArray(seg.words) && seg.words.length) {
-    const spoken = seg.words.filter((w) => w && t >= Number(w.start));
-    if (spoken.length === 0 && seg.words[0]) return seg.words[0]?.word || "";
+    const spoken = seg.words.filter((w) => w && t >= (Number(w.start) - 0.05));
+    if (spoken.length === 0) return "";
     return spoken.map((w) => w?.word || "").join(" ");
   }
   const words = String(seg.text || "")
@@ -1679,8 +1680,8 @@ async function syncAudioTranscript() {
   const before = captionContentSignature(editorState.segments);
   const operation = { clip };
 
-  const statusLabel = document.getElementById("captionStatusLabel");
-  const segmentBadge = document.getElementById("segmentCountBadge");
+  const statusLabel = typeof document !== "undefined" && document.getElementById ? document.getElementById("captionStatusLabel") : null;
+  const segmentBadge = typeof document !== "undefined" && document.getElementById ? document.getElementById("segmentCountBadge") : null;
   if (statusLabel) statusLabel.textContent = "Transcribing audio with Whisper...";
   if (segmentBadge) segmentBadge.textContent = "Transcribing with Whisper...";
 
@@ -1689,16 +1690,16 @@ async function syncAudioTranscript() {
     if (editorState.clip !== clip || captionContentSignature(editorState.segments) !== before) {
       throw new Error("Captions were edited while syncing. Click Sync Audio again to replace those edits.");
     }
-    const calibrated = calibrateSegmentsToClip(normalizeSegments(rawSegments), clip);
+    const calibrated = typeof calibrateSegmentsToClip === "function" ? calibrateSegmentsToClip(normalizeSegments(rawSegments), clip) : normalizeSegments(rawSegments);
     editorState.segments = calibrated;
-    captionData.segments = calibrated;
+    if (typeof captionData !== "undefined" && captionData) captionData.segments = calibrated;
     editorState.captionSchemaVersion = 2;
     clip.captionSchemaVersion = 2;
     editorState.activeSegmentId = editorState.segments[0]?.id || null;
-    persistCaptions();
-    renderTimeline();
-    syncCaptionOverlay();
-    updateLivePreview();
+    if (typeof persistCaptions === "function") persistCaptions();
+    if (typeof renderTimeline === "function") renderTimeline();
+    if (typeof syncCaptionOverlay === "function") syncCaptionOverlay();
+    if (typeof updateLivePreview === "function") updateLivePreview();
     if (statusLabel) statusLabel.textContent = `Audio transcribed (${calibrated.length} segments)`;
     if (segmentBadge) segmentBadge.textContent = `${calibrated.length} segments`;
     return calibrated;
@@ -2254,7 +2255,7 @@ function applyTextBoxVisuals(element, style) {
   element.style.boxSizing = "border-box";
   element.style.whiteSpace = "normal";
   element.style.wordBreak = "normal";
-  element.style.overflowWrap = "anywhere";
+  element.style.overflowWrap = "break-word";
 
   // Dynamic animation cadence / speed from preset duration
   element.style.setProperty("--preset-duration", `${Number(merged.presetDuration || 0.6)}s`);
@@ -2281,11 +2282,14 @@ function applyTextBoxVisuals(element, style) {
   } else if (merged.textShadow && typeof merged.textShadow === "string" && merged.textShadow !== "none" && merged.textShadow !== "true") {
     computedTextShadow = merged.textShadow;
     element.style.removeProperty("filter");
+  } else if (merged.textShadow === false || merged.textShadow === "none") {
+    computedTextShadow = "none";
+    element.style.removeProperty("filter");
   } else if (merged.textShadow === true || Number(merged.shadowBlur) > 0) {
     computedTextShadow = getShadowCss(merged);
     element.style.removeProperty("filter");
   } else {
-    computedTextShadow = "0 2px 4px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.95)";
+    computedTextShadow = "none";
     element.style.removeProperty("filter");
   }
   element.style.textShadow = computedTextShadow;
@@ -2684,7 +2688,7 @@ function applyStyleToOverlay() {
   captionOverlay.style.bottom = "auto";
   captionOverlay.style.transform = `translate(-50%, -50%) rotate(${Number(s.rotateAngle) || 0}deg)`;
   captionOverlay.style.width = `${s.boxWidth || 88}%`;
-  captionOverlay.style.height = s.boxHeight ? `${s.boxHeight}%` : "auto";
+  captionOverlay.style.height = s.boxHeight && s.boxHeight > 15 ? `${s.boxHeight}%` : "auto";
   // An explicit frame cannot clip a longer phrase; it grows at the minimum font size.
   captionOverlay.style.minHeight = "min-content";
   captionOverlayText.style.transform = "none";
@@ -2866,14 +2870,12 @@ function initCaptionDragging() {
 }
 
 function getActiveSegmentByTime(time) {
-  const currentTime = Number.isFinite(Number(time)) ? Number(time) : (captionVideo?.currentTime || 0);
-  const segments = (captionData && Array.isArray(captionData.segments) && captionData.segments.length)
+  const currentTime = Number.isFinite(Number(time)) ? Number(time) : (typeof captionVideo !== "undefined" && captionVideo?.currentTime ? captionVideo.currentTime : 0);
+  const segments = (typeof captionData !== "undefined" && captionData && Array.isArray(captionData.segments) && captionData.segments.length)
     ? captionData.segments
-    : (editorState.segments || []);
+    : (typeof editorState !== "undefined" && editorState?.segments ? editorState.segments : []);
   if (!segments.length) return null;
-  return segments.find(
-    (seg) => seg && currentTime >= (Number(seg.start) - 0.05) && currentTime <= (Number(seg.end) + 0.05)
-  ) || null;
+  return segments.find((seg) => isSpeechActive(seg, currentTime)) || null;
 }
 
 function syncCaptionOverlay() {
@@ -3277,9 +3279,27 @@ function renderPresetsUI() {
 
   const activeId = editorState.style?.activePresetId || allPresets[0]?.id;
 
+  const shortNames = {
+    "preset-moonshot-viral": "Moonshot",
+    "preset-hormozi-impact": "Hormozi",
+    "preset-studio-clean": "Studio Clean",
+    "preset-headline-punch": "Headline",
+    "preset-cyber-glow": "Cyber Glow",
+    "preset-editorial-serif": "Editorial",
+    "preset-dark-label": "Dark Label",
+    "preset-retro-pop": "Retro Pop",
+  };
+
   presetsGrid.innerHTML = quickPicks.map((preset) => {
     const s = preset.style || {};
     const active = activeId ? activeId === preset.id : (editorState.style?.animationStyle && editorState.style.animationStyle === preset.style?.animationStyle);
+    const displayName = shortNames[preset.id] || preset.name;
+    const isPill = s.highlightMode === "pill";
+    const swatchBg = isPill ? (s.highlightBg || "#FFE600") : (s.bgColor && s.bgColor !== "transparent" ? s.bgColor : "#161922");
+    const swatchColor = isPill ? (s.highlightColor || "#000000") : (s.highlightColor || s.textColor || "#ffffff");
+    const swatchShadow = s.glowIntensity > 0 ? `0 0 8px ${s.highlightColor || "#06B6D4"}` : "none";
+    const swatchStroke = s.strokeWidth > 0 ? `1px ${s.strokeColor || "#000000"}` : "none";
+
     return `
       <button
         class="preset-card${active ? " preset-card--active is-active" : ""}"
@@ -3291,15 +3311,18 @@ function renderPresetsUI() {
         <div
           class="preset-swatch"
           style="
-            background:${s.highlightBg && s.highlightBg !== "transparent" ? s.highlightBg : (s.bgColor || "#111111")};
-            color:${s.highlightMode === "pill" ? (s.highlightColor || "#000000") : (s.highlightColor || s.textColor || "#ffffff")};
+            background:${swatchBg};
+            color:${swatchColor};
             font-family:${s.fontFamily || "Montserrat"}, sans-serif;
             font-size: 11px;
             font-weight:${s.fontWeight || 800};
             text-transform:${s.textTransform || "none"};
+            font-style:${s.fontStyle || "normal"};
+            text-shadow:${swatchShadow};
+            -webkit-text-stroke:${swatchStroke};
           "
         >Aa</div>
-        <span class="preset-name">${preset.name}</span>
+        <span class="preset-name">${displayName}</span>
       </button>
     `;
   }).join("");
@@ -3311,8 +3334,8 @@ function renderPresetsUI() {
 function handlePresetSelection(event) {
   const card = event.target.closest?.("[data-preset-id]");
   if (!card) return;
-  event.preventDefault();
-  event.stopPropagation();
+  if (event && typeof event.preventDefault === "function") event.preventDefault();
+  if (event && typeof event.stopPropagation === "function") event.stopPropagation();
   applyPresetFromGallery(card.dataset.presetId);
 }
 

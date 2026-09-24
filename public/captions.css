@@ -80,9 +80,10 @@ body.caption-editor-page {
   height: 100vh;
   max-height: 100vh;
   overflow: hidden; /* No page scrollbar! */
-  padding: 5px !important; /* 5px margin from every side framing the black container */
+  padding: 0 !important;
+  margin: 0 !important;
   box-sizing: border-box;
-  background: #ffffff !important; /* Pure white page background */
+  background: #0B0D10 !important; /* Seamless dark page background */
   color: var(--text);
   font-family: var(--font);
   font-size: 12.5px;
@@ -92,22 +93,24 @@ body.caption-editor-page {
   flex-direction: column;
 }
 
-/* ─── 15PX FRAMED MAIN CONTAINER: COMPLETELY BLACK (45px Radius, No Border) ─ */
+/* ─── FULL-WIDTH SEAMLESS MAIN CONTAINER (No black frame, no box border radius) ─ */
 .ce-main-container {
   position: relative;
   z-index: 10;
   width: 100%;
   height: 100%;
-  background: #000000 !important;
+  background: transparent !important;
   border: none !important;
-  border-radius: 45px !important;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  border-radius: 0 !important;
+  box-shadow: none !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 8px 12px 10px 12px !important;
+  box-sizing: border-box !important;
 }
 
-/* Hide ambient glow spheres & background grid on white background */
+/* Hide ambient glow spheres & background grid */
 body.caption-editor-page .scene,
 body.caption-editor-page .scene-grid {
   display: none !important;
@@ -1552,79 +1555,78 @@ body.caption-editor-page .scene-grid {
   font-size: 13px;
 }
 
-/* ─── CARD 4: PRESETS (67PX X 60PX BOXES) & EXPORT ───────── */
+/* ─── CARD 4: PRESETS RESPONSIVE GRID ───────── */
 .presets-grid {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 0 !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  padding: 4px 0 !important;
-  flex: 1;
-  min-height: 0;
+  display: grid !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 6px !important;
+  margin: 6px 0 8px 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
-/* EXACT 67PX X 60PX PRESET BOXES (-3px width) — 35PX RADIUS — 5PX MARGIN */
 .preset-card {
-  width: 67px !important;
-  height: 60px !important;
-  min-width: 67px !important;
-  min-height: 60px !important;
-  max-width: 67px !important;
-  max-height: 60px !important;
-  margin: 5px !important;
-  padding: 4px 2px !important;
-  border-radius: 35px !important;
-  border: none !important;
-  background: #1c1d22 !important;
+  width: 100% !important;
+  height: 50px !important;
+  min-width: 0 !important;
+  min-height: 50px !important;
+  max-width: 100% !important;
+  max-height: 50px !important;
+  margin: 0 !important;
+  padding: 4px 6px !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: #1A1E26 !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
-  gap: 2px !important;
+  gap: 3px !important;
   cursor: pointer;
-  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.15s ease;
   user-select: none;
   overflow: hidden;
   position: relative;
+  box-sizing: border-box !important;
 }
 
 .preset-card:hover {
-  background: #25272e !important;
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  background: #232834 !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  transform: translateY(-1px);
 }
 
-.preset-card--active {
-  background: rgba(255, 255, 255, 0.22) !important;
-  box-shadow: 0 0 0 2px #ffffff, 0 4px 14px rgba(255, 255, 255, 0.4) !important;
-  transform: scale(1.04);
+.preset-card--active,
+.preset-card.is-active {
+  background: #1E2533 !important;
+  border: 1.5px solid #FFE600 !important;
+  box-shadow: 0 0 10px rgba(255, 230, 0, 0.35) !important;
 }
 
-/* 20px RADIUS FOR PRESET SWATCH INSIDE 67x60 BOX */
 .preset-swatch {
-  height: 22px !important;
-  width: 86% !important;
-  border-radius: 20px !important;
+  height: 20px !important;
+  width: 90% !important;
+  border-radius: 6px !important;
   border: none !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   font-size: 11px !important;
-  font-weight: 900 !important;
+  font-weight: 800 !important;
   letter-spacing: 0.02em;
+  flex-shrink: 0 !important;
 }
 
 .preset-name {
-  font-size: 8px !important;
-  font-weight: 700 !important;
-  color: var(--text-2) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #E2E8F0 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  max-width: 58px !important;
+  max-width: 100% !important;
   text-align: center !important;
+  line-height: 1.1 !important;
 }
 
 .preset-desc {

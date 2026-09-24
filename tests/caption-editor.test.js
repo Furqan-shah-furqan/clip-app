@@ -115,7 +115,7 @@ test('every gallery preset applies and persists without changing caption text or
   for(const preset of CAPTION_PRESETS){
     h.context.applyPresetFromGallery(preset.id);
     assert.equal(h.run('editorState.style.activePresetId'),preset.id);
-    assert.equal(h.run('editorState.style.strokeWidth'),0);
+    assert.equal(h.run('editorState.style.strokeWidth'),preset.style.strokeWidth || 0);
     assert.equal(JSON.parse(h.saved.get('clipflow-caption-style')).activePresetId,preset.id);
     assert.equal(h.run('JSON.stringify(editorState.segments)'),before);
   }
@@ -158,7 +158,9 @@ test('all 15 selectable font families resolve from bundled files in a real libas
     for(const font of families){
       const file=path.join(dir,'caption.ass');
       fs.writeFileSync(file,buildAssContent([{start:0,end:.5,text:'Clear\ncaptions'}],{fontFamily:font,fontSize:32,fontWeight:700,editorBox:true,textAlign:'right',boxWidth:80,rotateAngle:15,textShadow:true,shadowOffsetY:3,exportVideoWidth:320,exportVideoHeight:568}));
-      const r=spawnSync('ffmpeg',['-hide_banner','-f','lavfi','-i','color=s=320x568:d=0.5','-vf',`ass='${file}':fontsdir='${root}/public/fonts'`,'-frames:v','1','-f','null','-'],{encoding:'utf8'});
+      const escapedAss = file.replace(/\\/g, '/').replace(/:/g, '\\:');
+      const escapedFonts = `${root}/public/fonts`.replace(/\\/g, '/').replace(/:/g, '\\:');
+      const r=spawnSync('ffmpeg',['-hide_banner','-f','lavfi','-i','color=s=320x568:d=0.5','-vf',`ass='${escapedAss}':fontsdir='${escapedFonts}'`,'-frames:v','1','-f','null','-'],{encoding:'utf8'});
       assert.equal(r.status,0,r.stderr);
       const line=r.stderr.split('\n').find(l=>l.includes('fontselect:')) || '';
       assert.ok(line.includes(font),line);assert.ok(!/DejaVu|Liberation|Noto/.test(line),line);

@@ -74,7 +74,8 @@ function getArtifactPaths(videoPath) {
 
 function runCommand(command, args, options = {}) {
   return new Promise((resolve, reject) => {
-    const proc = spawn(command, args, { windowsHide: true, ...options });
+    const isBatch = process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
+    const proc = spawn(command, args, { windowsHide: true, shell: isBatch, ...options });
     let stdout = "", stderr = "";
     proc.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     proc.stderr.on("data", (chunk) => { stderr = (stderr + chunk.toString()).slice(-16000); });

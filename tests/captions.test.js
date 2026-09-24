@@ -121,9 +121,14 @@ test('client polls processing jobs, deduplicates calls, and exposes failures', a
 test('caption routes: real FFmpeg extraction, stub ASR, polling, cache isolation, missing files, and process timeout', async t => {
   // The ASR fixture verifies orchestration only; it is not a speech-recognition quality test.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(),'clip-caption-test-'));
-  const fakePython = path.join(dir,'python-fixture');
+  const fakePython = path.join(dir, process.platform === 'win32' ? 'python-fixture.cmd' : 'python-fixture');
   const countPath = path.join(dir,'count');
-  fs.writeFileSync(fakePython, `#!/usr/bin/env node\nconst fs=require('fs');\nconst wav=process.argv[3];\nif (!fs.readFileSync(wav).subarray(0,4).equals(Buffer.from('RIFF'))) process.exit(1);\nfs.appendFileSync(${JSON.stringify(countPath)},'1');\nsetTimeout(()=>console.log(JSON.stringify({segments:[{start:0,end:0.8,text:'hello',words:[{word:'hello',start:0,end:0.8}]}]})),100);\n`,{mode:0o755});
+  const fixtureJs = path.join(dir, 'fixture.js');
+  fs.writeFileSync(fixtureJs, `const fs=require('fs');\nconst wav=process.argv[3];\nif (!fs.readFileSync(wav).subarray(0,4).equals(Buffer.from('RIFF'))) process.exit(1);\nfs.appendFileSync(${JSON.stringify(countPath)},'1');\nsetTimeout(()=>console.log(JSON.stringify({segments:[{start:0,end:0.8,text:'hello',words:[{word:'hello',start:0,end:0.8}]}]})),100);\n`);
+  const scriptContent = process.platform === 'win32'
+    ? `@node "${fixtureJs}" %*`
+    : `#!/usr/bin/env node\nconst fs=require('fs');\nconst wav=process.argv[3];\nif (!fs.readFileSync(wav).subarray(0,4).equals(Buffer.from('RIFF'))) process.exit(1);\nfs.appendFileSync(${JSON.stringify(countPath)},'1');\nsetTimeout(()=>console.log(JSON.stringify({segments:[{start:0,end:0.8,text:'hello',words:[{word:'hello',start:0,end:0.8}]}]})),100);\n`;
+  fs.writeFileSync(fakePython, scriptContent, {mode:0o755});
   const previousPython = process.env.PYTHON_PATH;
   process.env.PYTHON_PATH = fakePython;
   const filename = path.join(root,'server/routes/captions.js');

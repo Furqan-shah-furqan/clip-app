@@ -12,9 +12,10 @@ html:has(.caption-editor-page),
 body.caption-editor-page {
   height: 100vh !important;
   max-height: 100vh !important;
+  width: 100vw !important;
   overflow: hidden !important;
   margin: 0 !important;
-  padding: 10px !important;
+  padding: 0 !important;
   box-sizing: border-box !important;
   background-color: #0B0D10 !important;
   color: #FFFFFF !important;
@@ -24,36 +25,40 @@ body.caption-editor-page {
 }
 
 .caption-editor-page .ce-main-container {
-  height: 100% !important;
-  max-height: calc(100vh - 20px) !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  width: 100% !important;
   overflow: hidden !important;
   display: flex !important;
   flex-direction: column !important;
   background: transparent !important;
   border: none !important;
+  border-radius: 0 !important;
   outline: none !important;
   box-shadow: none !important;
+  padding: 8px 12px 10px 12px !important;
+  box-sizing: border-box !important;
 }
 
-/* ─── PART 2: TOP NAVIGATION BAR (EXACTLY 50PX) ─── */
+/* ─── PART 2: TOP NAVIGATION BAR ─── */
 .ce-topbar {
-  height: 50px !important;
-  min-height: 50px !important;
-  max-height: 50px !important;
-  padding: 0 16px !important;
-  margin: 0 0 10px 0 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  padding: 0 14px !important;
+  margin: 0 0 8px 0 !important;
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
   justify-content: space-between !important;
   background-color: #15181E !important;
-  border-radius: 35px !important;
-  border: none !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
   outline: none !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25) !important;
   flex-shrink: 0 !important;
   box-sizing: border-box !important;
-  gap: 12px !important;
+  gap: 10px !important;
 }
 
 .ce-topbar-left,
@@ -188,8 +193,8 @@ body.caption-editor-page {
 /* ─── MAIN FIRST-FOLD LAYOUT (80/20 INVERTED GRID) ─── */
 .ce-shell {
   flex: 1 1 auto !important;
-  height: calc(100vh - 70px) !important;
-  max-height: calc(100vh - 70px) !important;
+  height: calc(100vh - 62px) !important;
+  max-height: calc(100vh - 62px) !important;
   overflow: hidden !important;
   padding: 0 !important;
   margin: 0 !important;
@@ -200,11 +205,11 @@ body.caption-editor-page {
 
 .ce-layout {
   display: grid !important;
-  grid-template-columns: minmax(0, 4fr) minmax(340px, 1fr) !important;
-  gap: 12px !important;
+  grid-template-columns: minmax(0, 1fr) 308px !important;
+  gap: 10px !important;
   align-items: stretch !important;
   height: 100% !important;
-  max-height: calc(100vh - 70px) !important;
+  max-height: calc(100vh - 62px) !important;
   overflow: hidden !important;
   width: 100% !important;
   margin: 0 auto !important;
@@ -218,26 +223,25 @@ body.caption-editor-page {
   grid-template-rows: 1fr 1fr !important;
   gap: 8px !important;
   height: 100% !important;
-  max-height: calc(100vh - 70px) !important;
+  max-height: calc(100vh - 62px) !important;
   overflow: hidden !important;
   width: 100% !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
 }
 
-/* ─── PART 3: ZERO-BORDER POLICY & STRICT TOKENS ─── */
-/* Card Containers: #15181E, 35px Radius, Zero Border */
+/* ─── CARD CONTAINERS: #15181E, 14px Radius, Zero Border ─── */
 .ce-card {
   background-color: #15181E !important;
-  border-radius: 35px !important;
-  border: none !important;
+  border-radius: 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
   outline: none !important;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3) !important;
-  padding: 12px !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22) !important;
+  padding: 10px 12px !important;
   display: flex !important;
   flex-direction: column !important;
   justify-content: flex-start !important;
-  gap: 6px !important;
+  gap: 4px !important;
   min-width: 0 !important;
   height: 100% !important;
   overflow: hidden !important;
@@ -721,55 +725,79 @@ body.caption-editor-page {
   font-weight: 700 !important;
 }
 
-/* Preset Cards Grid (8 styles in 2 columns, compact 24px buttons) */
+/* Preset Cards Grid (8 styles in clean 4-column responsive grid) */
 .presets-grid {
   display: grid !important;
-  grid-template-columns: repeat(2, 1fr) !important;
-  gap: 4px !important;
-  margin: 2px 0 !important;
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 6px !important;
+  margin: 4px 0 6px 0 !important;
   width: 100% !important;
-}
-
-.preset-card {
-  height: 26px !important;
-  min-height: 26px !important;
-  padding: 0 8px !important;
-  border-radius: 15px !important;
-  background-color: #1E232B !important;
-  border: none !important;
-  outline: none !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
   box-sizing: border-box !important;
 }
 
+.preset-card {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 4px 6px !important;
+  border-radius: 8px !important;
+  background-color: #1A1E26 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  outline: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
 .preset-card:hover {
-  background-color: #282F3B !important;
+  background-color: #232834 !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  transform: translateY(-1px) !important;
 }
 
 .preset-card.is-active,
 .preset-card.preset-card--active {
-  background-color: #2A3342 !important;
-  box-shadow: inset 0 0 0 1.5px #FFE600 !important;
-}
-
-.preset-card-name {
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: #FFFFFF !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
+  background-color: #1E2533 !important;
+  border: 1.5px solid #FFE600 !important;
+  box-shadow: 0 0 10px rgba(255, 230, 0, 0.35) !important;
 }
 
 .preset-swatch {
-  width: 10px !important;
-  height: 10px !important;
+  width: 88% !important;
+  height: 19px !important;
+  min-height: 19px !important;
   border-radius: 5px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.02em !important;
   flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+}
+
+.preset-name,
+.preset-card-name {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: #E2E8F0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  text-align: center !important;
+  line-height: 1.1 !important;
 }
 
 /* Hero Download Button */
@@ -906,26 +934,31 @@ body.caption-editor-page {
 .caption-video-overlay {
   position: absolute !important;
   z-index: 20 !important;
-  display: inline-flex !important;
+  display: flex !important;
+  flex-direction: column !important;
   align-items: center !important;
   justify-content: center !important;
   text-align: center !important;
   pointer-events: auto !important;
   box-sizing: border-box !important;
   cursor: pointer !important;
+  width: auto !important;
+  max-width: 92% !important;
 }
 
 .caption-video-text {
   display: block !important;
   width: 100% !important;
+  max-width: 100% !important;
   white-space: normal !important;
   word-break: normal !important;
-  overflow-wrap: anywhere !important;
+  overflow-wrap: break-word !important;
   pointer-events: auto !important;
   text-align: inherit !important;
   color: #FFFFFF !important;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85), 0 0 2px rgba(0, 0, 0, 0.95) !important;
   box-sizing: border-box !important;
+  line-height: 1.25 !important;
 }
 
 .caption-video-text .cap-row {
@@ -1088,10 +1121,15 @@ body.caption-editor-page {
 
 /* CapCut Bounding Box */
 .cap-box-frame {
+  position: absolute !important;
   inset: 0 !important;
   border-radius: 4px !important;
   box-shadow: none !important;
   border: 1px dashed rgba(255, 255, 255, 0.6) !important;
+  pointer-events: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box !important;
 }
 
 .caption-video-overlay.is-editing {
