@@ -2699,6 +2699,9 @@ function applyStyleToOverlay() {
   }
 
   updatePositionUI();
+
+  // ── Sync permanent caption layer with updated style ──────────────────────
+  if (typeof window.pclRefresh === "function") window.pclRefresh();
 }
 
 // Editor-only geometry. Clip extraction and speech timestamps are untouched.
@@ -3704,6 +3707,10 @@ function applyPresetFromGallery(id) {
   syncCaptionOverlay();
   updateLivePreview();
   persistCaptions();
+
+  // Notify the permanent caption engine of preset change
+  if (typeof window.pclRefresh === "function") window.pclRefresh();
+  document.dispatchEvent(new CustomEvent("captionPresetApplied", { detail: { id } }));
 
   renderPresetsGalleryGrid();
 }
@@ -4743,3 +4750,272 @@ window.normalizeStyle = normalizeStyle;
 if (document.readyState === "loading")
   document.addEventListener("DOMContentLoaded", init);
 else init();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERMANENT CAPTION OVERLAY ENGINE
+// Isolated, zero-dependency subtitle renderer.
+// Wired directly to video.timeupdate — no timers, no setInterval, no canvas.
+// Mounted on #permanent-caption-layer inside .caption-video-wrap.
+// Handles ms vs s timestamps, active word highlighting, and style linkage.
+// ─────────────────────────────────────────────────────────────────────────────
+(function mountPermanentCaptionEngine() {
+  "use strict";
+
+  /** @type {HTMLDivElement|null} */
+  let _pclLayer = null;
+  /** @type {HTMLVideoElement|null} */
+  let _pclVideo = null;
+
+  // Per-render cache to avoid redundant DOM mutations
+  let _pclLastSegId = null;
+  let _pclLastActiveWordIdx = -2;
+  let _pclLastFontSize = null;
+  let _pclLastColor = null;
+  let _pclLastHighlight = null;
+
+  /**
+   * Safely normalise a raw timestamp value to seconds.
+   * Whisper sometimes returns milliseconds (start > 1000 heuristic).
+   * @param {number} raw
+   * @returns {number} seconds
+   */
+  function _normTs(raw) {
+    const n = Number(raw) || 0;
+    // If the value looks like milliseconds (first segment start > 1000), divide by 1000.
+    return n > 1000 ? n / 1000 : n;
+  }
+
+  /**
+   * Get the current segments array from the shared editorState.
+   * Tolerates undefined captionData gracefully.
+   * @returns {Array}
+   */
+  function _getSegments() {
+    try {
+      const segs =
+        (window.captionData && Array.isArray(window.captionData.segments) && window.captionData.segments.length)
+          ? window.captionData.segments
+          : (window.editorState && Array.isArray(window.editorState.segments))
+            ? window.editorState.segments
+            : [];
+      return segs;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /**
+   * Derive current style overrides from editorState or form controls.
+   * @returns {{ fontSize: number, fontFamily: string, activeColor: string, inactiveColor: string, highlightColor: string }}
+   */
+  function _getStyleConfig() {
+    try {
+      const s = (window.editorState && window.editorState.style) ? window.editorState.style : {};
+      // Font size — prefer editorState, fallback to DOM
+      const fsEl = document.getElementById("capFontSize");
+      const fontSize = Number(s.fontSize) || (fsEl ? Number(fsEl.value) : 28) || 28;
+      // Font family
+      const fontFamily = s.fontFamily || "'Montserrat', sans-serif";
+      // Active highlight color (#FFE600 default from design tokens)
+      const highlightColor = (s.highlightColor && s.highlightColor !== "transparent") ? s.highlightColor : "#FFE600";
+      // Text color
+      const textColor = s.textColor || "#FFFFFF";
+      // Scale font to the phone preview (phone screen ≈ 300px, phone is 9:16, render size ~= fontSize * 0.8 for preview)
+      const previewFontSize = Math.max(10, Math.round(fontSize * 0.78));
+      return { fontSize: previewFontSize, fontFamily, activeColor: "#000000", inactiveColor: textColor, highlightColor };
+    } catch (_) {
+      return { fontSize: 22, fontFamily: "'Montserrat', sans-serif", activeColor: "#000000", inactiveColor: "#FFFFFF", highlightColor: "#FFE600" };
+    }
+  }
+
+  /**
+   * Main render function. Called on every timeupdate event.
+   * @param {number} currentTime  video.currentTime in seconds
+   */
+  function _pclRender(currentTime) {
+    if (!_pclLayer) return;
+    const t = Number.isFinite(currentTime) ? currentTime : 0;
+    const segments = _getSegments();
+    if (!segments.length) {
+      if (_pclLayer.innerHTML !== "") _pclLayer.innerHTML = "";
+      _pclLastSegId = null;
+      return;
+    }
+
+    // Find the active segment — normalise timestamps on-the-fly
+    let activeSeg = null;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (!seg) continue;
+      const start = _normTs(seg.start);
+      const end = _normTs(seg.end);
+      if (t >= (start - 0.08) && t <= (end + 0.08)) {
+        activeSeg = seg;
+        break;
+      }
+    }
+
+    // Hide if nothing is active
+    if (!activeSeg) {
+      if (_pclLastSegId !== "__none__") {
+        _pclLayer.innerHTML = "";
+        _pclLastSegId = "__none__";
+        _pclLastActiveWordIdx = -2;
+      }
+      return;
+    }
+
+    // Find the active word index inside the segment
+    let activeWordIdx = -1;
+    const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
+    if (words.length) {
+      for (let w = 0; w < words.length; w++) {
+        const ws = _normTs(words[w].start);
+        const we = _normTs(words[w].end);
+        if (t >= (ws - 0.08) && t <= (we + 0.08)) {
+          activeWordIdx = w;
+          break;
+        }
+      }
+      // If not exactly in a word boundary, use the last word whose start ≤ currentTime
+      if (activeWordIdx === -1) {
+        for (let w = words.length - 1; w >= 0; w--) {
+          if (_normTs(words[w].start) <= t + 0.08) {
+            activeWordIdx = w;
+            break;
+          }
+        }
+      }
+    }
+
+    const cfg = _getStyleConfig();
+
+    // Bail if nothing has changed — avoid redundant DOM mutations
+    const segId = activeSeg.id || activeSeg.text || String(activeSeg.start);
+    if (
+      segId === _pclLastSegId &&
+      activeWordIdx === _pclLastActiveWordIdx &&
+      cfg.fontSize === _pclLastFontSize &&
+      cfg.inactiveColor === _pclLastColor &&
+      cfg.highlightColor === _pclLastHighlight
+    ) {
+      return;
+    }
+    _pclLastSegId = segId;
+    _pclLastActiveWordIdx = activeWordIdx;
+    _pclLastFontSize = cfg.fontSize;
+    _pclLastColor = cfg.inactiveColor;
+    _pclLastHighlight = cfg.highlightColor;
+
+    // Split segment text into display words
+    const rawText = (activeSeg.text || "").trim();
+    if (!rawText) {
+      _pclLayer.innerHTML = "";
+      return;
+    }
+    const displayWords = rawText.split(/\s+/).filter(Boolean);
+
+    // Determine whether we can do word-level highlighting
+    // (word array either matches tokens or we fall back to position-based estimation)
+    const hasWordTimings = words.length > 0;
+    let effectiveActiveWordIdx = activeWordIdx;
+    if (!hasWordTimings && displayWords.length > 1) {
+      // Estimate active word by position within segment duration
+      const segStart = _normTs(activeSeg.start);
+      const segEnd = _normTs(activeSeg.end);
+      const segDur = Math.max(0.01, segEnd - segStart);
+      const progress = Math.min(1, Math.max(0, (t - segStart) / segDur));
+      effectiveActiveWordIdx = Math.floor(progress * displayWords.length);
+    }
+
+    // Build the HTML — use CSS classes defined in captionEditorLayout.css
+    const parts = displayWords.map((word, i) => {
+      const isActive = i === effectiveActiveWordIdx;
+      const escapedWord = word
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      if (isActive) {
+        return `<span class="pcl-word pcl-word--active" style="color:${cfg.activeColor};background:${cfg.highlightColor};font-size:${cfg.fontSize}px;font-family:${cfg.fontFamily};">${escapedWord}</span>`;
+      }
+      return `<span class="pcl-word pcl-word--inactive" style="color:${cfg.inactiveColor};font-size:${cfg.fontSize}px;font-family:${cfg.fontFamily};">${escapedWord}</span>`;
+    });
+
+    _pclLayer.innerHTML = parts.join(" ");
+  }
+
+  /**
+   * Force a re-render immediately (called when style controls change).
+   */
+  function _pclRefresh() {
+    // Bust cache so next render rebuilds DOM even if seg/word didn't change
+    _pclLastSegId = null;
+    _pclLastActiveWordIdx = -2;
+    _pclLastFontSize = null;
+    _pclLastColor = null;
+    _pclLastHighlight = null;
+    if (_pclVideo) _pclRender(_pclVideo.currentTime || 0);
+  }
+
+  /**
+   * Mount the engine once the DOM and video element are ready.
+   */
+  function _pclMount() {
+    _pclLayer = document.getElementById("permanent-caption-layer");
+    _pclVideo = document.getElementById("captionVideo");
+
+    if (!_pclLayer || !_pclVideo) {
+      // Retry once after a short delay in case DOM isn't ready
+      setTimeout(_pclMount, 400);
+      return;
+    }
+
+    // ── Primary sync hook: video timeupdate ──────────────────────────────────
+    _pclVideo.addEventListener("timeupdate", () => {
+      _pclRender(_pclVideo.currentTime);
+    });
+
+    // ── Supplementary hooks for seek / pause / play ──────────────────────────
+    _pclVideo.addEventListener("seeked",  () => _pclRender(_pclVideo.currentTime));
+    _pclVideo.addEventListener("seeking", () => _pclRender(_pclVideo.currentTime));
+    _pclVideo.addEventListener("play",    () => { _pclRefresh(); _pclRender(_pclVideo.currentTime); });
+    _pclVideo.addEventListener("loadedmetadata", () => _pclRender(_pclVideo.currentTime));
+
+    // ── Style control linkage ─────────────────────────────────────────────────
+    // Font size slider
+    const fontSizeEl = document.getElementById("capFontSize");
+    if (fontSizeEl) fontSizeEl.addEventListener("input", _pclRefresh);
+
+    // Text color picker
+    const textColorEl = document.getElementById("capTextColor");
+    if (textColorEl) textColorEl.addEventListener("input", _pclRefresh);
+
+    // Highlight/active color picker
+    const highlightColorEl = document.getElementById("capHighlightColor");
+    if (highlightColorEl) highlightColorEl.addEventListener("input", _pclRefresh);
+
+    // Font family selector
+    const fontFamilyEl = document.getElementById("capFontFamily");
+    if (fontFamilyEl) fontFamilyEl.addEventListener("change", _pclRefresh);
+
+    // Preset cards — refresh when any preset is applied
+    document.addEventListener("captionPresetApplied", _pclRefresh);
+
+    // Expose refresh on window so applyStyleToOverlay / handlePresetSelection can call it
+    window.pclRefresh = _pclRefresh;
+
+    // Initial render (in case video is already at t > 0 on load)
+    _pclRender(_pclVideo.currentTime || 0);
+  }
+
+  // Boot: defer until after init() has set up the DOM
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setTimeout(_pclMount, 300));
+  } else {
+    setTimeout(_pclMount, 300);
+  }
+
+  // Expose for debugging
+  window._pclEngine = { render: _pclRender, refresh: _pclRefresh };
+}());
+
