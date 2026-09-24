@@ -645,6 +645,25 @@ function hexToRgba(hex = "#000000", opacityPercent = 100) {
   const alpha = Math.max(0, Math.min(1, opacityPercent / 100));
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
+function toHexColor(color, fallback = "#000000") {
+  if (!color || typeof color !== "string") return fallback;
+  const c = color.trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(c)) return c;
+  if (/^#[0-9a-f]{3}$/.test(c)) {
+    return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`;
+  }
+  if (c === "transparent") return fallback;
+  if (c.startsWith("rgba") || c.startsWith("rgb")) {
+    const match = c.match(/[\d.]+/g);
+    if (match && match.length >= 3) {
+      const r = Math.min(255, Math.max(0, parseInt(match[0], 10) || 0)).toString(16).padStart(2, "0");
+      const g = Math.min(255, Math.max(0, parseInt(match[1], 10) || 0)).toString(16).padStart(2, "0");
+      const b = Math.min(255, Math.max(0, parseInt(match[2], 10) || 0)).toString(16).padStart(2, "0");
+      return `#${r}${g}${b}`;
+    }
+  }
+  return fallback;
+}
 function secondsToClock(totalSeconds) {
   const safe = Math.max(0, Number(totalSeconds) || 0);
   const hrs = Math.floor(safe / 3600);
@@ -766,28 +785,20 @@ function getClipSource(clip = {}) {
 
     if (!isPlayableVideoUrl(trimmed)) continue;
 
-    // Relative endpoint or server static path
-    if (
-      trimmed.startsWith("/api/files/download/") ||
-      trimmed.startsWith("/exports/") ||
-      trimmed.startsWith("/uploads/") ||
-      trimmed.startsWith("/captions/")
-    ) {
+    // Relative endpoint or server static path already pointing to streaming endpoints
+    if (trimmed.startsWith("/clips/") || trimmed.startsWith("/public/renders/")) {
       return trimmed;
     }
 
-    // Absolute HTTP/HTTPS URL
+    // Absolute HTTP/HTTPS URL from external domain
     if (/^https?:\/\//i.test(trimmed)) {
       if (!trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
+        const urlObj = new URL(trimmed, window.location.origin);
+        const pathFn = urlObj.pathname.split("/").pop();
+        if (pathFn && pathFn.toLowerCase().endsWith(".mp4") && urlObj.origin === window.location.origin) {
+          return `/clips/${encodeURIComponent(pathFn)}`;
+        }
         return trimmed;
-      }
-      const pathOnly = trimmed.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, "");
-      if (
-        pathOnly.startsWith("/api/files/download/") ||
-        pathOnly.startsWith("/exports/") ||
-        pathOnly.startsWith("/uploads/")
-      ) {
-        return pathOnly;
       }
     }
 
@@ -796,7 +807,15 @@ function getClipSource(clip = {}) {
     const rawFn = normalized.split("/").pop();
     const fn = rawFn ? rawFn.split(/[?#]/)[0] : "";
     if (fn && fn.toLowerCase().endsWith(".mp4")) {
-      return `/api/files/download/${encodeURIComponent(fn)}`;
+      return `/clips/${encodeURIComponent(fn)}`;
+    }
+    if (
+      trimmed.startsWith("/api/files/download/") ||
+      trimmed.startsWith("/exports/") ||
+      trimmed.startsWith("/uploads/") ||
+      trimmed.startsWith("/captions/")
+    ) {
+      return trimmed;
     }
     if (fn) {
       return `/api/files/download/${encodeURIComponent(fn)}`;
@@ -2343,23 +2362,26 @@ function updateShadowControlsState() {
 function updateColorSwatchState() {
   if (!colorSwatchButtons.length) return;
   const map = {
-    capTextColor: (capTextColor?.value || "").toLowerCase(),
-    capBgColor: (capBgColor?.value || "").toLowerCase(),
-    capShadowColor: (capShadowColor?.value || "").toLowerCase(),
+    capTextColor: toHexColor(capTextColor?.value, "#ffffff").toLowerCase(),
+    capBgColor: toHexColor(capBgColor?.value, "#000000").toLowerCase(),
+    capShadowColor: toHexColor(capShadowColor?.value, "#000000").toLowerCase(),
   };
-  colorSwatchButtons.forEach((btn) =>
+  colorSwatchButtons.forEach((btn) => {
+    const target = btn.dataset.target;
+    const targetVal = map[target];
+    const swatchVal = toHexColor(btn.dataset.value, "").toLowerCase();
     btn.classList.toggle(
       "active",
-      map[btn.dataset.target] === (btn.dataset.value || "").toLowerCase(),
-    ),
-  );
+      Boolean(targetVal && swatchVal && targetVal === swatchVal),
+    );
+  });
 }
 function bindColorSwatches() {
   colorSwatchButtons.forEach((btn) =>
     btn.addEventListener("click", () => {
       const target = document.getElementById(btn.dataset.target);
       if (target && btn.dataset.value) {
-        target.value = btn.dataset.value;
+        target.value = toHexColor(btn.dataset.value, target.value || "#000000");
         syncStyleFromControls();
         updateColorSwatchState();
       }
@@ -3095,15 +3117,15 @@ function populateStyleControls() {
   if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
   if (capLineSpacing) capLineSpacing.value = String(s.lineSpacing ?? 1.35);
   if (capLineSpacingVal) capLineSpacingVal.textContent = `${Number(s.lineSpacing ?? 1.35).toFixed(2)}x`;
-  if (capTextColor) capTextColor.value = s.textColor;
-  if (capBgColor) capBgColor.value = s.bgColor;
+  if (capTextColor) capTextColor.value = toHexColor(s.textColor, "#ffffff");
+  if (capBgColor) capBgColor.value = toHexColor(s.bgColor, "#000000");
   if (capBgOpacity) capBgOpacity.value = String(s.bgOpacity);
   if (capBgOpacityVal) capBgOpacityVal.textContent = String(s.bgOpacity);
   if (capBoxPadding) capBoxPadding.value = String(parseInt(s.paddingX ?? 14, 10) || 14);
   if (capBoxPaddingVal) capBoxPaddingVal.textContent = String(parseInt(s.paddingX ?? 14, 10) || 14);
   if (capBoxSizeLabel) capBoxSizeLabel.textContent = `${s.fontSize ?? 28}px`;
   if (capTextShadow) capTextShadow.checked = Boolean(s.textShadow && s.textShadow !== "none");
-  if (capShadowColor) capShadowColor.value = s.shadowColor;
+  if (capShadowColor) capShadowColor.value = toHexColor(s.shadowColor, "#000000");
   if (capShadowBlur) capShadowBlur.value = String(s.shadowBlur);
   if (capShadowBlurVal) capShadowBlurVal.textContent = String(s.shadowBlur);
   if (capShadowOffsetX) capShadowOffsetX.value = String(s.shadowOffsetX);
@@ -3123,7 +3145,7 @@ function populateStyleControls() {
 
   if (capStrokeWidth) capStrokeWidth.value = String(s.strokeWidth ?? 0);
   if (capStrokeWidthVal) capStrokeWidthVal.textContent = String(s.strokeWidth ?? 0);
-  if (capStrokeColor) capStrokeColor.value = s.strokeColor || "#000000";
+  if (capStrokeColor) capStrokeColor.value = toHexColor(s.strokeColor, "#000000");
 
   if (capGlowIntensity) capGlowIntensity.value = String(s.glowIntensity ?? 0);
   if (capGlowIntensityVal) capGlowIntensityVal.textContent = String(s.glowIntensity ?? 0);
@@ -3162,8 +3184,8 @@ function syncStyleFromControls(options = {}) {
     0.8,
     2.5,
   );
-  editorState.style.textColor = capTextColor?.value || "#fff";
-  editorState.style.bgColor = capBgColor?.value || "#000";
+  editorState.style.textColor = toHexColor(capTextColor?.value, "#ffffff");
+  editorState.style.bgColor = toHexColor(capBgColor?.value, "#000000");
   editorState.style.bgOpacity = clamp(
     parseInt(capBgOpacity?.value || "70", 10),
     0,
@@ -3175,7 +3197,7 @@ function syncStyleFromControls(options = {}) {
     editorState.style.paddingY = Math.max(2, Math.round(pad * 0.7));
   }
   editorState.style.textShadow = Boolean(capTextShadow?.checked);
-  editorState.style.shadowColor = capShadowColor?.value || "#000";
+  editorState.style.shadowColor = toHexColor(capShadowColor?.value, "#000000");
   editorState.style.shadowBlur = clamp(
     parseInt(capShadowBlur?.value || "8", 10),
     0,
@@ -3211,7 +3233,7 @@ function syncStyleFromControls(options = {}) {
     0,
     10,
   );
-  editorState.style.strokeColor = capStrokeColor?.value || "#000000";
+  editorState.style.strokeColor = toHexColor(capStrokeColor?.value, "#000000");
   editorState.style.glowIntensity = clamp(
     parseInt(capGlowIntensity?.value || "0", 10),
     0,
@@ -4656,6 +4678,13 @@ async function init() {
       captionVideo.addEventListener("error", () => {
         const currentSrc = captionVideo.getAttribute("src") || captionVideo.src || "";
         const fn = currentSrc.split(/[/\\]/).pop()?.split(/[?#]/)[0];
+        if (fn && !currentSrc.startsWith("/clips/") && !captionVideo.dataset.triedClips) {
+          captionVideo.dataset.triedClips = "true";
+          captionVideo.src = `/clips/${encodeURIComponent(fn)}`;
+          captionVideo.load();
+          updatePlaybackUI();
+          return;
+        }
         if (currentSrc.includes("/api/files/download/") && fn && !captionVideo.dataset.triedExports) {
           captionVideo.dataset.triedExports = "true";
           captionVideo.src = `/exports/${fn}`;
@@ -4936,9 +4965,9 @@ else init();
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
       if (isActive) {
-        return `<span class="pcl-word pcl-word--active" style="color:${cfg.activeColor};background:${cfg.highlightColor};font-size:${cfg.fontSize}px;font-family:${cfg.fontFamily};">${escapedWord}</span>`;
+        return `<span class="pcl-word pcl-word--active" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:${cfg.activeColor || '#000000'};background:${cfg.highlightColor || '#FFE600'};transform:scale(1.15);text-shadow:none;">${escapedWord}</span>`;
       }
-      return `<span class="pcl-word pcl-word--inactive" style="color:${cfg.inactiveColor};font-size:${cfg.fontSize}px;font-family:${cfg.fontFamily};">${escapedWord}</span>`;
+      return `<span class="pcl-word pcl-word--inactive" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:${cfg.inactiveColor || '#FFFFFF'};background:transparent;transform:scale(1);text-shadow:0 2px 6px rgba(0,0,0,0.9);">${escapedWord}</span>`;
     });
 
     _pclLayer.innerHTML = parts.join(" ");
@@ -4970,15 +4999,37 @@ else init();
       return;
     }
 
+    let _pclRafId = null;
+    function _pclLoop() {
+      if (_pclVideo && !_pclVideo.paused && !_pclVideo.ended) {
+        _pclRender(_pclVideo.currentTime);
+        _pclRafId = requestAnimationFrame(_pclLoop);
+      } else {
+        _pclRafId = null;
+      }
+    }
+
     // ── Primary sync hook: video timeupdate ──────────────────────────────────
     _pclVideo.addEventListener("timeupdate", () => {
       _pclRender(_pclVideo.currentTime);
     });
 
-    // ── Supplementary hooks for seek / pause / play ──────────────────────────
+    // ── Supplementary hooks for seek / pause / play / RAF loop ───────────────
     _pclVideo.addEventListener("seeked",  () => _pclRender(_pclVideo.currentTime));
     _pclVideo.addEventListener("seeking", () => _pclRender(_pclVideo.currentTime));
-    _pclVideo.addEventListener("play",    () => { _pclRefresh(); _pclRender(_pclVideo.currentTime); });
+    _pclVideo.addEventListener("play", () => {
+      _pclRefresh();
+      _pclRender(_pclVideo.currentTime);
+      if (!_pclRafId) _pclRafId = requestAnimationFrame(_pclLoop);
+    });
+    _pclVideo.addEventListener("pause", () => {
+      if (_pclRafId) { cancelAnimationFrame(_pclRafId); _pclRafId = null; }
+      _pclRender(_pclVideo.currentTime);
+    });
+    _pclVideo.addEventListener("ended", () => {
+      if (_pclRafId) { cancelAnimationFrame(_pclRafId); _pclRafId = null; }
+      _pclRender(_pclVideo.currentTime);
+    });
     _pclVideo.addEventListener("loadedmetadata", () => _pclRender(_pclVideo.currentTime));
 
     // ── Style control linkage ─────────────────────────────────────────────────
@@ -4989,6 +5040,10 @@ else init();
     // Text color picker
     const textColorEl = document.getElementById("capTextColor");
     if (textColorEl) textColorEl.addEventListener("input", _pclRefresh);
+
+    // Background color picker
+    const bgColorEl = document.getElementById("capBgColor");
+    if (bgColorEl) bgColorEl.addEventListener("input", _pclRefresh);
 
     // Highlight/active color picker
     const highlightColorEl = document.getElementById("capHighlightColor");

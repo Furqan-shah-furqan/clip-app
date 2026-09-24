@@ -102,6 +102,7 @@ const {
   exportsDir,
   uploadsDir,
 } = require("./utils/paths");
+const { resolveVideoPath, streamVideoFile } = require("./utils/videoStream");
 
 const app = express();
 let prisma = null;
@@ -653,6 +654,38 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// HTTP 206 Partial Content (Byte-Range Streaming) for clips, renders, exports, and uploads
+app.get(
+  [
+    "/clips/:filename",
+    "/public/renders/:filename",
+    "/renders/:filename",
+    "/exports/:filename",
+    "/uploads/:filename",
+  ],
+  (req, res, next) => {
+    const filename = req.params.filename;
+    if (
+      !filename ||
+      (!filename.toLowerCase().endsWith(".mp4") &&
+        !filename.toLowerCase().endsWith(".webm") &&
+        !filename.toLowerCase().endsWith(".mov"))
+    ) {
+      return next();
+    }
+    try {
+      const filePath = resolveVideoPath(filename);
+      if (!filePath) {
+        return res.status(404).send("Clip not found");
+      }
+      return streamVideoFile(filePath, req, res);
+    } catch (error) {
+      console.error("CLIP STREAM ERROR:", error);
+      return res.status(500).send("Error streaming clip");
+    }
+  }
+);
+
 // Static file serving
 app.use(express.static(path.join(rootDir, "public")));
 app.use("/captions", express.static(captionsDir));
@@ -1168,27 +1201,18 @@ app.get("/api/files/download/:fileName", (req, res) => {
   try {
     const rawParam = req.params.fileName ? decodeURIComponent(req.params.fileName) : "";
     const safeName = path.basename(rawParam);
-
-    const candidates = [
-      path.join(exportsDir, safeName),
-      path.join(uploadsDir, safeName),
-      path.join(captionsDir, safeName),
-      typeof subtitlesDir !== "undefined" ? path.join(subtitlesDir, safeName) : null,
-      path.join(rootDir, "exports", safeName),
-      path.join(rootDir, "uploads", safeName),
-      path.join(rootDir, safeName),
-    ].filter(Boolean);
-
-    let foundPath = null;
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate)) {
-        foundPath = candidate;
-        break;
-      }
-    }
+    const foundPath = resolveVideoPath(safeName);
 
     if (!foundPath) {
       return res.status(404).send("File not found");
+    }
+
+    if (
+      foundPath.toLowerCase().endsWith(".mp4") ||
+      foundPath.toLowerCase().endsWith(".webm") ||
+      foundPath.toLowerCase().endsWith(".mov")
+    ) {
+      return streamVideoFile(foundPath, req, res);
     }
 
     return res.sendFile(foundPath, { acceptRanges: true }, (err) => {
