@@ -1,0 +1,492 @@
+{
+  "description": "Actual faster-whisper tiny output from a 30.88s Flite slt speech fixture; clip-relative seconds.",
+  "duration": 30.88,
+  "segments": [
+    {
+      "start": 0,
+      "end": 13.94,
+      "text": "This is the beginning of our caption timing test. The first sentence should appear at the start. Now we continue speaking beyond two seconds. These words must follow the video clock. We are testing the middle of the recording with a completely different sentence.",
+      "words": [
+        {
+          "word": "This",
+          "start": 0,
+          "end": 0.38
+        },
+        {
+          "word": "is",
+          "start": 0.38,
+          "end": 0.6
+        },
+        {
+          "word": "the",
+          "start": 0.6,
+          "end": 0.76
+        },
+        {
+          "word": "beginning",
+          "start": 0.76,
+          "end": 1.06
+        },
+        {
+          "word": "of",
+          "start": 1.06,
+          "end": 1.32
+        },
+        {
+          "word": "our",
+          "start": 1.32,
+          "end": 1.56
+        },
+        {
+          "word": "caption",
+          "start": 1.56,
+          "end": 1.92
+        },
+        {
+          "word": "timing",
+          "start": 1.92,
+          "end": 2.34
+        },
+        {
+          "word": "test.",
+          "start": 2.34,
+          "end": 2.78
+        },
+        {
+          "word": "The",
+          "start": 3.08,
+          "end": 3.1
+        },
+        {
+          "word": "first",
+          "start": 3.1,
+          "end": 3.46
+        },
+        {
+          "word": "sentence",
+          "start": 3.46,
+          "end": 3.92
+        },
+        {
+          "word": "should",
+          "start": 3.92,
+          "end": 4.3
+        },
+        {
+          "word": "appear",
+          "start": 4.3,
+          "end": 4.62
+        },
+        {
+          "word": "at",
+          "start": 4.62,
+          "end": 4.94
+        },
+        {
+          "word": "the",
+          "start": 4.94,
+          "end": 5
+        },
+        {
+          "word": "start.",
+          "start": 5,
+          "end": 5.34
+        },
+        {
+          "word": "Now",
+          "start": 5.68,
+          "end": 5.68
+        },
+        {
+          "word": "we",
+          "start": 5.68,
+          "end": 5.94
+        },
+        {
+          "word": "continue",
+          "start": 5.94,
+          "end": 6.22
+        },
+        {
+          "word": "speaking",
+          "start": 6.22,
+          "end": 6.66
+        },
+        {
+          "word": "beyond",
+          "start": 6.66,
+          "end": 7.12
+        },
+        {
+          "word": "two",
+          "start": 7.12,
+          "end": 7.42
+        },
+        {
+          "word": "seconds.",
+          "start": 7.42,
+          "end": 7.84
+        },
+        {
+          "word": "These",
+          "start": 8.02,
+          "end": 8.22
+        },
+        {
+          "word": "words",
+          "start": 8.22,
+          "end": 8.56
+        },
+        {
+          "word": "must",
+          "start": 8.56,
+          "end": 8.96
+        },
+        {
+          "word": "follow",
+          "start": 8.96,
+          "end": 9.34
+        },
+        {
+          "word": "the",
+          "start": 9.34,
+          "end": 9.56
+        },
+        {
+          "word": "video",
+          "start": 9.56,
+          "end": 9.82
+        },
+        {
+          "word": "clock.",
+          "start": 9.82,
+          "end": 10.14
+        },
+        {
+          "word": "We",
+          "start": 10.42,
+          "end": 10.42
+        },
+        {
+          "word": "are",
+          "start": 10.42,
+          "end": 10.58
+        },
+        {
+          "word": "testing",
+          "start": 10.58,
+          "end": 10.94
+        },
+        {
+          "word": "the",
+          "start": 10.94,
+          "end": 11.16
+        },
+        {
+          "word": "middle",
+          "start": 11.16,
+          "end": 11.36
+        },
+        {
+          "word": "of",
+          "start": 11.36,
+          "end": 11.6
+        },
+        {
+          "word": "the",
+          "start": 11.6,
+          "end": 11.74
+        },
+        {
+          "word": "recording",
+          "start": 11.74,
+          "end": 12
+        },
+        {
+          "word": "with",
+          "start": 12,
+          "end": 12.34
+        },
+        {
+          "word": "a",
+          "start": 12.34,
+          "end": 12.54
+        },
+        {
+          "word": "completely",
+          "start": 12.54,
+          "end": 12.84
+        },
+        {
+          "word": "different",
+          "start": 12.84,
+          "end": 13.4
+        },
+        {
+          "word": "sentence.",
+          "start": 13.4,
+          "end": 13.94
+        }
+      ]
+    },
+    {
+      "start": 14.22,
+      "end": 24.92,
+      "text": "Captions should change as each new word is spoken. If we pause the video, the words should pause due. If we seek back word, the correct earlier sentence should return near the end of this recording.",
+      "words": [
+        {
+          "word": "Captions",
+          "start": 14.22,
+          "end": 14.62
+        },
+        {
+          "word": "should",
+          "start": 14.62,
+          "end": 14.98
+        },
+        {
+          "word": "change",
+          "start": 14.98,
+          "end": 15.38
+        },
+        {
+          "word": "as",
+          "start": 15.38,
+          "end": 15.66
+        },
+        {
+          "word": "each",
+          "start": 15.66,
+          "end": 15.88
+        },
+        {
+          "word": "new",
+          "start": 15.88,
+          "end": 16.16
+        },
+        {
+          "word": "word",
+          "start": 16.16,
+          "end": 16.36
+        },
+        {
+          "word": "is",
+          "start": 16.36,
+          "end": 16.48
+        },
+        {
+          "word": "spoken.",
+          "start": 16.48,
+          "end": 16.78
+        },
+        {
+          "word": "If",
+          "start": 16.96,
+          "end": 17.1
+        },
+        {
+          "word": "we",
+          "start": 17.1,
+          "end": 17.34
+        },
+        {
+          "word": "pause",
+          "start": 17.34,
+          "end": 17.6
+        },
+        {
+          "word": "the",
+          "start": 17.6,
+          "end": 17.78
+        },
+        {
+          "word": "video,",
+          "start": 17.78,
+          "end": 18.12
+        },
+        {
+          "word": "the",
+          "start": 18.38,
+          "end": 18.5
+        },
+        {
+          "word": "words",
+          "start": 18.5,
+          "end": 18.78
+        },
+        {
+          "word": "should",
+          "start": 18.78,
+          "end": 19.08
+        },
+        {
+          "word": "pause",
+          "start": 19.08,
+          "end": 19.4
+        },
+        {
+          "word": "due.",
+          "start": 19.4,
+          "end": 19.64
+        },
+        {
+          "word": "If",
+          "start": 19.86,
+          "end": 20.02
+        },
+        {
+          "word": "we",
+          "start": 20.02,
+          "end": 20.22
+        },
+        {
+          "word": "seek",
+          "start": 20.22,
+          "end": 20.44
+        },
+        {
+          "word": "back",
+          "start": 20.44,
+          "end": 20.8
+        },
+        {
+          "word": "word,",
+          "start": 20.8,
+          "end": 21.12
+        },
+        {
+          "word": "the",
+          "start": 21.38,
+          "end": 21.5
+        },
+        {
+          "word": "correct",
+          "start": 21.5,
+          "end": 21.76
+        },
+        {
+          "word": "earlier",
+          "start": 21.76,
+          "end": 22.12
+        },
+        {
+          "word": "sentence",
+          "start": 22.12,
+          "end": 22.64
+        },
+        {
+          "word": "should",
+          "start": 22.64,
+          "end": 22.98
+        },
+        {
+          "word": "return",
+          "start": 22.98,
+          "end": 23.36
+        },
+        {
+          "word": "near",
+          "start": 23.36,
+          "end": 23.7
+        },
+        {
+          "word": "the",
+          "start": 23.7,
+          "end": 23.96
+        },
+        {
+          "word": "end",
+          "start": 23.96,
+          "end": 24.04
+        },
+        {
+          "word": "of",
+          "start": 24.04,
+          "end": 24.26
+        },
+        {
+          "word": "this",
+          "start": 24.26,
+          "end": 24.5
+        },
+        {
+          "word": "recording.",
+          "start": 24.5,
+          "end": 24.92
+        }
+      ]
+    },
+    {
+      "start": 24.92,
+      "end": 30.74,
+      "text": "New captions should still appear. This final sentence completes our continuous caption test.",
+      "words": [
+        {
+          "word": "New",
+          "start": 24.92,
+          "end": 25.44
+        },
+        {
+          "word": "captions",
+          "start": 25.44,
+          "end": 25.9
+        },
+        {
+          "word": "should",
+          "start": 25.9,
+          "end": 26.3
+        },
+        {
+          "word": "still",
+          "start": 26.3,
+          "end": 26.66
+        },
+        {
+          "word": "appear.",
+          "start": 26.66,
+          "end": 27
+        },
+        {
+          "word": "This",
+          "start": 27.28,
+          "end": 27.44
+        },
+        {
+          "word": "final",
+          "start": 27.44,
+          "end": 27.84
+        },
+        {
+          "word": "sentence",
+          "start": 27.84,
+          "end": 28.3
+        },
+        {
+          "word": "completes",
+          "start": 28.3,
+          "end": 28.86
+        },
+        {
+          "word": "our",
+          "start": 28.86,
+          "end": 29.26
+        },
+        {
+          "word": "continuous",
+          "start": 29.26,
+          "end": 29.68
+        },
+        {
+          "word": "caption",
+          "start": 29.68,
+          "end": 30.28
+        },
+        {
+          "word": "test.",
+          "start": 30.28,
+          "end": 30.74
+        }
+      ]
+    }
+  ]
+}

@@ -52,7 +52,7 @@ function harness(){
     querySelectorAll:selector=>selector==='[data-text-align]'?aligns:[],querySelector:()=>null,
     createElement:tag=>{const el=new Element();if(tag==='canvas')el.getContext=()=>({measureText:text=>({width:text.length*14})});return el;},
     createTextNode:text=>({isText:true,textContent:text}),fonts:{load:async()=>[{}]}};
-  const context=vm.createContext({window:{CAPTION_PRESETS,location:{search:'?index=0'},addEventListener(){}},document,console,URLSearchParams,setTimeout,clearTimeout,
+  const context=vm.createContext({window:{CAPTION_PRESETS,location:{search:'?index=0'},addEventListener(){}},document,console,URL,URLSearchParams,setTimeout,clearTimeout,
     Option:function(text,value){this.text=text;this.value=value;},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)}});
   vm.runInContext(fs.readFileSync(path.join(root,'public/captions.js'),'utf8'),context);
   const run=code=>vm.runInContext(code,context);
@@ -172,4 +172,81 @@ test('narrow boxes break long words for export without altering their timing',()
   const h=harness();const result=h.context.wrapExportToBox([{start:2,end:2.2,text:'synchronization'}],{fontFamily:'Barlow',fontSize:28,boxWidth:15});
   assert.ok(result[0].text.split('\n').every(line=>line.length<=3));
   assert.equal(result[0].text.replace(/\n/g,''),'synchronization');assert.equal(result[0].start,2);assert.equal(result[0].end,2.2);
+});
+
+
+test('real editor renderer advances through a full 54s timeline and remains correct after seeks',()=>{
+  const h=harness();
+  h.run(`editorState.style.wordsPerRow=2;
+    editorState.style.wordAnimation='twoword';
+    editorState.segments=Array.from({length:27},(_,i)=>({
+      id:'s'+i,start:i*2,end:i*2+1.8,text:'phrase'+i+' ending'+i,
+      words:[{word:'phrase'+i,start:i*2,end:i*2+.7},{word:'ending'+i,start:i*2+.9,end:i*2+1.8}]
+    }));
+    var observed=[]; var originalRender=renderAnimatedCaption;
+    renderAnimatedCaption=function(text,id,index){observed.push({text,id,index});return originalRender(text,id,index);};`);
+  h.controls.captionVideo.duration=54;
+  const seen=new Set();
+  for(let frame=0;frame<54*30;frame++) {
+    const t=frame/30;
+    h.controls.captionVideo.currentTime=t;
+    h.context.syncCaptionOverlay();
+    const row=h.run('observed.at(-1)');
+    if(row.text) {
+      const index=Math.min(26,Math.floor((t+.05)/2));
+      assert.equal(row.id,'s'+index);
+      assert.ok(row.text.includes('phrase'+index) || row.text.includes('ending'+index));
+      seen.add(row.id);
+    }
+  }
+  assert.equal(seen.size,27);
+  for(const [time,expected] of [[38.2,'s19'],[1.1,'s0'],[52.2,'s26'],[20.2,'s10']]){
+    h.controls.captionVideo.currentTime=time;h.context.syncCaptionOverlay();
+    assert.equal(h.run('observed.at(-1).id'),expected);
+  }
+  h.controls.captionVideo.currentTime=53.95;h.context.syncCaptionOverlay();
+  assert.equal(h.run('observed.at(-1).text'),'');
+  assert.equal(h.controls.captionOverlay.style.opacity,'0');
+  assert.equal(h.run('editorState.segments.length'),27);
+});
+
+test('video recovery is bounded, preserves signed source and time, and never changes clip identity',()=>{
+  const h=harness(),video=h.controls.captionVideo;
+  video.getAttribute=()=>video.src;video.src='https://media.example/clip.mp4?signature=keep';
+  video.load=()=>{};video.play=async()=>{video.paused=false;};
+  video.removeEventListener=(name,fn)=>{video.events[name]=(video.events[name]||[]).filter(f=>f!==fn);};
+  video.error={code:2};video.currentTime=22;video.duration=54;video.paused=false;
+  const clip={previewUrl:video.src};
+  h.context.bindCaptionVideoRecovery(video,clip);
+  video.emit('error');assert.equal(video.src,clip.previewUrl);
+  video.currentTime=0;video.emit('loadedmetadata');assert.equal(video.currentTime,22);
+  video.emit('error');
+  assert.match(h.controls.captionStatusLabel.textContent,/playback interrupted/i);
+  assert.equal(video.src,clip.previewUrl);
+});
+
+
+test('actual 30.88s speech transcript displays every recognized word through the final sentence',()=>{
+  const fixture=require('./fixtures/continuous-caption-transcript.json');
+  const h=harness();
+  h.context.fixtureSegments=fixture.segments;
+  h.run(`editorState.segments=normalizeSegments(fixtureSegments);editorState.style.wordsPerRow=2;
+    var lastFrame;var renderOriginal=renderAnimatedCaption;
+    renderAnimatedCaption=function(text,id,index){lastFrame={text,id,index};return renderOriginal(text,id,index);};`);
+  h.controls.captionVideo.duration=fixture.duration;
+  let checked=0;
+  for(const segment of fixture.segments){
+    for(let i=0;i<segment.words.length;i++){
+      const word=segment.words[i];if(word.end<=word.start)continue;
+      h.controls.captionVideo.currentTime=(word.start+word.end)/2;
+      h.context.syncCaptionOverlay();
+      const frame=h.run('lastFrame');
+      assert.ok(frame.text.includes(word.word),JSON.stringify({word,frame}));
+      assert.equal(frame.index,i%2);
+      assert.ok(frame.text.split(/\s+/).length<=2);
+      checked++;
+    }
+  }
+  assert.equal(checked,91); // Whisper also returned two zero-duration tokens.
+  assert.ok(h.controls.captionVideo.currentTime>30);
 });

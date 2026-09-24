@@ -636,30 +636,6 @@
                       <!-- Layer 3: Real-time Subject Segmentation Canvas (Behind the Person) -->
                       <canvas id="captionSubjectCanvas" class="caption-subject-canvas"></canvas>
 
-                      <!-- ─── PERMANENT CAPTION OVERLAY ENGINE ─────────────────────────────── -->
-                      <!-- Mounted directly inside video-wrap so it is clipped by phone border radius -->
-                      <!-- Driven entirely by video.timeupdate — zero timers, zero intervals -->
-                      <div
-                        id="permanent-caption-layer"
-                        style="
-                          position: absolute;
-                          top: 60%;
-                          bottom: auto;
-                          transform: translateY(-50%);
-                          left: 0;
-                          width: 100%;
-                          z-index: 50;
-                          pointer-events: none;
-                          display: flex;
-                          align-items: center;
-                          justify-content: center;
-                          padding: 0 6%;
-                          box-sizing: border-box;
-                          text-align: center;
-                          line-height: 1.25;
-                          min-height: 2.5em;
-                        "
-                      ></div>
                     </div>
 
                     <!-- CAPTION OVERLAY LAYER — Pinned relative to video frame with overflow: hidden -->
@@ -752,8 +728,8 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
     <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
-    <script src="captionClient.js?v=1"></script>
-    <script src="captions.js?v=editor-14"></script>
+    <script src="captionClient.js?v=timeline-1"></script>
+    <script src="captions.js?v=timeline-1"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>

@@ -162,6 +162,16 @@ test('caption routes: real FFmpeg extraction, stub ASR, polling, cache isolation
   assert.equal(job.status,'completed'); assert.equal(job.segments[0].words[0].start,0);
   assert.equal(fs.readFileSync(countPath,'utf8'),'1');
   assert.equal((await post({inputPath:video})).status,200);
+  // Direct compatibility endpoint must return the SAME clip-relative times as
+  // the job endpoint, even for a clip cut from 103:53 in the source video.
+  const direct = await (await fetch(origin+'/api/captions/transcribe', {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({inputPath:video,clipStartTime:6233})
+  })).json();
+  assert.deepEqual(direct.segments,job.segments);
+  assert.equal(direct.timeline,'clip'); assert.equal(direct.timestampUnit,'seconds');
+  assert.equal(fs.readFileSync(countPath,'utf8'),'1');
+
   assert.equal((await post({inputPath:'/missing.mp4',async:true})).status,404);
   assert.equal((await fetch(origin+'/api/captions/jobs/expired')).status,404);
   assert.equal(h.safeBaseName('https://host/exports/clip%20one.mp4?download=1'),'clip one.mp4');
@@ -247,4 +257,50 @@ test('playback and paused seeking select no caption during silence or before the
   assert.equal(h.getActiveSegmentByTime(0),null);
   assert.equal(h.getActiveSegmentByTime(1.2).text,'hi');
   assert.equal(h.getActiveSegmentByTime(3),null);
+});
+
+
+test('clip-relative captions keep leading silence, later speech and >1000s times unchanged', () => {
+  const h = editorFunctions([...helpers, 'calibrateSegmentsToClip', 'hasValidCaptionTiming']);
+  for (const sourceOffset of [0, 1, 30, 1633, 6233]) {
+    const segments = [3, 12, 28, 1001, 1010].map((start,i) => ({
+      id: String(i), start, end:start+1, text:`word${i}`,
+      words:[{word:`word${i}`,start,end:start+1}]
+    }));
+    const result = h.calibrateSegmentsToClip(segments, {startSec:sourceOffset,durationSec:1012});
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), segments);
+    assert.equal(h.hasValidCaptionTiming(result), true);
+  }
+  assert.equal(h.hasValidCaptionTiming([
+    {start:0,end:.1,text:'first',words:[{start:0,end:.05}]},
+    {start:0,end:.1,text:'last',words:[{start:0,end:.05}]}
+  ]), false);
+  assert.equal(h.hasValidCaptionTiming([{start:0,end:2,words:[{start:1,end:.05}]}]),false);
+});
+
+test('editor fetch uses one queued transcript without a second source offset', async () => {
+  let calls=0;
+  const segments=[{start:8,end:9,text:'late speech'}];
+  const h=editorFunctions(['fetchServerCaptions'], {
+    getClipPathCandidates:()=>['/clip.mp4'], extractSegmentsFromPayload:data=>data.segments,
+    ClipCaptionClient:{generate:async payload=>{calls++;assert.equal(payload.inputPath,'/clip.mp4');return {segments};}}
+  });
+  assert.equal(await h.fetchServerCaptions({startSec:6233}),segments);
+  assert.equal(calls,1);
+});
+
+test('temporary polling interruption reconnects to the same job without duplicate transcription', async () => {
+  const source=fs.readFileSync(path.join(root,'public/captionClient.js'),'utf8');
+  let starts=0,polls=0;
+  const context=vm.createContext({AbortController,TypeError,setTimeout:(fn,ms)=>setTimeout(fn,ms===2000?0:ms),clearTimeout,
+    fetch:async(url,options)=>{
+      if(options.method==='POST'){starts++;return {ok:true,json:async()=>({status:'processing',jobId:'same'})};}
+      polls++;assert.equal(url,'/api/captions/jobs/same');
+      if(polls===1)throw new TypeError('Connection reset');
+      if(polls===2)return {ok:false,status:503,json:async()=>({error:'Temporarily unavailable'})};
+      return {ok:true,json:async()=>({status:'completed',segments:[{start:20,end:21,text:'late speech'}]})};
+    }});
+  vm.runInContext(source,context);
+  const data=await context.ClipCaptionClient.generate({inputPath:'clip.mp4'});
+  assert.equal(data.segments[0].start,20);assert.equal(starts,1);assert.equal(polls,3);
 });

@@ -188,7 +188,7 @@ function jobResponse(job) {
     jobId: job.id, status: job.status,
     ...(job.status === "failed" ? { error: job.error } : {}),
     ...(job.status === "completed" ? {
-      success: true, source: "whisper",
+      success: true, source: "whisper", timestampUnit: "seconds", timeline: "clip",
       trackUrl: `/captions/${path.basename(job.result.vttPath)}`,
       segments: job.result.segments,
     } : {}),
@@ -312,6 +312,10 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
       .map(resolveInputVideo)
       .find(Boolean);
 
+    const remoteUrl = candidates.map(allowedCaptionSource).find(Boolean);
+
+    // A supplied remote clip is authoritative; never replace it with another
+    // project's video merely because both have the same numeric index.
     // If not found directly by path, check clipIndex or id
     const idOrIndex =
       body.clipIndex ??
@@ -320,7 +324,7 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
       body.clip?.id ??
       body.clip?.index;
 
-    if (!resolvedVideoPath && idOrIndex !== undefined && idOrIndex !== null) {
+    if (!resolvedVideoPath && !remoteUrl && idOrIndex !== undefined && idOrIndex !== null) {
       const isNum = /^\d+$/.test(String(idOrIndex));
       const idx = isNum ? parseInt(idOrIndex, 10) : null;
       try {
@@ -377,7 +381,6 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
       }
     }
 
-    const remoteUrl = candidates.map(allowedCaptionSource).find(Boolean);
     if (!resolvedVideoPath && !remoteUrl) {
       return res.status(404).json({
         error: "Clip video file not found on server for transcription. Ensure video is exported or uploaded.",
@@ -386,40 +389,15 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
 
     const targetVideo = resolvedVideoPath || (await restoreCaptionSource(remoteUrl));
     console.log(`[Captions] Running Whisper transcription on: ${targetVideo}`);
-    const result = await ensureCaptionFiles(targetVideo);
+    const job = captionJobs.start({ videoPath: targetVideo });
+    await job.promise;
+    if (job.status === "failed") throw new Error(job.error);
+    const result = job.result;
 
-    const clipStartSec = Math.max(
-      0,
-      Number(
-        body.clipStartTime ||
-          body.startSec ||
-          body.clip?.startSec ||
-          body.clip?.startTime ||
-          0
-      )
-    );
-    const rawSegments = result.segments || [];
-
-    // Calibrate all segments so timestamps start at 0.00s relative to the clip
-    const calibratedSegments = rawSegments.map((seg, segIdx) => {
-      const segStart = Math.max(0, Number((seg.start - clipStartSec).toFixed(3)));
-      const segEnd = Math.max(segStart + 0.1, Number((seg.end - clipStartSec).toFixed(3)));
-      let words = undefined;
-      if (Array.isArray(seg.words) && seg.words.length) {
-        words = seg.words.map((w) => ({
-          word: String(w.word || "").trim(),
-          start: Math.max(0, Number((w.start - clipStartSec).toFixed(3))),
-          end: Math.max(0.05, Number((w.end - clipStartSec).toFixed(3))),
-        }));
-      }
-      return {
-        id: seg.id || `seg-${segIdx + 1}`,
-        start: segStart,
-        end: segEnd,
-        text: String(seg.text || "").trim(),
-        ...(words ? { words } : {}),
-      };
-    });
+    // ensureCaptionFiles transcribes this trimmed media file, not the original
+    // source video. Subtracting clipStartTime here collapses valid later speech
+    // onto zero (and produces invalid word intervals).
+    const calibratedSegments = result.segments || [];
 
     const flattenedWords = [];
     calibratedSegments.forEach((seg) => {
@@ -444,6 +422,8 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
     return res.json({
       success: true,
       source: "whisper",
+      timestampUnit: "seconds",
+      timeline: "clip",
       trackUrl: `/captions/${path.basename(result.vttPath)}`,
       segments: calibratedSegments,
       words: flattenedWords,

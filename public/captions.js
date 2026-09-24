@@ -267,50 +267,28 @@ function getClipStartTimeSeconds(clip = {}) {
   return 0;
 }
 
-function calibrateSegmentsToClip(segments = [], clip = editorState?.clip) {
-  if (!Array.isArray(segments) || !segments.length) return [];
-  const clipStartTime = getClipStartTimeSeconds(clip);
-  const firstStart = Number(segments[0]?.start) || 0;
+// Transcription endpoints process the trimmed media file. Their timestamps are
+// already seconds on this video's timeline, including intentional leading silence.
+// Never infer offsets from the first spoken word or the source video's start time.
+function calibrateSegmentsToClip(segments = []) {
+  return normalizeSegments(segments);
+}
 
-  // Calibrate transcription data to start at 00:00:00 relative to the current trimmed clip.
-  // If timestamps were generated from the source video, calculate offset: relativeWordStart = word.start - clipStartTime
-  let offset = 0;
-  if (clipStartTime > 0 && (firstStart >= clipStartTime || Math.abs(firstStart - clipStartTime) <= 3)) {
-    offset = clipStartTime;
-  } else if (clipStartTime > 0 && firstStart > 2) {
-    offset = clipStartTime;
-  } else if (firstStart > 5 && (!clip?.durationSec || firstStart > (clip.durationSec * 0.4))) {
-    offset = firstStart;
-  }
-
-  return segments.map((seg) => {
-    const rawStart = Number(seg.start) || 0;
-    const rawEnd = Number(seg.end) || 0;
-    const segStart = Math.max(0, rawStart - offset);
-    const segEnd = Math.max(segStart + 0.1, rawEnd - offset);
-
-    let words = undefined;
-    if (Array.isArray(seg.words) && seg.words.length) {
-      words = seg.words.map((w) => {
-        const wStart = Number(w.start) || 0;
-        const wEnd = Number(w.end) || 0;
-        const relativeWordStart = Math.max(0, wStart - offset);
-        const relativeWordEnd = Math.max(relativeWordStart + 0.05, wEnd - offset);
-        return {
-          ...w,
-          start: Number(relativeWordStart.toFixed(3)),
-          end: Number(relativeWordEnd.toFixed(3)),
-        };
-      });
+function hasValidCaptionTiming(segments = []) {
+  if (!segments.length) return false;
+  let previousEnd = -Infinity;
+  for (const segment of segments) {
+    const start = Number(segment.start), end = Number(segment.end);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return false;
+    // Old /transcribe responses collapsed entire transcripts onto 0..0.1s.
+    if (start < previousEnd - 0.05) return false;
+    previousEnd = end;
+    for (const word of segment.words || []) {
+      const ws = Number(word.start), we = Number(word.end);
+      if (!Number.isFinite(ws) || !Number.isFinite(we) || we < ws || ws < start - 0.1 || we > end + 0.1) return false;
     }
-
-    return {
-      ...seg,
-      start: Number(segStart.toFixed(3)),
-      end: Number(segEnd.toFixed(3)),
-      ...(words ? { words } : {}),
-    };
-  });
+  }
+  return true;
 }
 
 let _lastRenderedSegId = null;
@@ -752,6 +730,55 @@ function normalizeVideoUrl(val) {
   return clean;
 }
 
+function bindCaptionVideoRecovery(video, clip) {
+  if (video.dataset.hasErrorFallback) return;
+  video.dataset.hasErrorFallback = "true";
+  const alternatives = [...new Set([
+    clip.previewUrl, clip.downloadUrl, clip.storageUrl, clip.outputPath,
+    clip.filePath, clip.localPath, clip.clipPath,
+  ].filter(Boolean).map(value => getClipSource({ previewUrl: value })).filter(Boolean))];
+  const attempted = new Set([video.getAttribute("src") || video.src]);
+  let retriedCurrent = false;
+  let resumeAt = 0;
+  let resumePlayback = false;
+  let recovering = false;
+  let resumeHandler = null;
+  video.addEventListener("error", () => {
+    const code = video.error?.code;
+    console.warn("Caption video playback failed", { code });
+    if (!recovering) {
+      resumeAt = Number(video.currentTime) || 0;
+      resumePlayback = !video.paused && !video.ended;
+    }
+    recovering = true;
+    if (resumeHandler) video.removeEventListener("loadedmetadata", resumeHandler);
+    let nextSource;
+    if (!retriedCurrent && (code === 2 || code === 3)) {
+      retriedCurrent = true;
+      nextSource = video.getAttribute("src") || video.src;
+    } else {
+      nextSource = alternatives.find(source => !attempted.has(source));
+    }
+    if (!nextSource) {
+      const label = document.getElementById("captionStatusLabel");
+      if (label) label.textContent = "Video playback interrupted. Reload this clip to retry; captions are saved.";
+      return;
+    }
+    attempted.add(nextSource);
+    resumeHandler = () => {
+      const duration = Number(video.duration);
+      video.currentTime = Number.isFinite(duration) ? Math.min(resumeAt, duration) : resumeAt;
+      recovering = false;
+      syncCaptionOverlay();
+      if (resumePlayback) video.play().catch(error => console.warn("Click Play to resume", error.message));
+    };
+    video.addEventListener("loadedmetadata", resumeHandler, { once: true });
+    // Keep signed URL query parameters. Never switch to another project's clip.
+    video.src = nextSource;
+    video.load();
+  });
+}
+
 function getClipSource(clip = {}) {
   if (!clip) return "";
 
@@ -1001,7 +1028,12 @@ function getWordGroupText(seg, currentTime, wordsPerGroup = 1) {
   const groupSize = Math.max(1, Number(wordsPerGroup) || 1);
   const t = Number.isFinite(Number(currentTime)) ? Number(currentTime) : 0;
   if (Array.isArray(seg.words) && seg.words.length) {
-    const index = seg.words.findIndex(
+    // Prefer exact word boundaries: a 50ms tolerance must not hide a short
+    // following word by repeatedly selecting its predecessor.
+    let index = seg.words.findIndex(
+      (w) => w && t >= Number(w.start) && t < Number(w.end)
+    );
+    if (index < 0) index = seg.words.findIndex(
       (w) => w && t >= (Number(w.start) - 0.05) && t <= (Number(w.end) + 0.05)
     );
     if (index < 0) return "";
@@ -1660,36 +1692,11 @@ function isPlaceholderOrMockCaptions(segments, clip) {
 }
 
 async function fetchServerCaptions(clip) {
-  // First attempt direct /api/transcribe endpoint
-  try {
-    const directRes = await fetch("/api/transcribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        clip,
-        clipIndex: editorState.clipIndex,
-        inputPath: getClipSource(clip),
-        videoUrl: getClipSource(clip),
-        clipStartTime: getClipStartTimeSeconds(clip),
-      }),
-    });
-    if (directRes.ok) {
-      const directData = await directRes.json();
-      if (Array.isArray(directData.segments) && directData.segments.length) {
-        return calibrateSegmentsToClip(directData.segments, clip);
-      }
-      if (Array.isArray(directData.words) && directData.words.length) {
-        return calibrateSegmentsToClip(buildSegmentsFromWords(directData.words), clip);
-      }
-    }
-  } catch (directErr) {
-    console.warn("Direct /api/transcribe attempt error, falling back to ClipCaptionClient:", directErr.message);
-  }
-
+  // Use the shared queued job: polling can outlive a single HTTP request and
+  // automatic/manual sync share one transcription instead of launching twice.
   const inputPaths = getClipPathCandidates(clip);
   const data = await ClipCaptionClient.generate({ inputPath: inputPaths[0], inputPaths });
-  const rawSegments = extractSegmentsFromPayload(data);
-  return calibrateSegmentsToClip(rawSegments, clip);
+  return extractSegmentsFromPayload(data);
 }
 
 // Do not overwrite edits made while a background transcription was running.
@@ -1715,7 +1722,7 @@ async function syncAudioTranscript() {
     if (editorState.clip !== clip || captionContentSignature(editorState.segments) !== before) {
       throw new Error("Captions were edited while syncing. Click Sync Audio again to replace those edits.");
     }
-    const calibrated = typeof calibrateSegmentsToClip === "function" ? calibrateSegmentsToClip(normalizeSegments(rawSegments), clip) : normalizeSegments(rawSegments);
+    const calibrated = normalizeSegments(rawSegments);
     editorState.segments = calibrated;
     if (typeof captionData !== "undefined" && captionData) captionData.segments = calibrated;
     editorState.captionSchemaVersion = 2;
@@ -2733,8 +2740,6 @@ function applyStyleToOverlay() {
 
   updatePositionUI();
 
-  // ── Sync permanent caption layer with updated style ──────────────────────
-  if (typeof window.pclRefresh === "function") window.pclRefresh();
 }
 
 // Editor-only geometry. Clip extraction and speech timestamps are untouched.
@@ -2930,13 +2935,10 @@ function syncCaptionOverlay() {
     const activeSegment = segments.find(
       (seg) => seg && currentTime >= (Number(seg.start) - 0.05) && currentTime <= (Number(seg.end) + 0.05)
     );
-    const activeWord = activeSegment?.words?.find(
-      (w) => w && currentTime >= (Number(w.start) - 0.05) && currentTime <= (Number(w.end) + 0.05)
-    );
 
     const nextSegId = activeSegment?.id || null;
     let displayText = activeSegment
-      ? (getParityDisplayText(activeSegment, currentTime, editorState.style) || activeSegment.text || "")
+      ? getParityDisplayText(activeSegment, currentTime, editorState.style)
       : "";
 
     const hasText = Boolean(displayText && displayText.trim());
@@ -2944,25 +2946,9 @@ function syncCaptionOverlay() {
     captionOverlay.style.visibility = hasText ? "visible" : "hidden";
     captionOverlay.style.pointerEvents = hasText ? "auto" : "none";
 
-    let activeWordIndex = -1;
-    if (activeSegment?.words?.length) {
-      const wIdx = activeSegment.words.findIndex(
-        (w) => w && currentTime >= (Number(w.start) - 0.05) && currentTime <= (Number(w.end) + 0.05)
-      );
-      if (wIdx !== -1) {
-        activeWordIndex = wIdx;
-      } else {
-        for (let i = activeSegment.words.length - 1; i >= 0; i--) {
-          if (activeSegment.words[i] && currentTime >= (Number(activeSegment.words[i].start) - 0.05)) {
-            activeWordIndex = i;
-            break;
-          }
-        }
-      }
-    }
-    if (activeWordIndex === -1 && activeSegment) {
-      activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
-    }
+    // The rendered group may contain only two of a segment's many words.
+    // Highlight its local index, not the index in the full transcript segment.
+    const activeWordIndex = getActiveDisplayWordIndex(activeSegment, currentTime, editorState.style);
 
     renderAnimatedCaption(hasText ? displayText : "", nextSegId, activeWordIndex);
 
@@ -2990,11 +2976,11 @@ function updateLivePreview() {
   applyTextBoxVisuals(captionLivePreview, s);
 
   const currentTime = captionVideo?.currentTime || 0;
-  const currentSeg = getActiveSegmentByTime(currentTime) || editorState.segments[0];
+  const currentSeg = getActiveSegmentByTime(currentTime);
 
   let sampleText = currentSeg
     ? getParityDisplayText(currentSeg, currentTime, s)
-    : "Sample Caption";
+    : "";
 
   if (s.curated || s.boxWidth) {
     renderSmoothCaption(captionLivePreview, sampleText, currentSeg?.id,
@@ -3744,9 +3730,6 @@ function applyPresetFromGallery(id) {
   updateLivePreview();
   persistCaptions();
 
-  // Notify the permanent caption engine of preset change
-  if (typeof window.pclRefresh === "function") window.pclRefresh();
-  document.dispatchEvent(new CustomEvent("captionPresetApplied", { detail: { id } }));
 
   renderPresetsGalleryGrid();
 }
@@ -4691,71 +4674,7 @@ async function init() {
       console.warn("No video source found for clip:", session.clip);
     }
 
-    if (!captionVideo.dataset.hasErrorFallback) {
-      captionVideo.dataset.hasErrorFallback = "true";
-      captionVideo.addEventListener("error", (e) => {
-        console.error("Video element loading error:", captionVideo.error);
-        // Re-attempt stream with cache bust if connection drops
-        if (captionVideo.error && captionVideo.error.code === 2) {
-          captionVideo.src = captionVideo.src.split("?")[0] + "?t=" + Date.now();
-          captionVideo.load();
-          updatePlaybackUI();
-          return;
-        }
-
-        const currentSrc = captionVideo.getAttribute("src") || captionVideo.src || "";
-        const fn = currentSrc.split(/[/\\]/).pop()?.split(/[?#]/)[0];
-        if (fn && !currentSrc.startsWith("/clips/") && !captionVideo.dataset.triedClips) {
-          captionVideo.dataset.triedClips = "true";
-          captionVideo.src = `/clips/${encodeURIComponent(fn)}`;
-          captionVideo.load();
-          updatePlaybackUI();
-          return;
-        }
-        if (currentSrc.includes("/api/files/download/") && fn && !captionVideo.dataset.triedExports) {
-          captionVideo.dataset.triedExports = "true";
-          captionVideo.src = `/exports/${fn}`;
-          captionVideo.load();
-          updatePlaybackUI();
-          return;
-        }
-        if (currentSrc.includes("/exports/") && fn && !captionVideo.dataset.triedApi) {
-          captionVideo.dataset.triedApi = "true";
-          captionVideo.src = `/api/files/download/${encodeURIComponent(fn)}`;
-          captionVideo.load();
-          updatePlaybackUI();
-          return;
-        }
-        if (fn && !captionVideo.dataset.triedUploads) {
-          captionVideo.dataset.triedUploads = "true";
-          captionVideo.src = `/uploads/${fn}`;
-          captionVideo.load();
-          updatePlaybackUI();
-          return;
-        }
-        if (!captionVideo.dataset.triedStudioFallback) {
-          captionVideo.dataset.triedStudioFallback = "true";
-          const studioRaw = localStorage.getItem("clipflow-studio-session");
-          if (studioRaw) {
-            try {
-              const studio = JSON.parse(studioRaw);
-              const clips = Array.isArray(studio.generatedClips) ? studio.generatedClips : [];
-              for (const c of clips) {
-                const alt = getClipSource(c);
-                if (alt && alt !== currentSrc) {
-                  editorState.clip = c;
-                  session.clip = c;
-                  captionVideo.src = alt;
-                  captionVideo.load();
-                  updatePlaybackUI();
-                  return;
-                }
-              }
-            } catch { }
-          }
-        }
-      });
-    }
+    bindCaptionVideoRecovery(captionVideo, session.clip);
   }
 
   // Ensure the transcription data loaded into captionData.segments is calibrated to start at 00:00:00 relative to the current trimmed clip.
@@ -4764,7 +4683,7 @@ async function init() {
   const isMock = isPlaceholderOrMockCaptions(rawSaved, session.clip);
   const hasWords = hasWordLevelTimestamps(rawSaved);
   const calibratedSaved = (!isMock && hasWords) ? calibrateSegmentsToClip(normalizeSegments(rawSaved), session.clip) : [];
-  const trusted = !isMock && hasWords && session.captionSchemaVersion === 2 && calibratedSaved.length > 0;
+  const trusted = !isMock && hasWords && session.captionSchemaVersion === 2 && hasValidCaptionTiming(rawSaved) && calibratedSaved.length > 0;
   editorState.captionSchemaVersion = trusted ? 2 : undefined;
   editorState.segments = trusted ? calibratedSaved : [];
   captionData.segments = editorState.segments;
@@ -4806,511 +4725,3 @@ window.normalizeStyle = normalizeStyle;
 if (document.readyState === "loading")
   document.addEventListener("DOMContentLoaded", init);
 else init();
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PERMANENT CAPTION OVERLAY ENGINE
-// Isolated, zero-dependency subtitle renderer.
-// Wired directly to video.timeupdate — no timers, no setInterval, no canvas.
-// Mounted on #permanent-caption-layer inside .caption-video-wrap.
-// Handles ms vs s timestamps, active word highlighting, and style linkage.
-// ─────────────────────────────────────────────────────────────────────────────
-(function mountPermanentCaptionEngine() {
-  "use strict";
-
-  /** @type {HTMLDivElement|null} */
-  let _pclLayer = null;
-  /** @type {HTMLVideoElement|null} */
-  let _pclVideo = null;
-
-  // Per-render cache to avoid redundant DOM mutations
-  let _pclLastSegId = null;
-  let _pclLastActiveWordIdx = -2;
-  let _pclLastFontSize = null;
-  let _pclLastColor = null;
-  let _pclLastHighlight = null;
-
-  /**
-   * Safely normalise a raw timestamp value to seconds.
-   * Whisper sometimes returns milliseconds (start > 1000 heuristic).
-   * @param {number} raw
-   * @returns {number} seconds
-   */
-  function _normTs(raw) {
-    const n = Number(raw) || 0;
-    // If the value looks like milliseconds (first segment start > 1000), divide by 1000.
-    return n > 1000 ? n / 1000 : n;
-  }
-
-  /**
-   * Get the current segments array from the shared editorState.
-   * Tolerates undefined captionData gracefully.
-   * @returns {Array}
-   */
-  function _getSegments() {
-    try {
-      const segs =
-        (window.captionData && Array.isArray(window.captionData.segments) && window.captionData.segments.length)
-          ? window.captionData.segments
-          : (window.editorState && Array.isArray(window.editorState.segments))
-            ? window.editorState.segments
-            : [];
-      return segs;
-    } catch (_) {
-      return [];
-    }
-  }
-
-  /**
-   * Derive current style overrides from editorState or form controls.
-   * @returns {{ fontSize: number, fontFamily: string, activeColor: string, inactiveColor: string, highlightColor: string }}
-   */
-  function _getStyleConfig() {
-    try {
-      const s = (window.editorState && window.editorState.style) ? window.editorState.style : {};
-      // Font size — prefer editorState, fallback to DOM
-      const fsEl = document.getElementById("capFontSize");
-      const fontSize = Number(s.fontSize) || (fsEl ? Number(fsEl.value) : 28) || 28;
-      // Font family
-      const fontFamily = s.fontFamily || "'Montserrat', sans-serif";
-      // Active highlight color (#FFE600 default from design tokens)
-      const highlightColor = (s.highlightColor && s.highlightColor !== "transparent") ? s.highlightColor : "#FFE600";
-      // Text color
-      const textColor = s.textColor || "#FFFFFF";
-      // Scale font to the phone preview (phone screen ≈ 300px, phone is 9:16, render size ~= fontSize * 0.8 for preview)
-      const previewFontSize = Math.max(10, Math.round(fontSize * 0.78));
-      return { fontSize: previewFontSize, fontFamily, activeColor: "#000000", inactiveColor: textColor, highlightColor };
-    } catch (_) {
-      return { fontSize: 22, fontFamily: "'Montserrat', sans-serif", activeColor: "#000000", inactiveColor: "#FFFFFF", highlightColor: "#FFE600" };
-    }
-  }
-
-  /**
-   * Main render function. Called on every timeupdate event.
-   * @param {number} currentTime  video.currentTime in seconds
-   */
-  function _pclRender(currentTime) {
-    if (!_pclLayer) return;
-    const t = Number.isFinite(currentTime) ? currentTime : 0;
-    const segments = _getSegments();
-    if (!segments || !segments.length) {
-      if (_pclLayer.innerHTML !== "") _pclLayer.innerHTML = "";
-      _pclLastSegId = null;
-      return;
-    }
-
-    // Find the active segment — normalise timestamps on-the-fly
-    let activeSeg = null;
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i];
-      if (!seg) continue;
-      const start = _normTs(seg.start);
-      const end = _normTs(seg.end);
-      if (t >= (start - 0.05) && t <= (end + 0.05)) {
-        activeSeg = seg;
-        break;
-      }
-    }
-
-    // Hide if nothing is active (blank pause between sentences)
-    if (!activeSeg) {
-      if (_pclLastSegId !== "__none__") {
-        _pclLayer.innerHTML = "";
-        _pclLastSegId = "__none__";
-        _pclLastActiveWordIdx = -2;
-      }
-      return;
-    }
-
-    // Synchronize vertical position safely clamped to [20, 75] with default 60%
-    const sliderVal = Number((window.editorState?.style?.positionY !== undefined && window.editorState?.style?.positionY !== null) ? window.editorState.style.positionY : 60);
-    const safeY = Math.min(Math.max(sliderVal, 20), 75);
-    _pclLayer.style.top = safeY + "%";
-    _pclLayer.style.bottom = "auto";
-    _pclLayer.style.transform = "translateY(-50%)";
-
-    const rawText = String(activeSeg.text || "").trim();
-    const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
-
-    // Find the active word index inside the segment
-    let activeWordIdx = -1;
-    if (words.length > 0) {
-      for (let w = 0; w < words.length; w++) {
-        const ws = _normTs(words[w]?.start);
-        const we = _normTs(words[w]?.end);
-        if (t >= (ws - 0.05) && t <= (we + 0.05)) {
-          activeWordIdx = w;
-          break;
-        }
-      }
-      // If not exactly in a word boundary, use the last word whose start <= currentTime
-      if (activeWordIdx === -1) {
-        for (let w = words.length - 1; w >= 0; w--) {
-          if (_normTs(words[w]?.start) <= t + 0.05) {
-            activeWordIdx = w;
-            break;
-          }
-        }
-      }
-    }
-
-    const cfg = _getStyleConfig();
-
-    // Bail if nothing has changed — avoid redundant DOM mutations
-    const segId = activeSeg.id || activeSeg.text || String(activeSeg.start);
-    if (
-      segId === _pclLastSegId &&
-      activeWordIdx === _pclLastActiveWordIdx &&
-      cfg.fontSize === _pclLastFontSize &&
-      cfg.inactiveColor === _pclLastColor &&
-      cfg.highlightColor === _pclLastHighlight
-    ) {
-      return;
-    }
-    _pclLastSegId = segId;
-    _pclLastActiveWordIdx = activeWordIdx;
-    _pclLastFontSize = cfg.fontSize;
-    _pclLastColor = cfg.inactiveColor;
-    _pclLastHighlight = cfg.highlightColor;
-
-    // Build word tokens: prefer activeSeg.words with timestamps;
-    // fallback gracefully to segment text splitting if word timestamps are absent
-    let wordItems = [];
-    if (words.length > 0) {
-      wordItems = words.map((w, idx) => {
-        const txt = String(w?.word || w?.text || w || "").trim();
-        const ws = _normTs(w?.start);
-        const we = _normTs(w?.end);
-        const active = (t >= (ws - 0.05) && t <= (we + 0.05)) || (idx === activeWordIdx);
-        return { text: txt, active };
-      }).filter(item => item.text);
-    }
-
-    if (!wordItems.length && rawText) {
-      const displayWords = rawText.split(/\s+/).filter(Boolean);
-      const segStart = _normTs(activeSeg.start);
-      const segEnd = _normTs(activeSeg.end);
-      const segDur = Math.max(0.01, segEnd - segStart);
-      const progress = Math.min(1, Math.max(0, (t - segStart) / segDur));
-      const activeFallbackIdx = Math.min(displayWords.length - 1, Math.floor(progress * displayWords.length));
-      wordItems = displayWords.map((word, i) => ({
-        text: word,
-        active: i === activeFallbackIdx,
-      }));
-    }
-
-    if (!wordItems.length) {
-      _pclLayer.innerHTML = "";
-      return;
-    }
-
-    // Build HTML matching the verified highlight styling
-    const parts = wordItems.map((w) => {
-      const escapedWord = w.text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;");
-      if (w.active) {
-        return `<span class="pcl-word pcl-word--active" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:#000000;background:#FFE600;transform:scale(1.15);text-shadow:none;">${escapedWord}</span>`;
-      }
-      return `<span class="pcl-word pcl-word--inactive" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:#FFFFFF;background:transparent;transform:scale(1);text-shadow:0 2px 6px rgba(0,0,0,0.9);">${escapedWord}</span>`;
-    });
-
-    _pclLayer.innerHTML = parts.join(" ");
-  }
-
-  /**
-   * Force a re-render immediately (called when style controls change).
-   */
-  function _pclRefresh() {
-    // Bust cache so next render rebuilds DOM even if seg/word didn't change
-    _pclLastSegId = null;
-    _pclLastActiveWordIdx = -2;
-    _pclLastFontSize = null;
-    _pclLastColor = null;
-    _pclLastHighlight = null;
-    if (_pclVideo) _pclRender(_pclVideo.currentTime || 0);
-  }
-
-  /**
-   * Mount the engine once the DOM and video element are ready.
-   */
-  function _pclMount() {
-    _pclLayer = document.getElementById("permanent-caption-layer");
-    _pclVideo = document.getElementById("captionVideo");
-
-    if (!_pclLayer || !_pclVideo) {
-      // Retry once after a short delay in case DOM isn't ready
-      setTimeout(_pclMount, 400);
-      return;
-    }
-
-    let _pclRafId = null;
-    function _pclLoop() {
-      if (_pclVideo && !_pclVideo.paused && !_pclVideo.ended) {
-        _pclRender(_pclVideo.currentTime);
-        _pclRafId = requestAnimationFrame(_pclLoop);
-      } else {
-        _pclRafId = null;
-      }
-    }
-
-    // ── Primary sync hook: video timeupdate ──────────────────────────────────
-    _pclVideo.addEventListener("timeupdate", () => {
-      _pclRender(_pclVideo.currentTime);
-    });
-
-    // ── Supplementary hooks for seek / pause / play / RAF loop ───────────────
-    _pclVideo.addEventListener("seeked", () => _pclRender(_pclVideo.currentTime));
-    _pclVideo.addEventListener("seeking", () => _pclRender(_pclVideo.currentTime));
-    _pclVideo.addEventListener("play", () => {
-      _pclRefresh();
-      _pclRender(_pclVideo.currentTime);
-      if (!_pclRafId) _pclRafId = requestAnimationFrame(_pclLoop);
-    });
-    _pclVideo.addEventListener("pause", () => {
-      if (_pclRafId) { cancelAnimationFrame(_pclRafId); _pclRafId = null; }
-      _pclRender(_pclVideo.currentTime);
-    });
-    _pclVideo.addEventListener("ended", () => {
-      if (_pclRafId) { cancelAnimationFrame(_pclRafId); _pclRafId = null; }
-      _pclRender(_pclVideo.currentTime);
-    });
-    _pclVideo.addEventListener("loadedmetadata", () => _pclRender(_pclVideo.currentTime));
-
-    // ── Style control linkage ─────────────────────────────────────────────────
-    // Font size slider
-    const fontSizeEl = document.getElementById("capFontSize");
-    if (fontSizeEl) fontSizeEl.addEventListener("input", _pclRefresh);
-
-    // Text color picker
-    const textColorEl = document.getElementById("capTextColor");
-    if (textColorEl) textColorEl.addEventListener("input", _pclRefresh);
-
-    // Background color picker
-    const bgColorEl = document.getElementById("capBgColor");
-    if (bgColorEl) bgColorEl.addEventListener("input", _pclRefresh);
-
-    // Highlight/active color picker
-    const highlightColorEl = document.getElementById("capHighlightColor");
-    if (highlightColorEl) highlightColorEl.addEventListener("input", _pclRefresh);
-
-    // Font family selector
-    const fontFamilyEl = document.getElementById("capFontFamily");
-    if (fontFamilyEl) fontFamilyEl.addEventListener("change", _pclRefresh);
-
-    // Vertical (Y) slider
-    const posYEl = document.getElementById("capPosY");
-    if (posYEl) posYEl.addEventListener("input", _pclRefresh);
-
-    // Preset cards — refresh when any preset is applied
-    document.addEventListener("captionPresetApplied", _pclRefresh);
-
-    // Expose refresh on window so applyStyleToOverlay / handlePresetSelection can call it
-    window.pclRefresh = _pclRefresh;
-
-    // Initial render (in case video is already at t > 0 on load)
-    _pclRender(_pclVideo.currentTime || 0);
-  }
-
-  // Boot: defer until after init() has set up the DOM
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(_pclMount, 300));
-  } else {
-    setTimeout(_pclMount, 300);
-  }
-
-  // Expose for debugging
-  window._pclEngine = { render: _pclRender, refresh: _pclRefresh };
-}());
-
-// ==========================================
-// PERMANENT NATIVE CAPTION ENGINE FIX
-// ==========================================
-(function () {
-  function initPermanentCaptions() {
-    const video = document.querySelector('video') || document.getElementById('captionVideo');
-    if (!video) {
-      // Retry if video element isn't rendered yet
-      setTimeout(initPermanentCaptions, 400);
-      return;
-    }
-
-    // Hide any legacy permanent caption layer to prevent double overlay
-    const legacyPcl = document.getElementById('permanent-caption-layer');
-    if (legacyPcl) legacyPcl.style.display = 'none';
-
-    // Prevent duplicate injection if already initialized
-    if (document.getElementById('permanent-caption-container')) return;
-
-    // 1. Create authoritative overlay container locked to the video frame
-    const container = document.createElement('div');
-    container.id = 'permanent-caption-container';
-
-    const curY = Number((window.editorState?.style?.positionY !== undefined && window.editorState?.style?.positionY !== null) ? window.editorState.style.positionY : 60);
-    const safeY = Math.min(Math.max(curY, 20), 75);
-
-    container.style.cssText = `
-      position: absolute !important;
-      left: 0 !important;
-      right: 0 !important;
-      top: ${safeY}% !important;
-      bottom: auto !important;
-      transform: translateY(-50%) !important;
-      display: flex !important;
-      justify-content: center !important;
-      pointer-events: none !important;
-      z-index: 99999 !important;
-      text-align: center !important;
-      padding: 0 16px !important;
-    `;
-
-    const phraseCard = document.createElement('div');
-    phraseCard.style.cssText = `
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 8px;
-      max-width: 90%;
-    `;
-    container.appendChild(phraseCard);
-
-    const parent = video.parentElement;
-    if (parent && window.getComputedStyle(parent).position === 'static') {
-      parent.style.position = 'relative';
-    }
-    if (parent) {
-      parent.appendChild(container);
-    }
-
-    // Dynamic sync of vertical position from Y slider
-    const capPosYEl = document.getElementById('capPosY');
-    if (capPosYEl) {
-      capPosYEl.addEventListener('input', () => {
-        const val = Number(capPosYEl.value || 60);
-        const y = Math.min(Math.max(val, 20), 75);
-        container.style.top = y + '%';
-        container.style.transform = 'translateY(-50%)';
-      });
-    }
-
-    // 2. Playback sync loop running natively on the video element
-    function renderFrame() {
-      // Grab data dynamically from global app state
-      const segments = window.captionData?.segments
-        || window.editorState?.segments
-        || window.segments
-        || window.currentClip?.segments
-        || (Array.isArray(window.captionData) ? window.captionData : [])
-        || [];
-
-      if (!Array.isArray(segments) || segments.length === 0) {
-        phraseCard.innerHTML = '';
-        return;
-      }
-
-      const t = video.currentTime;
-
-      // Find active phrase segment
-      const activeSeg = segments.find(s => {
-        if (!s) return false;
-        const start = s.start > 1000 ? s.start / 1000 : Number(s.start);
-        const end = s.end > 1000 ? s.end / 1000 : Number(s.end);
-        return t >= (start - 0.05) && t <= (end + 0.05);
-      });
-
-      // Blank pause between sentences
-      if (!activeSeg) {
-        phraseCard.innerHTML = '';
-        return;
-      }
-
-      // Check word-level timestamps
-      const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
-      let wordList = [];
-      if (words.length > 0) {
-        wordList = words.map(w => {
-          const wStart = w.start > 1000 ? w.start / 1000 : Number(w.start);
-          const wEnd = w.end > 1000 ? w.end / 1000 : Number(w.end);
-          const isActive = t >= (wStart - 0.05) && t <= (wEnd + 0.05);
-          return { word: String(w.word || w.text || w || '').trim(), active: isActive };
-        }).filter(w => w.word);
-      }
-
-      // Segment text fallback if word timestamps are missing
-      if (!wordList.length && activeSeg.text) {
-        const displayWords = String(activeSeg.text).trim().split(/\s+/).filter(Boolean);
-        const segStart = activeSeg.start > 1000 ? activeSeg.start / 1000 : Number(activeSeg.start);
-        const segEnd = activeSeg.end > 1000 ? activeSeg.end / 1000 : Number(activeSeg.end);
-        const segDur = Math.max(0.01, segEnd - segStart);
-        const progress = Math.min(1, Math.max(0, (t - segStart) / segDur));
-        const activeIdx = Math.min(displayWords.length - 1, Math.floor(progress * displayWords.length));
-        wordList = displayWords.map((word, i) => ({
-          word,
-          active: i === activeIdx
-        }));
-      }
-
-      if (!wordList.length) {
-        phraseCard.innerHTML = '';
-        return;
-      }
-
-      // Render words with active Moonshot yellow highlight
-      phraseCard.innerHTML = wordList.map(w => {
-        const escaped = w.word
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;');
-
-        return `
-          <span style="
-            font-family: 'Barlow', 'Montserrat', sans-serif;
-            font-size: 25px;
-            font-weight: 900;
-            text-transform: uppercase;
-            padding: 3px 10px;
-            border-radius: 8px;
-            color: ${w.active ? '#000000' : '#FFFFFF'};
-            background: ${w.active ? '#FFE600' : 'rgba(0, 0, 0, 0.65)'};
-            transform: ${w.active ? 'scale(1.15)' : 'scale(1)'};
-            display: inline-block;
-            transition: transform 0.05s ease, background 0.05s ease;
-            text-shadow: ${w.active ? 'none' : '0 2px 6px rgba(0,0,0,0.9)'};
-          ">${escaped}</span>
-        `;
-      }).join('');
-    }
-
-    video.addEventListener('timeupdate', renderFrame);
-    video.addEventListener('seeked', renderFrame);
-    video.addEventListener('seeking', renderFrame);
-    video.addEventListener('play', renderFrame);
-
-    let rafId = null;
-    function rafLoop() {
-      if (!video.paused && !video.ended) {
-        renderFrame();
-        rafId = requestAnimationFrame(rafLoop);
-      } else {
-        rafId = null;
-      }
-    }
-    video.addEventListener('play', () => {
-      if (!rafId) rafId = requestAnimationFrame(rafLoop);
-    });
-    video.addEventListener('pause', () => {
-      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-      renderFrame();
-    });
-
-    console.log("✅ Permanent native caption engine bound successfully to video stream.");
-  }
-
-  // Bind execution to page load lifecycle
-  if (document.readyState === 'complete') {
-    initPermanentCaptions();
-  } else {
-    window.addEventListener('DOMContentLoaded', initPermanentCaptions);
-    window.addEventListener('load', initPermanentCaptions);
-  }
-})();
