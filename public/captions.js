@@ -30,7 +30,7 @@ const DEFAULT_STYLE = {
   bgOpacity: 0,
   position: "bottom",
   positionX: 50,
-  positionY: 82,
+  positionY: 60,
   wordsPerRow: 0,
   textShadow: "none",
   shadowColor: "#000000",
@@ -74,7 +74,7 @@ const STYLE_PRESETS = [
       bgOpacity: 65,
       position: "bottom",
       positionX: 50,
-      positionY: 82,
+      positionY: 60,
       wordsPerRow: 0,
       textShadow: false,
       shadowColor: "#000000",
@@ -102,7 +102,7 @@ const STYLE_PRESETS = [
       bgOpacity: 100,
       position: "bottom",
       positionX: 50,
-      positionY: 82,
+      positionY: 60,
       wordsPerRow: 2,
       textShadow: false,
       shadowColor: "#000000",
@@ -130,7 +130,7 @@ const STYLE_PRESETS = [
       bgOpacity: 0,
       position: "bottom",
       positionX: 50,
-      positionY: 82,
+      positionY: 60,
       wordsPerRow: 0,
       textShadow: true,
       shadowColor: "#00e5ff",
@@ -186,7 +186,7 @@ const STYLE_PRESETS = [
       bgOpacity: 40,
       position: "bottom",
       positionX: 50,
-      positionY: 84,
+      positionY: 60,
       wordsPerRow: 0,
       textShadow: true,
       shadowColor: "#000000",
@@ -214,7 +214,7 @@ const STYLE_PRESETS = [
       bgOpacity: 75,
       position: "bottom",
       positionX: 50,
-      positionY: 80,
+      positionY: 60,
       wordsPerRow: 2,
       textShadow: true,
       shadowColor: "#000000",
@@ -932,7 +932,7 @@ function buildScaledStyleForExport(baseStyle) {
     textAlign: style.textAlign || "center",
     editorBox: true,
     positionX: Number(style.positionX ?? 50),
-    positionY: Number(style.positionY ?? 82),
+    positionY: Math.min(Math.max(Number(style.positionY ?? 60), 20), 75),
     wordsPerRow: Number(style.wordsPerRow || 0),
     animationStyle: sourceAnimationStyle,
     sourceAnimationStyle,
@@ -2173,7 +2173,7 @@ function normalizeStyle(style = {}) {
   const legacyFonts = { Impact: "'Anton', sans-serif", "Arial Black": "'Archivo Black', sans-serif", Georgia: "'Libre Caslon Text', serif" };
   if (legacyFonts[captionFontName(merged.fontFamily)]) merged.fontFamily = legacyFonts[captionFontName(merged.fontFamily)];
   merged.positionX = Number(merged.positionX ?? 50);
-  merged.positionY = Number(merged.positionY ?? 82);
+  merged.positionY = Math.min(Math.max(Number(merged.positionY ?? 60), 20), 75);
   merged.wordsPerRow = Number(merged.wordsPerRow ?? 0);
   merged.fontSize = clamp(Number(merged.fontSize ?? 28), 12, 72);
   merged.paddingX = clamp(parseInt(merged.paddingX ?? 14, 10) || 14, 0, 60);
@@ -2667,23 +2667,24 @@ function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
 
 function updatePositionUI() {
   const posX = clamp(Number(editorState.style.positionX ?? 50), 5, 95);
-  const posY = clamp(Number(editorState.style.positionY ?? 82), 10, 85);
+  const sliderVal = Number(editorState.style.positionY !== undefined && editorState.style.positionY !== null ? editorState.style.positionY : 60);
+  const safeY = Math.min(Math.max(sliderVal, 20), 75);
 
   if (capPosX) capPosX.value = String(posX);
-  if (capPosY) capPosY.value = String(posY);
+  if (capPosY) capPosY.value = String(safeY);
   if (capPosXVal) capPosXVal.textContent = `${posX}%`;
-  if (capPosYVal) capPosYVal.textContent = `${posY}%`;
-  if (captionPosDisplay) captionPosDisplay.textContent = `X: ${posX}% · Y: ${posY}%`;
+  if (capPosYVal) capPosYVal.textContent = `${safeY}%`;
+  if (captionPosDisplay) captionPosDisplay.textContent = `X: ${posX}% · Y: ${safeY}%`;
 
   positionBtns?.querySelectorAll(".duration-btn").forEach((btn) => {
     if (btn.dataset.pos === "top") {
-      btn.classList.toggle("active", posY <= 25 && Math.abs(posX - 50) <= 10);
+      btn.classList.toggle("active", safeY <= 25 && Math.abs(posX - 50) <= 10);
     } else if (btn.dataset.pos === "center") {
-      btn.classList.toggle("active", Math.abs(posY - 50) <= 10 && Math.abs(posX - 50) <= 10);
+      btn.classList.toggle("active", Math.abs(safeY - 50) <= 10 && Math.abs(posX - 50) <= 10);
     } else if (btn.dataset.pos === "bottom") {
-      btn.classList.toggle("active", posY >= 75 && Math.abs(posX - 50) <= 10);
+      btn.classList.toggle("active", safeY >= 58 && Math.abs(posX - 50) <= 10);
     } else if (btn.dataset.x && btn.dataset.y) {
-      btn.classList.toggle("active", Number(btn.dataset.x) === posX && Number(btn.dataset.y) === posY);
+      btn.classList.toggle("active", Number(btn.dataset.x) === posX && Number(btn.dataset.y) === safeY);
     }
   });
 }
@@ -2703,12 +2704,16 @@ function applyStyleToOverlay() {
   if (captionEditSession) captionOverlay.classList.add("is-editing");
 
   const posX = clamp(Number(s.positionX ?? 50), 5, 95);
-  const posY = clamp(Number(s.positionY ?? 82), 10, 85);
+  const sliderVal = Number(s.positionY !== undefined && s.positionY !== null ? s.positionY : 60);
+  const safeY = Math.min(Math.max(sliderVal, 20), 75);
+  const rotateDeg = Number(s.rotateAngle) || 0;
 
   captionOverlay.style.left = `${posX}%`;
-  captionOverlay.style.top = `${posY}%`;
+  captionOverlay.style.top = safeY + '%';
   captionOverlay.style.bottom = "auto";
-  captionOverlay.style.transform = `translate(-50%, -50%) rotate(${Number(s.rotateAngle) || 0}deg)`;
+  captionOverlay.style.transform = rotateDeg
+    ? `translate(-50%, -50%) rotate(${rotateDeg}deg)`
+    : "translate(-50%, -50%)";
   captionOverlay.style.width = `${s.boxWidth || 88}%`;
   captionOverlay.style.height = s.boxHeight && s.boxHeight > 15 ? `${s.boxHeight}%` : "auto";
   // An explicit frame cannot clip a longer phrase; it grows at the minimum font size.
@@ -2849,7 +2854,7 @@ function initCaptionDragging() {
       if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
     } else {
       s.positionX = clamp(g.style.positionX + dx / g.bounds.width * 100, 5, 95);
-      s.positionY = clamp(g.style.positionY + dy / g.bounds.height * 100, 10, 85);
+      s.positionY = clamp(g.style.positionY + dy / g.bounds.height * 100, 20, 75);
       s.position = "custom";
     }
     applyStyleToOverlay();
@@ -3216,7 +3221,8 @@ function syncStyleFromControls(options = {}) {
   editorState.style.animationStyle = capAnimStyle?.value || "none";
   editorState.style.wordsPerRow = Number(capWordsPerRow?.value || 0);
   editorState.style.positionX = clamp(Number(capPosX?.value || 50), 5, 95);
-  editorState.style.positionY = clamp(Number(capPosY?.value || 82), 10, 85);
+  const sliderValY = Number(capPosY?.value || 60);
+  editorState.style.positionY = Math.min(Math.max(sliderValY, 20), 75);
 
   editorState.style.presetDuration = clamp(
     parseFloat(capPresetDuration?.value || "0.6"),
@@ -3619,7 +3625,7 @@ function applyPresetFromGallery(id) {
   const preservedPosition = {
     position: cur.position || "bottom",
     positionX: cur.positionX !== undefined ? cur.positionX : 50,
-    positionY: cur.positionY !== undefined ? cur.positionY : 82,
+    positionY: Math.min(Math.max(Number(cur.positionY !== undefined && cur.positionY !== null ? cur.positionY : 60), 20), 75),
     rotateAngle: cur.rotateAngle !== undefined ? cur.rotateAngle : 0,
     boxWidth: cur.boxWidth || 88, boxHeight: cur.boxHeight || 0, textAlign: cur.textAlign || "center",
   };
@@ -4295,7 +4301,11 @@ function bindControls() {
     syncCaptionOverlay();
   });
   capPosY?.addEventListener("input", () => {
-    editorState.style.positionY = Number(capPosY.value);
+    const sliderVal = Number(capPosY.value);
+    const safeY = Math.min(Math.max(sliderVal, 20), 75);
+    editorState.style.positionY = safeY;
+    capPosY.value = String(safeY);
+    if (capPosYVal) capPosYVal.textContent = `${safeY}%`;
     editorState.style.position = "custom";
     applyStyleToOverlay();
     persistCaptions();
@@ -4304,7 +4314,7 @@ function bindControls() {
 
   resetCenterBtn?.addEventListener("click", () => {
     editorState.style.positionX = 50;
-    editorState.style.positionY = 82;
+    editorState.style.positionY = 60;
     editorState.style.position = "bottom";
     applyStyleToOverlay();
     persistCaptions();
@@ -4675,7 +4685,16 @@ async function init() {
 
     if (!captionVideo.dataset.hasErrorFallback) {
       captionVideo.dataset.hasErrorFallback = "true";
-      captionVideo.addEventListener("error", () => {
+      captionVideo.addEventListener("error", (e) => {
+        console.error("Video element loading error:", captionVideo.error);
+        // Re-attempt stream with cache bust if connection drops
+        if (captionVideo.error && captionVideo.error.code === 2) {
+          captionVideo.src = captionVideo.src.split("?")[0] + "?t=" + Date.now();
+          captionVideo.load();
+          updatePlaybackUI();
+          return;
+        }
+
         const currentSrc = captionVideo.getAttribute("src") || captionVideo.src || "";
         const fn = currentSrc.split(/[/\\]/).pop()?.split(/[?#]/)[0];
         if (fn && !currentSrc.startsWith("/clips/") && !captionVideo.dataset.triedClips) {
@@ -4865,7 +4884,7 @@ else init();
     if (!_pclLayer) return;
     const t = Number.isFinite(currentTime) ? currentTime : 0;
     const segments = _getSegments();
-    if (!segments.length) {
+    if (!segments || !segments.length) {
       if (_pclLayer.innerHTML !== "") _pclLayer.innerHTML = "";
       _pclLastSegId = null;
       return;
@@ -4878,13 +4897,13 @@ else init();
       if (!seg) continue;
       const start = _normTs(seg.start);
       const end = _normTs(seg.end);
-      if (t >= (start - 0.08) && t <= (end + 0.08)) {
+      if (t >= (start - 0.05) && t <= (end + 0.05)) {
         activeSeg = seg;
         break;
       }
     }
 
-    // Hide if nothing is active
+    // Hide if nothing is active (blank pause between sentences)
     if (!activeSeg) {
       if (_pclLastSegId !== "__none__") {
         _pclLayer.innerHTML = "";
@@ -4894,22 +4913,31 @@ else init();
       return;
     }
 
+    // Synchronize vertical position safely clamped to [20, 75] with default 60%
+    const sliderVal = Number((window.editorState?.style?.positionY !== undefined && window.editorState?.style?.positionY !== null) ? window.editorState.style.positionY : 60);
+    const safeY = Math.min(Math.max(sliderVal, 20), 75);
+    _pclLayer.style.top = safeY + "%";
+    _pclLayer.style.bottom = "auto";
+    _pclLayer.style.transform = "translateY(-50%)";
+
+    const rawText = String(activeSeg.text || "").trim();
+    const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
+
     // Find the active word index inside the segment
     let activeWordIdx = -1;
-    const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
-    if (words.length) {
+    if (words.length > 0) {
       for (let w = 0; w < words.length; w++) {
-        const ws = _normTs(words[w].start);
-        const we = _normTs(words[w].end);
-        if (t >= (ws - 0.08) && t <= (we + 0.08)) {
+        const ws = _normTs(words[w]?.start);
+        const we = _normTs(words[w]?.end);
+        if (t >= (ws - 0.05) && t <= (we + 0.05)) {
           activeWordIdx = w;
           break;
         }
       }
-      // If not exactly in a word boundary, use the last word whose start ≤ currentTime
+      // If not exactly in a word boundary, use the last word whose start <= currentTime
       if (activeWordIdx === -1) {
         for (let w = words.length - 1; w >= 0; w--) {
-          if (_normTs(words[w].start) <= t + 0.08) {
+          if (_normTs(words[w]?.start) <= t + 0.05) {
             activeWordIdx = w;
             break;
           }
@@ -4936,38 +4964,47 @@ else init();
     _pclLastColor = cfg.inactiveColor;
     _pclLastHighlight = cfg.highlightColor;
 
-    // Split segment text into display words
-    const rawText = (activeSeg.text || "").trim();
-    if (!rawText) {
-      _pclLayer.innerHTML = "";
-      return;
+    // Build word tokens: prefer activeSeg.words with timestamps;
+    // fallback gracefully to segment text splitting if word timestamps are absent
+    let wordItems = [];
+    if (words.length > 0) {
+      wordItems = words.map((w, idx) => {
+        const txt = String(w?.word || w?.text || w || "").trim();
+        const ws = _normTs(w?.start);
+        const we = _normTs(w?.end);
+        const active = (t >= (ws - 0.05) && t <= (we + 0.05)) || (idx === activeWordIdx);
+        return { text: txt, active };
+      }).filter(item => item.text);
     }
-    const displayWords = rawText.split(/\s+/).filter(Boolean);
 
-    // Determine whether we can do word-level highlighting
-    // (word array either matches tokens or we fall back to position-based estimation)
-    const hasWordTimings = words.length > 0;
-    let effectiveActiveWordIdx = activeWordIdx;
-    if (!hasWordTimings && displayWords.length > 1) {
-      // Estimate active word by position within segment duration
+    if (!wordItems.length && rawText) {
+      const displayWords = rawText.split(/\s+/).filter(Boolean);
       const segStart = _normTs(activeSeg.start);
       const segEnd = _normTs(activeSeg.end);
       const segDur = Math.max(0.01, segEnd - segStart);
       const progress = Math.min(1, Math.max(0, (t - segStart) / segDur));
-      effectiveActiveWordIdx = Math.floor(progress * displayWords.length);
+      const activeFallbackIdx = Math.min(displayWords.length - 1, Math.floor(progress * displayWords.length));
+      wordItems = displayWords.map((word, i) => ({
+        text: word,
+        active: i === activeFallbackIdx,
+      }));
     }
 
-    // Build the HTML — use CSS classes defined in captionEditorLayout.css
-    const parts = displayWords.map((word, i) => {
-      const isActive = i === effectiveActiveWordIdx;
-      const escapedWord = word
+    if (!wordItems.length) {
+      _pclLayer.innerHTML = "";
+      return;
+    }
+
+    // Build HTML matching the verified highlight styling
+    const parts = wordItems.map((w) => {
+      const escapedWord = w.text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-      if (isActive) {
-        return `<span class="pcl-word pcl-word--active" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:${cfg.activeColor || '#000000'};background:${cfg.highlightColor || '#FFE600'};transform:scale(1.15);text-shadow:none;">${escapedWord}</span>`;
+      if (w.active) {
+        return `<span class="pcl-word pcl-word--active" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:#000000;background:#FFE600;transform:scale(1.15);text-shadow:none;">${escapedWord}</span>`;
       }
-      return `<span class="pcl-word pcl-word--inactive" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:${cfg.inactiveColor || '#FFFFFF'};background:transparent;transform:scale(1);text-shadow:0 2px 6px rgba(0,0,0,0.9);">${escapedWord}</span>`;
+      return `<span class="pcl-word pcl-word--inactive" style="font-family:${cfg.fontFamily};font-size:${cfg.fontSize}px;font-weight:900;padding:2px 8px;border-radius:6px;display:inline-block;color:#FFFFFF;background:transparent;transform:scale(1);text-shadow:0 2px 6px rgba(0,0,0,0.9);">${escapedWord}</span>`;
     });
 
     _pclLayer.innerHTML = parts.join(" ");
@@ -5052,6 +5089,10 @@ else init();
     // Font family selector
     const fontFamilyEl = document.getElementById("capFontFamily");
     if (fontFamilyEl) fontFamilyEl.addEventListener("change", _pclRefresh);
+
+    // Vertical (Y) slider
+    const posYEl = document.getElementById("capPosY");
+    if (posYEl) posYEl.addEventListener("input", _pclRefresh);
 
     // Preset cards — refresh when any preset is applied
     document.addEventListener("captionPresetApplied", _pclRefresh);

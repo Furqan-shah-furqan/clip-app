@@ -198,12 +198,12 @@ function normalizeBurnStyle(style = {}) {
         : 50,
     positionY:
       style.positionY != null && Number.isFinite(Number(style.positionY))
-        ? Number(style.positionY)
+        ? Math.min(Math.max(Number(style.positionY), 20), 75)
         : style.position === "top"
           ? 12
           : style.position === "center"
             ? 50
-            : 82,
+            : 60,
     wordsPerRow: Number(style.wordsPerRow) || 0,
     textShadow: Boolean(style.textShadow),
     shadowColor: style.shadowColor || "#000000",
