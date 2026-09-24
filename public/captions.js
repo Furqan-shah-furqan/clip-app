@@ -616,9 +616,9 @@ function hexToRgb(hex) {
   const normalized =
     clean.length === 3
       ? clean
-          .split("")
-          .map((p) => p + p)
-          .join("")
+        .split("")
+        .map((p) => p + p)
+        .join("")
       : clean;
   const r = parseInt(normalized.slice(0, 2), 16) || 0;
   const g = parseInt(normalized.slice(2, 4), 16) || 0;
@@ -962,7 +962,7 @@ function wrapExportToBox(segments, style) {
       if (measure(word) > width) {
         // Match overflow-wrap:anywhere for long words at narrow box sizes.
         const graphemes = typeof Intl.Segmenter === "function"
-          ? Array.from(new Intl.Segmenter(undefined, {granularity:"grapheme"}).segment(word), item => item.segment)
+          ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(word), item => item.segment)
           : Array.from(word);
         for (const character of graphemes) {
           if (line && measure(line + character) > width) { lines.push(line); line = ""; }
@@ -971,7 +971,7 @@ function wrapExportToBox(segments, style) {
       } else line = line ? `${line} ${word}` : word;
     }
     if (line) lines.push(line);
-    return {...segment, text:lines.join("\n")};
+    return { ...segment, text: lines.join("\n") };
   });
 }
 
@@ -1061,9 +1061,9 @@ function getActiveDisplayWordIndex(seg, time, style = {}) {
   const words = timed
     ? seg.words
     : String(seg.text || "")
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
   if (!words.length) return 0;
   let index = 0;
   if (timed) {
@@ -1107,7 +1107,8 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
         const groupStart = Math.floor(i / groupSize) * groupSize;
         const start = Math.max(Number(seg.start), Number(word.start));
         const end = Math.min(Number(seg.end), Number(word.end));
-        if (end > start) expanded.push({ ...seg, id: `${seg.id || "seg"}-spoken-${i}`,
+        if (end > start) expanded.push({
+          ...seg, id: `${seg.id || "seg"}-spoken-${i}`,
           start, end, text: seg.words.slice(groupStart, i + 1).map(w => w.word).join(" "),
           words: seg.words.slice(groupStart, i + 1),
         });
@@ -1141,7 +1142,8 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
           const groupStart = Math.floor(i / wordsPerGroup) * wordsPerGroup;
           const subStart = Number(word.start);
           const subEnd = Number(word.end);
-          if (subEnd > subStart) expanded.push({ ...seg,
+          if (subEnd > subStart) expanded.push({
+            ...seg,
             id: `${seg.id || "seg"}-word-${i}`, start: subStart, end: subEnd,
             text: seg.words.slice(groupStart, i + 1).map(w => w.word).join(" "),
             words: seg.words.slice(groupStart, i + 1),
@@ -1184,8 +1186,10 @@ function expandSegmentsForExport(segments, animStyle, wordsPerRow = 0) {
         seg.words.forEach((word, i) => {
           const subStart = Number(word.start);
           const subEnd = Number(word.end);
-          if (subEnd > subStart) expanded.push({ ...seg, start: subStart, end: subEnd,
-            id: `${seg.id || "seg"}-append-${i}`, text: seg.words.slice(0, i + 1).map(w => w.word).join(" ") });
+          if (subEnd > subStart) expanded.push({
+            ...seg, start: subStart, end: subEnd,
+            id: `${seg.id || "seg"}-append-${i}`, text: seg.words.slice(0, i + 1).map(w => w.word).join(" ")
+          });
         });
         continue;
       }
@@ -1223,7 +1227,7 @@ function loadSession() {
   if (raw) {
     try {
       session = JSON.parse(raw);
-    } catch {}
+    } catch { }
   }
 
   // Parse Clip Index & Load Real Clip Data
@@ -1238,7 +1242,7 @@ function loadSession() {
   try {
     const rawCurrent = localStorage.getItem("currentClips");
     if (rawCurrent) currentClips = JSON.parse(rawCurrent);
-  } catch {}
+  } catch { }
 
   let clipFromStorage = null;
   if (Array.isArray(currentClips) && currentClips.length) {
@@ -1271,7 +1275,7 @@ function loadSession() {
       if (!studioClip && requestedIdx === null) {
         studioClip = clips[0] || studio.generatedClip || null;
       }
-    } catch {}
+    } catch { }
   }
 
   const activeFoundClip = clipFromStorage || studioClip;
@@ -1295,7 +1299,7 @@ function loadSession() {
       };
       try {
         localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      } catch {}
+      } catch { }
       return session;
     }
   }
@@ -1312,7 +1316,7 @@ function loadSession() {
         session.captions = [];
         try {
           localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        } catch {}
+        } catch { }
       }
       return session;
     }
@@ -1329,7 +1333,7 @@ function loadSession() {
     };
     try {
       localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    } catch {}
+    } catch { }
     return session;
   }
 
@@ -1343,8 +1347,8 @@ function loadSession() {
       const clips = Array.isArray(jobData.clips)
         ? jobData.clips
         : Array.isArray(jobData.resultJson?.clips)
-        ? jobData.resultJson.clips
-        : [];
+          ? jobData.resultJson.clips
+          : [];
       const targetClip = clips[targetIdx] || (clipIndex ? clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
       if (targetClip && getClipSource(targetClip)) {
         const cleanCaptions = isPlaceholderOrMockCaptions(targetClip.captions, targetClip) ? [] : (targetClip.captions || []);
@@ -1356,10 +1360,10 @@ function loadSession() {
         };
         try {
           localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        } catch {}
+        } catch { }
         return session;
       }
-    } catch {}
+    } catch { }
   }
 
   // Fallback 2: check all projects cache in localStorage
@@ -1386,7 +1390,7 @@ function loadSession() {
           }
         }
       }
-    } catch {}
+    } catch { }
   }
 
   return session;
@@ -1611,8 +1615,10 @@ function buildSegmentsFromWords(words = []) {
   let chunk = [];
   const flush = () => {
     if (!chunk.length) return;
-    segments.push({ id: uniqueId(), start: chunk[0].start, end: chunk[chunk.length - 1].end,
-      text: chunk.map(w => w.word).join(" "), words: chunk });
+    segments.push({
+      id: uniqueId(), start: chunk[0].start, end: chunk[chunk.length - 1].end,
+      text: chunk.map(w => w.word).join(" "), words: chunk
+    });
     chunk = [];
   };
   for (const item of words) {
@@ -1688,7 +1694,7 @@ async function fetchServerCaptions(clip) {
 
 // Do not overwrite edits made while a background transcription was running.
 function captionContentSignature(segments) {
-  return JSON.stringify(segments.map(({start, end, text, words}) => ({start, end, text, words})));
+  return JSON.stringify(segments.map(({ start, end, text, words }) => ({ start, end, text, words })));
 }
 
 async function syncAudioTranscript() {
@@ -2261,7 +2267,7 @@ function applyTextBoxVisuals(element, style) {
   if (!element.style.borderRadius) {
     element.style.borderRadius = `${Number(merged.borderRadius) || 14}px`;
   }
-  
+
   // Line Height
   const lineSpacing = Number(merged.lineSpacing || 1.2);
   element.style.lineHeight = String(lineSpacing);
@@ -2390,7 +2396,7 @@ function bindColorSwatches() {
 }
 
 // Layout reorganization no-op since captions.html is already authored correctly
-function reorganizeStyleLayout() {}
+function reorganizeStyleLayout() { }
 
 // ─── ANIMATION RENDERERS ──────────────────────────────────
 
@@ -2773,10 +2779,10 @@ function beginCaptionEdit() {
   const segment = getActiveSegmentByTime(safeVideoTime());
   if (!segment) { setBoxHint("Seek to a spoken word, then choose Edit words."); return; }
   captionVideo.pause();
-  captionEditSession = { segment, originalText: segment.text, originalWords: segment.words?.map(w => ({...w})) };
+  captionEditSession = { segment, originalText: segment.text, originalWords: segment.words?.map(w => ({ ...w })) };
   captionOverlay.classList.add("is-selected", "is-editing");
   captionOverlayText.replaceChildren();
-  const words = segment.words?.length ? segment.words : String(segment.text).split(/\s+/).map(word => ({word}));
+  const words = segment.words?.length ? segment.words : String(segment.text).split(/\s+/).map(word => ({ word }));
   words.forEach((word, index) => {
     if (index) captionOverlayText.appendChild(document.createTextNode(" "));
     const span = document.createElement("span");
@@ -2822,8 +2828,10 @@ function initCaptionDragging() {
     captionOverlay.classList.add("is-selected");
     const handle = e.target.closest(".cap-resize-handle")?.dataset.handle;
     const bounds = captionVideoWrap.getBoundingClientRect();
-    gesture = { x:e.clientX, y:e.clientY, handle, bounds, style:{...editorState.style},
-      width:captionOverlay.offsetWidth, height:captionOverlay.offsetHeight };
+    gesture = {
+      x: e.clientX, y: e.clientY, handle, bounds, style: { ...editorState.style },
+      width: captionOverlay.offsetWidth, height: captionOverlay.offsetHeight
+    };
     captionOverlay.classList.add(handle ? "is-resizing" : "is-dragging");
     captionOverlay.setPointerCapture?.(e.pointerId);
   });
@@ -3499,9 +3507,9 @@ function renderPresetsGalleryGrid() {
       const anim = (p.style?.wordAnimation || p.style?.animationStyle || "").toLowerCase();
       const font = (p.style?.fontFamily || "").toLowerCase();
       return name.includes(presetsSearchQuery) ||
-             cat.includes(presetsSearchQuery) ||
-             anim.includes(presetsSearchQuery) ||
-             font.includes(presetsSearchQuery);
+        cat.includes(presetsSearchQuery) ||
+        anim.includes(presetsSearchQuery) ||
+        font.includes(presetsSearchQuery);
     });
   }
 
@@ -3875,8 +3883,8 @@ async function exportCaptionedVideo() {
     if (!response.ok) {
       throw new Error(
         data?.details ||
-          data?.error ||
-          `Export failed with status ${response.status}`,
+        data?.error ||
+        `Export failed with status ${response.status}`,
       );
     }
 
@@ -3993,8 +4001,8 @@ async function buildCaptionedClipForPublish() {
   if (!response.ok) {
     throw new Error(
       data?.details ||
-        data?.error ||
-        `Could not prepare captioned video. Status ${response.status}`,
+      data?.error ||
+      `Could not prepare captioned video. Status ${response.status}`,
     );
   }
 
@@ -4162,7 +4170,7 @@ function bindControls() {
   saveAndBackBtn?.addEventListener("click", () => {
     try {
       syncStyleFromControls();
-    } catch {}
+    } catch { }
     goBack();
   });
 
@@ -4188,7 +4196,7 @@ function bindControls() {
 
   capFontFamily?.addEventListener("change", () => {
     const name = captionFontName(capFontFamily.value);
-    const weights = { "Archivo Black":400, Poppins:700, Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
+    const weights = { "Archivo Black": 400, Poppins: 700, Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
     if (weights[name]) editorState.style.fontWeight = weights[name];
     onSliderCommit();
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
@@ -4449,8 +4457,8 @@ async function init() {
             requestedIdx !== null
               ? parsedCurrent[requestedIdx]
               : parsedCurrent.find(
-                  (c) => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)
-                );
+                (c) => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)
+              );
           if (matched && getClipSource(matched)) {
             session = {
               clip: matched,
@@ -4462,7 +4470,7 @@ async function init() {
           }
         }
       }
-    } catch {}
+    } catch { }
 
     // 2. Fetch directly from backend /api/clips/:idOrIndex
     if ((!session?.clip || !getClipSource(session.clip) || (requestedIdx !== null && Number(session.index) !== requestedIdx)) && clipIndex !== null) {
@@ -4497,7 +4505,7 @@ async function init() {
             const parsed = JSON.parse(raw);
             return parsed.id || parsed.jobId || null;
           }
-        } catch {}
+        } catch { }
         return null;
       })();
 
@@ -4512,8 +4520,8 @@ async function init() {
           const clips = Array.isArray(jobData.clips)
             ? jobData.clips
             : Array.isArray(jobData.job?.clips)
-            ? jobData.job.clips
-            : [];
+              ? jobData.job.clips
+              : [];
           const targetClip = clips[searchIdx] || (clipIndex ? clips.find(c => c && (String(c.id) === String(clipIndex) || c.fileName === clipIndex)) : null);
           if (targetClip && getClipSource(targetClip)) {
             session = {
@@ -4549,7 +4557,7 @@ async function init() {
             localStorage.setItem(SESSION_KEY, JSON.stringify(session));
           }
         }
-      } catch {}
+      } catch { }
     }
 
     if (!session?.clip || !getClipSource(session.clip)) {
@@ -4574,7 +4582,7 @@ async function init() {
             }
           }
         }
-      } catch {}
+      } catch { }
     }
 
     if (!session?.clip || !getClipSource(session.clip)) {
@@ -4626,7 +4634,7 @@ async function init() {
   if (savedStyle) {
     try {
       Object.assign(editorState.style, JSON.parse(savedStyle));
-    } catch {}
+    } catch { }
   }
 
   if (session.captionStyle) {
@@ -4662,7 +4670,7 @@ async function init() {
       captionVideo.load();
       try {
         captionVideo.currentTime = 0;
-      } catch {}
+      } catch { }
       updatePlaybackUI();
 
       // Initialize subject segmentation if available
@@ -4743,7 +4751,7 @@ async function init() {
                   return;
                 }
               }
-            } catch {}
+            } catch { }
           }
         }
       });
@@ -5052,7 +5060,7 @@ else init();
     });
 
     // ── Supplementary hooks for seek / pause / play / RAF loop ───────────────
-    _pclVideo.addEventListener("seeked",  () => _pclRender(_pclVideo.currentTime));
+    _pclVideo.addEventListener("seeked", () => _pclRender(_pclVideo.currentTime));
     _pclVideo.addEventListener("seeking", () => _pclRender(_pclVideo.currentTime));
     _pclVideo.addEventListener("play", () => {
       _pclRefresh();
@@ -5115,3 +5123,194 @@ else init();
   window._pclEngine = { render: _pclRender, refresh: _pclRefresh };
 }());
 
+// ==========================================
+// PERMANENT NATIVE CAPTION ENGINE FIX
+// ==========================================
+(function () {
+  function initPermanentCaptions() {
+    const video = document.querySelector('video') || document.getElementById('captionVideo');
+    if (!video) {
+      // Retry if video element isn't rendered yet
+      setTimeout(initPermanentCaptions, 400);
+      return;
+    }
+
+    // Hide any legacy permanent caption layer to prevent double overlay
+    const legacyPcl = document.getElementById('permanent-caption-layer');
+    if (legacyPcl) legacyPcl.style.display = 'none';
+
+    // Prevent duplicate injection if already initialized
+    if (document.getElementById('permanent-caption-container')) return;
+
+    // 1. Create authoritative overlay container locked to the video frame
+    const container = document.createElement('div');
+    container.id = 'permanent-caption-container';
+
+    const curY = Number((window.editorState?.style?.positionY !== undefined && window.editorState?.style?.positionY !== null) ? window.editorState.style.positionY : 60);
+    const safeY = Math.min(Math.max(curY, 20), 75);
+
+    container.style.cssText = `
+      position: absolute !important;
+      left: 0 !important;
+      right: 0 !important;
+      top: ${safeY}% !important;
+      bottom: auto !important;
+      transform: translateY(-50%) !important;
+      display: flex !important;
+      justify-content: center !important;
+      pointer-events: none !important;
+      z-index: 99999 !important;
+      text-align: center !important;
+      padding: 0 16px !important;
+    `;
+
+    const phraseCard = document.createElement('div');
+    phraseCard.style.cssText = `
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      max-width: 90%;
+    `;
+    container.appendChild(phraseCard);
+
+    const parent = video.parentElement;
+    if (parent && window.getComputedStyle(parent).position === 'static') {
+      parent.style.position = 'relative';
+    }
+    if (parent) {
+      parent.appendChild(container);
+    }
+
+    // Dynamic sync of vertical position from Y slider
+    const capPosYEl = document.getElementById('capPosY');
+    if (capPosYEl) {
+      capPosYEl.addEventListener('input', () => {
+        const val = Number(capPosYEl.value || 60);
+        const y = Math.min(Math.max(val, 20), 75);
+        container.style.top = y + '%';
+        container.style.transform = 'translateY(-50%)';
+      });
+    }
+
+    // 2. Playback sync loop running natively on the video element
+    function renderFrame() {
+      // Grab data dynamically from global app state
+      const segments = window.captionData?.segments
+        || window.editorState?.segments
+        || window.segments
+        || window.currentClip?.segments
+        || (Array.isArray(window.captionData) ? window.captionData : [])
+        || [];
+
+      if (!Array.isArray(segments) || segments.length === 0) {
+        phraseCard.innerHTML = '';
+        return;
+      }
+
+      const t = video.currentTime;
+
+      // Find active phrase segment
+      const activeSeg = segments.find(s => {
+        if (!s) return false;
+        const start = s.start > 1000 ? s.start / 1000 : Number(s.start);
+        const end = s.end > 1000 ? s.end / 1000 : Number(s.end);
+        return t >= (start - 0.05) && t <= (end + 0.05);
+      });
+
+      // Blank pause between sentences
+      if (!activeSeg) {
+        phraseCard.innerHTML = '';
+        return;
+      }
+
+      // Check word-level timestamps
+      const words = Array.isArray(activeSeg.words) ? activeSeg.words : [];
+      let wordList = [];
+      if (words.length > 0) {
+        wordList = words.map(w => {
+          const wStart = w.start > 1000 ? w.start / 1000 : Number(w.start);
+          const wEnd = w.end > 1000 ? w.end / 1000 : Number(w.end);
+          const isActive = t >= (wStart - 0.05) && t <= (wEnd + 0.05);
+          return { word: String(w.word || w.text || w || '').trim(), active: isActive };
+        }).filter(w => w.word);
+      }
+
+      // Segment text fallback if word timestamps are missing
+      if (!wordList.length && activeSeg.text) {
+        const displayWords = String(activeSeg.text).trim().split(/\s+/).filter(Boolean);
+        const segStart = activeSeg.start > 1000 ? activeSeg.start / 1000 : Number(activeSeg.start);
+        const segEnd = activeSeg.end > 1000 ? activeSeg.end / 1000 : Number(activeSeg.end);
+        const segDur = Math.max(0.01, segEnd - segStart);
+        const progress = Math.min(1, Math.max(0, (t - segStart) / segDur));
+        const activeIdx = Math.min(displayWords.length - 1, Math.floor(progress * displayWords.length));
+        wordList = displayWords.map((word, i) => ({
+          word,
+          active: i === activeIdx
+        }));
+      }
+
+      if (!wordList.length) {
+        phraseCard.innerHTML = '';
+        return;
+      }
+
+      // Render words with active Moonshot yellow highlight
+      phraseCard.innerHTML = wordList.map(w => {
+        const escaped = w.word
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+
+        return `
+          <span style="
+            font-family: 'Barlow', 'Montserrat', sans-serif;
+            font-size: 25px;
+            font-weight: 900;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border-radius: 8px;
+            color: ${w.active ? '#000000' : '#FFFFFF'};
+            background: ${w.active ? '#FFE600' : 'rgba(0, 0, 0, 0.65)'};
+            transform: ${w.active ? 'scale(1.15)' : 'scale(1)'};
+            display: inline-block;
+            transition: transform 0.05s ease, background 0.05s ease;
+            text-shadow: ${w.active ? 'none' : '0 2px 6px rgba(0,0,0,0.9)'};
+          ">${escaped}</span>
+        `;
+      }).join('');
+    }
+
+    video.addEventListener('timeupdate', renderFrame);
+    video.addEventListener('seeked', renderFrame);
+    video.addEventListener('seeking', renderFrame);
+    video.addEventListener('play', renderFrame);
+
+    let rafId = null;
+    function rafLoop() {
+      if (!video.paused && !video.ended) {
+        renderFrame();
+        rafId = requestAnimationFrame(rafLoop);
+      } else {
+        rafId = null;
+      }
+    }
+    video.addEventListener('play', () => {
+      if (!rafId) rafId = requestAnimationFrame(rafLoop);
+    });
+    video.addEventListener('pause', () => {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+      renderFrame();
+    });
+
+    console.log("✅ Permanent native caption engine bound successfully to video stream.");
+  }
+
+  // Bind execution to page load lifecycle
+  if (document.readyState === 'complete') {
+    initPermanentCaptions();
+  } else {
+    window.addEventListener('DOMContentLoaded', initPermanentCaptions);
+    window.addEventListener('load', initPermanentCaptions);
+  }
+})();
