@@ -2570,7 +2570,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
         delete span.dataset.highlightMode;
         span.style.backgroundColor = "transparent";
         span.style.padding = "0px";
-        span.style.display = "inline";
+        span.style.display = "inline-block";
         span.style.color = style.highlightColor || "#00FF66";
         if (style.fontStyle === "italic") span.style.fontStyle = "italic";
       }
@@ -2578,7 +2578,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       delete span.dataset.highlightMode;
       span.style.backgroundColor = "transparent";
       span.style.padding = "0px";
-      span.style.display = "inline";
+      span.style.display = "inline-block";
       span.style.color = "inherit";
       span.style.fontStyle = style.fontStyle === "italic" ? "normal" : "inherit";
     }

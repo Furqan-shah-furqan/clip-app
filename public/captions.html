@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=editor-2" />
     <link rel="stylesheet" href="captions.css?v=editor-2" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-8" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=animated-1" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -108,9 +108,9 @@
         <!-- MAIN LAYOUT: 80% Left Controls Workspace / 20% Right Mobile Frame -->
         <div class="ce-layout" id="editorShell">
           <!-- LEFT CONTAINER: 80% CONTROLS WORKSPACE (2x2 Grid) -->
-          <div class="ce-controls-workspace ce-workspace" id="controlsWorkspace">
+          <div class="ce-controls-workspace layout-container grid-layout" id="controlsWorkspace" data-grid="1">
             <!-- TOP-LEFT: CARD 1 (Typography & Motion) -->
-            <section class="ce-card ce-card--typo" id="cardTypography">
+            <section class="item ce-card ce-card--typo" id="cardTypography">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🔤</span>
@@ -270,7 +270,7 @@
             </section>
 
             <!-- TOP-RIGHT: CARD 3 (Colors & Outline) -->
-            <section class="ce-card ce-card--colors" id="cardColors">
+            <section class="item ce-card ce-card--colors" id="cardColors">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🎨</span>
@@ -459,7 +459,7 @@
             </section>
 
             <!-- BOTTOM-LEFT: CARD 2 (Text Box & Position) -->
-            <section class="ce-card ce-card--placement" id="cardPlacement">
+            <section class="item ce-card ce-card--placement" id="cardPlacement">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">📍</span>
@@ -548,7 +548,7 @@
             </section>
 
             <!-- BOTTOM-RIGHT: CARD 4 (Presets & Export) -->
-            <section class="ce-card ce-card--presets" id="cardPresets">
+            <section class="item ce-card ce-card--presets" id="cardPresets">
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">⚡</span>
@@ -729,7 +729,8 @@
     <script src="captionPresets.js?v=editor-5"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=timeline-1"></script>
-    <script src="captions.js?v=timeline-1"></script>
+    <script src="captions.js?v=styling-1"></script>
     <script src="dropdowns.js?v=1"></script>
+    <script type="module" src="captionLayout.js?v=1"></script>
   </body>
 </html>

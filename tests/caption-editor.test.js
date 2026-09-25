@@ -250,3 +250,17 @@ test('actual 30.88s speech transcript displays every recognized word through the
   assert.equal(checked,91); // Whisper also returned two zero-duration tokens.
   assert.ok(h.controls.captionVideo.currentTime>30);
 });
+
+
+test('caption color and motion survive word replacement without changing speech times', () => {
+  const h = harness();
+  const timing = h.run('JSON.stringify(editorState.segments)');
+  h.run('editorState.style.textColor="#ff6e5e"; editorState.style.highlightColor="#4ade80"; editorState.style.animationStyle="pop"; applyStyleToOverlay(); renderSmoothCaption(captionOverlayText,"hello world","s",0,editorState.style);');
+  assert.equal(h.controls.captionOverlayText.style.color, '#ff6e5e');
+  assert.equal(h.controls.captionOverlayText.children[0].style.color, '#4ade80');
+  assert.equal(h.controls.captionOverlayText.children[0].style.display, 'inline-block');
+  h.run('renderSmoothCaption(captionOverlayText,"next phrase","next",1,editorState.style);');
+  assert.equal(h.controls.captionOverlayText.children[1].className, 'caption-smooth-word caption-smooth-word--pop');
+  assert.equal(h.controls.captionOverlayText.children[1].style.color, '#4ade80');
+  assert.equal(h.run('JSON.stringify(editorState.segments)'), timing);
+});
