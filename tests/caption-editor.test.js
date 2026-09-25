@@ -264,3 +264,22 @@ test('caption color and motion survive word replacement without changing speech 
   assert.equal(h.controls.captionOverlayText.children[1].style.color, '#4ade80');
   assert.equal(h.run('JSON.stringify(editorState.segments)'), timing);
 });
+
+test('layout loops through all four grids and pauses for editing/reduced motion', () => {
+  let next, editing=false, reduced=false;
+  const states=[], events={};
+  const root={dataset:{grid:'1'},matches:()=>editing,getClientRects:()=>[{}]};
+  const ctx=vm.createContext({document:{getElementById:()=>root,hidden:false},
+    matchMedia:q=>({get matches(){return q.includes('reduced') && reduced;}}),
+    setTimeout:fn=>{next=fn;return 1;},clearTimeout(){},stagger:()=>0,
+    addEventListener:(name,fn)=>events[name]=fn,
+    createLayout:()=>({update(fn,options){fn({root});states.push(root.dataset.grid);options.onComplete();return {pause(){}};}})});
+  const code=fs.readFileSync(path.join(rootPath(),'public/captionLayout.js'),'utf8').replace(/^import .*;\n/,'');
+  vm.runInContext(code,ctx);
+  for(let i=0;i<4;i++)next();
+  assert.deepEqual(states,['2','3','4','1']);
+  editing=true;next();assert.equal(states.length,4);
+  editing=false;reduced=true;next();assert.equal(states.length,4);
+  events.pagehide();reduced=false;next();assert.equal(states.length,4);
+});
+function rootPath(){return path.resolve(__dirname,'..');}

@@ -1508,3 +1508,7 @@ html:has(.caption-editor-page), body.caption-editor-page {
 .caption-editor-page .preset-card { border: 0 !important; border-radius: 15px !important; box-shadow: none !important; min-width: 0; }
 .caption-editor-page .preset-card.is-active { background: var(--panel-3) !important; }
 .caption-editor-page .preset-card.is-active .preset-name::after { content: ' ✓'; }
+.caption-editor-page :is(.cf-select-trigger, .cf-select-menu) {
+  border: 0 !important; border-radius: 15px !important; box-shadow: none !important;
+}
+.caption-editor-page :is(.cf-select-option, .presets-search-input, .presets-filter-tab) { border: 0 !important; border-radius: 5px !important; }
