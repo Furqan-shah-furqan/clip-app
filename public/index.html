@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="style.css?v=20260922" />
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
+    <link rel="stylesheet" href="hero.css?v=1" />
   </head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
@@ -84,7 +85,7 @@
         <!-- ───── TAB 1: CLIP GENERATION VIEW ───── -->
         <section class="home-view-pane is-active" id="viewGenerate">
           <!-- ─── HERO SECTION ─── -->
-          <article class="hero-redesign-panel">
+          <article class="hero-redesign-panel hero-reference">
             <!-- Typography & Hero Headlines -->
             <div class="hero-headings">
               <h1 class="hero-title">
@@ -95,147 +96,10 @@
               </p>
             </div>
 
-            <!-- ─── INPUT CONTAINER CARD (NEOMORPHIC BASE CARD) ─── -->
-            <div class="hero-card-container neomorphic-base-card" id="heroInputCard">
-              <!-- Neomorphic Heading -->
-              <div class="neomorphic-card-header">
-                <h2 class="neomorphic-title">You're almost there!</h2>
-                <p class="neomorphic-subtitle">
-                  Review your funding goal, inspect media assets, and trigger automatic clip generation.
-                </p>
-              </div>
-
-              <!-- 1. Floating Dropdown / Tooltip Box with 200px x 150px Thumbnail -->
-              <div class="neo-dropdown-box" id="neoFundingDropdown">
-                <button
-                  type="button"
-                  class="neo-dropdown-trigger"
-                  id="neoFundingDropdownTrigger"
-                  aria-expanded="true"
-                >
-                  <div class="neo-trigger-left">
-                    <span class="neo-trigger-icon">🎯</span>
-                    <div>
-                      <span class="neo-trigger-title">Funding goal</span>
-                      <span class="neo-trigger-subtitle">Campaign Target &amp; Assets</span>
-                    </div>
-                  </div>
-                  <div class="neo-trigger-right">
-                    <span class="neo-target-badge" id="neoFundingAmountBadge">$25,000</span>
-                    <svg class="neo-chevron-icon" id="neoFundingChevron" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </button>
-
-                <div class="neo-dropdown-content is-open" id="neoFundingDropdownContent">
-                  <div class="neo-list-tile">
-                    <!-- YouTube Thumbnail: Constrained explicitly to 200px x 150px -->
-                    <div class="neo-thumb-wrapper" style="width: 200px; height: 150px; min-width: 200px; max-width: 200px;">
-                      <img
-                        id="neoFundingThumb"
-                        src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80"
-                        alt="Project Media Preview"
-                        class="neo-thumb-img"
-                      />
-                      <span class="neo-thumb-badge">YouTube</span>
-                      <div class="neo-play-circle">
-                        <svg class="neo-play-svg" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M8 5v14l11-7z" />
-                        </svg>
-                      </div>
-                    </div>
-
-                    <!-- Inputs & Metadata -->
-                    <div class="neo-tile-body">
-                      <div class="neo-tile-header">
-                        <div>
-                          <h4 class="neo-tile-title" id="neoTileTitle">Campaign Video Feature</h4>
-                          <p class="neo-tile-sub" id="neoTileSub">Official Teaser &bull; HD</p>
-                        </div>
-                        <span class="neo-live-media-tag">Live Media</span>
-                      </div>
-
-                      <div class="neo-allocation-field">
-                        <label class="neo-field-label">Target Allocation</label>
-                        <div class="neo-input-wrapper">
-                          <span class="neo-currency-tag">USD</span>
-                          <input
-                            type="text"
-                            id="neoTargetInput"
-                            class="neo-target-input"
-                            value="$25,000"
-                            placeholder="e.g. $25,000"
-                          />
-                        </div>
-                      </div>
-
-                      <div class="neo-tile-footer">
-                        <span>Auto-calculated split: 100%</span>
-                        <span class="neo-link-btn">Edit Details &rarr;</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 2. Interactive Step Progress Bar (5 Steps) -->
-              <div class="neo-step-progress-wrapper" id="neoStepProgress">
-                <div class="neo-step-track-line">
-                  <div class="neo-step-track-fill" id="neoStepTrackFill" style="width: 75%;"></div>
-                </div>
-
-                <div class="neo-step-nodes-row">
-                  <!-- Step 1: Completed -->
-                  <div class="neo-step-node is-completed" data-step="1">
-                    <div class="neo-step-circle">
-                      <svg class="neo-check-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span class="neo-step-name">Create Project</span>
-                  </div>
-
-                  <!-- Step 2: Completed -->
-                  <div class="neo-step-node is-completed" data-step="2">
-                    <div class="neo-step-circle">
-                      <svg class="neo-check-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span class="neo-step-name">Add Media</span>
-                  </div>
-
-                  <!-- Step 3: Completed -->
-                  <div class="neo-step-node is-completed" data-step="3">
-                    <div class="neo-step-circle">
-                      <svg class="neo-check-svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    </div>
-                    <span class="neo-step-name">Set Goals</span>
-                  </div>
-
-                  <!-- Step 4: Semi-active -->
-                  <div class="neo-step-node is-active" data-step="4">
-                    <div class="neo-step-circle">
-                      <span class="neo-pulse-dot"></span>
-                    </div>
-                    <span class="neo-step-name">Team</span>
-                  </div>
-
-                  <!-- Step 5: Inactive (+) -->
-                  <div class="neo-step-node is-inactive" data-step="5">
-                    <div class="neo-step-circle">
-                      <span class="neo-plus-sign">+</span>
-                    </div>
-                    <span class="neo-step-name">Launch</span>
-                  </div>
-                </div>
-              </div>
-
+            <div class="hero-card-container" id="heroInputCard">
+              <div class="hero-entry-row">
               <!-- Primary Input: Pill Container -->
-              <div class="hero-pill-input-box neo-input-box mt-4">
+              <div class="hero-pill-input-box">
                 <span class="hero-link-icon">🔗</span>
                 <input
                   type="url"
@@ -265,6 +129,50 @@
                 </button>
               </div>
 
+              <!-- CTA Button & Cancel Button on Exact Same Row -->
+              <div class="hero-cta-wrapper" id="generationActionRow">
+                <button
+                  class="cancel-generation-btn is-hidden"
+                  id="cancelGenerationBtn"
+                  type="button"
+                  aria-label="Cancel clip generation"
+                  title="Cancel generation"
+                >
+                  <svg class="neo-cancel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Cancel</span>
+                </button>
+                <button
+                  class="hero-gradient-cta-btn"
+                  id="smartClipBtn"
+                  type="button"
+                >
+                  <span>✨ Generate Clips</span>
+                  <span class="cta-arrow">→</span>
+                </button>
+              </div>
+
+              </div>
+              <div class="hero-showcase">
+                <section class="hero-loading-card" aria-label="Clip generation progress">
+                  <div class="hero-loading-main">
+                    <div class="hero-loading-gauge" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="heroLoadingGauge">
+                      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="heroLoadingGradient"><stop stop-color="#00d9ff"/><stop offset=".5" stop-color="#7679ff"/><stop offset="1" stop-color="#e22bdc"/></linearGradient></defs><circle class="hero-gauge-track" cx="60" cy="60" r="49"/><circle class="hero-gauge-fill" id="heroLoadingArc" cx="60" cy="60" r="49"/></svg>
+                      <div class="hero-loading-value"><strong id="heroLoadingPercent">0%</strong><span>Loading</span></div>
+                    </div>
+                    <div class="hero-loading-copy"><h2>Your next<br>great clips</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+                  </div>
+                  <p class="hero-loading-status" id="heroLoadingStatus" role="status">Add a video to get started</p>
+                </section>
+                <div class="hero-media-card">
+                  <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a link or upload a video below.</span></div>
+                  <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
+                  <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
+                  <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
+                </div>
+              </div>
+              <div class="hero-source-toolbar">
               <!-- Hidden file upload -->
               <input type="file" id="videoInput" accept="video/*" hidden />
 
@@ -285,60 +193,7 @@
                 </button>
               </div>
 
-              <!-- Compact Progress Card with Purple Accent Boxes (Dynamic during generation) -->
-              <div class="neo-compact-progress is-hidden" id="neoCompactProgress">
-                <div class="neo-compact-top">
-                  <span class="neo-compact-label">Generation Status</span>
-                  <span class="neo-compact-percent" id="neoCompactPercent">45%</span>
-                </div>
-                <div class="neo-compact-track">
-                  <div class="neo-compact-fill" id="neoCompactFill" style="width: 45%;"></div>
-                </div>
-                <div class="neo-purple-accents-row">
-                  <div class="neo-purple-box">
-                    <p class="neo-purple-title">Stage Phase</p>
-                    <p class="neo-purple-sub" id="neoCompactStage">Analyzing viral moments...</p>
-                  </div>
-                  <div class="neo-purple-box neo-purple-box-flex">
-                    <div>
-                      <p class="neo-purple-title">Clips Target</p>
-                      <p class="neo-purple-sub">3-5 Vertical</p>
-                    </div>
-                    <span class="neo-purple-pulse"></span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- CTA Button & Cancel Button on Exact Same Row -->
-              <div class="hero-cta-wrapper neo-cta-wrapper" id="generationActionRow">
-                <button
-                  class="cancel-generation-btn is-hidden"
-                  id="cancelGenerationBtn"
-                  type="button"
-                  aria-label="Cancel clip generation"
-                  title="Cancel generation"
-                >
-                  <svg class="neo-cancel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span>Cancel</span>
-                </button>
-                <button
-                  class="hero-gradient-cta-btn neo-main-cta-btn"
-                  id="smartClipBtn"
-                  type="button"
-                >
-                  <span>✨ Generate Clips</span>
-                  <span class="cta-arrow">→</span>
-                </button>
-              </div>
-
-              <!-- 5. Tip Footer -->
-              <div class="neo-tip-footer">
-                <div class="neo-tip-pill">
-                  <div class="neo-tip-badge">+</div>
-                  <span><strong>Tip:</strong> Use round numbers to attract backers.</span>
-                </div>
+                <span class="hero-toolbar-note">Long videos. Standout moments.</span>
               </div>
             </div>
 
@@ -827,5 +682,6 @@
     <script src="captionClient.js?v=20260922"></script>
     <script src="app.js?v=20260922"></script>
     <script src="dropdowns.js?v=20260922"></script>
+    <script src="hero.js?v=1"></script>
   </body>
 </html>
