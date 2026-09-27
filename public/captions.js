@@ -2402,6 +2402,9 @@ function bindColorSwatches() {
       const target = document.getElementById(btn.dataset.target);
       if (target && btn.dataset.value) {
         target.value = toHexColor(btn.dataset.value, target.value || "#000000");
+        if (target === capTextColor && editorState.style.highlightMode === "word") {
+          editorState.style.highlightColor = target.value;
+        }
         syncStyleFromControls();
         updateColorSwatchState();
       }

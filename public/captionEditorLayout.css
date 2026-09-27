@@ -1514,6 +1514,11 @@ html:has(.caption-editor-page), body.caption-editor-page {
 .caption-editor-page :is(.cf-select-option, .presets-search-input, .presets-filter-tab) { border: 0 !important; border-radius: 5px !important; }
 
 /* Stable two-row workspace; keep all controls in the first viewport. */
+@media (min-width: 761px) {
+  body.caption-editor-page { height: 100dvh !important; overflow: hidden !important; }
+  .caption-editor-page .ce-main-container { height: 100dvh !important; min-height: 0 !important; overflow: hidden !important; }
+  .caption-editor-page .ce-shell { flex: 1 1 0 !important; height: auto !important; min-height: 0 !important; overflow: hidden !important; }
+}
 #controlsWorkspace[data-grid] {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
