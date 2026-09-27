@@ -1512,3 +1512,45 @@ html:has(.caption-editor-page), body.caption-editor-page {
   border: 0 !important; border-radius: 15px !important; box-shadow: none !important;
 }
 .caption-editor-page :is(.cf-select-option, .presets-search-input, .presets-filter-tab) { border: 0 !important; border-radius: 5px !important; }
+
+/* Stable two-row workspace; keep all controls in the first viewport. */
+#controlsWorkspace[data-grid] {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+#controlsWorkspace[data-grid] > .item {
+  grid-area: auto !important;
+  order: 0 !important;
+  min-height: 0;
+  overflow: auto !important;
+}
+.caption-editor-page .ce-layout { height: 100% !important; min-height: 0 !important; overflow: hidden !important; }
+.caption-editor-page .ce-preview-panel { height: 100% !important; min-height: 0 !important; }
+.caption-editor-page .ce-video-scrubber-track {
+  appearance: none; -webkit-appearance: none; min-width: 0; padding: 0;
+  background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.28) var(--seek-progress, 0%));
+  height: 6px; border: 0; border-radius: 3px;
+}
+.caption-editor-page .ce-video-scrubber-track::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff;
+}
+.caption-editor-page .ce-video-scrubber-track::-moz-range-thumb {
+  width: 12px; height: 12px; border: 0; border-radius: 50%; background: #fff;
+}
+body.caption-editor-page.theme-light { background: #f8f9fa !important; color: var(--text) !important; }
+body.caption-editor-page.theme-light :is(.ce-pill-group, .ce-color-block, .ce-shadow-block, .ce-shadow-subcard, .ce-placement-presets, .ce-align-buttons, .ce-status-chip, .ce-topbar .ce-status-chip, .ce-topbar .ce-back-btn, .ce-topbar .ce-sync-btn, .ce-topbar .day-night-toggle, .ce-topbar .ce-btn--publish, .preset-card, .cf-select-trigger, .cf-select-menu) {
+  background: var(--panel-3) !important; color: var(--text) !important;
+}
+body.caption-editor-page.theme-light :is(.ce-pill-opt, .presets-filter-tab, .cf-select-option) { color: var(--text) !important; }
+body.caption-editor-page.theme-light :is(.ce-pill-opt.is-active, .presets-filter-tab.is-active, .cf-select-option[aria-selected="true"]) {
+  background: #dbeafe !important; color: #132b56 !important;
+}
+@media (max-width: 760px) {
+  .caption-editor-page .ce-layout, #controlsWorkspace[data-grid] { height: auto !important; overflow: visible !important; }
+  #controlsWorkspace[data-grid] { grid-template-rows: auto auto !important; }
+  #controlsWorkspace[data-grid] > .item { overflow: visible !important; }
+  .caption-editor-page .ce-preview-panel { height: 520px !important; }
+}

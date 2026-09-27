@@ -519,7 +519,10 @@ function updatePlaybackUI() {
     : (editorState.clip?.duration || 30);
   const pct = Math.min(100, Math.max(0, (cur / dur) * 100));
 
-  if (videoScrubberProgress) videoScrubberProgress.style.width = `${pct}%`;
+  if (videoScrubberTrack) {
+    videoScrubberTrack.value = String(Math.round(pct * 10));
+    videoScrubberTrack.style.setProperty("--seek-progress", `${pct}%`);
+  }
   if (videoTimeDisplay) videoTimeDisplay.textContent = `${formatVideoTime(cur)} / ${formatVideoTime(dur)}`;
 }
 
@@ -533,6 +536,10 @@ function toggleVideoPlayback() {
           updatePlaybackUI();
         })
         .catch((err) => {
+          if (err.name !== "NotAllowedError") {
+            console.error("Video play failed:", err);
+            return;
+          }
           console.warn("Video playback with audio blocked, attempting muted:", err);
           captionVideo.muted = true;
           captionVideo.play().then(() => {
@@ -2571,7 +2578,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
         span.style.backgroundColor = "transparent";
         span.style.padding = "0px";
         span.style.display = "inline-block";
-        span.style.color = style.highlightColor || "#00FF66";
+        span.style.color = style.highlightColor || style.textColor || "inherit";
         if (style.fontStyle === "italic") span.style.fontStyle = "italic";
       }
     } else {
@@ -4184,8 +4191,7 @@ function bindControls() {
     onSliderCommit();
     ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
   });
-  capAnimStyle?.addEventListener("change", () => {
-  });
+  capAnimStyle?.addEventListener("change", () => selectWordAnimation(capAnimStyle.value));
   capTextShadow?.addEventListener("change", onSliderCommit);
 
   capFontSize?.addEventListener("input", onLiveSliderInput);
@@ -4212,8 +4218,14 @@ function bindControls() {
   capRotateAngle?.addEventListener("input", onLiveSliderInput);
   capRotateAngle?.addEventListener("change", onSliderCommit);
 
-  capTextColor?.addEventListener("input", onLiveSliderInput);
-  capTextColor?.addEventListener("change", onSliderCommit);
+  capTextColor?.addEventListener("input", () => {
+    if (editorState.style.highlightMode === "word") editorState.style.highlightColor = capTextColor.value;
+    onLiveSliderInput();
+  });
+  capTextColor?.addEventListener("change", () => {
+    if (editorState.style.highlightMode === "word") editorState.style.highlightColor = capTextColor.value;
+    onSliderCommit();
+  });
 
   capBgColor?.addEventListener("input", onLiveSliderInput);
   capBgColor?.addEventListener("change", onSliderCommit);
@@ -4369,15 +4381,13 @@ function bindControls() {
     toggleVideoPlayback();
   });
 
-  videoScrubberTrack?.addEventListener("click", (e) => {
+  videoScrubberTrack?.addEventListener("input", (e) => {
     e.stopPropagation();
     if (!captionVideo) return;
     const dur = captionVideo.duration && isFinite(captionVideo.duration) && captionVideo.duration > 0
       ? captionVideo.duration
       : (editorState.clip?.duration || 30);
-    const rect = videoScrubberTrack.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const ratio = Math.min(1, Math.max(0, clickX / rect.width));
+    const ratio = Number(e.target.value) / 1000;
     captionVideo.currentTime = ratio * dur;
     updatePlaybackUI();
     syncCaptionOverlay();

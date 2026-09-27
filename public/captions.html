@@ -627,9 +627,7 @@
                           <svg class="bar-icon-play" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                           <svg class="bar-icon-pause" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:none;"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
                         </button>
-                        <div class="ce-video-scrubber-track" id="videoScrubberTrack">
-                          <div class="ce-video-scrubber-progress" id="videoScrubberProgress"></div>
-                        </div>
+                        <input class="ce-video-scrubber-track" id="videoScrubberTrack" type="range" min="0" max="1000" value="0" aria-label="Seek video" />
                         <span class="ce-video-time-display" id="videoTimeDisplay">00:00 / 00:30</span>
                       </div>
 
@@ -731,6 +729,5 @@
     <script src="captionClient.js?v=timeline-1"></script>
     <script src="captions.js?v=styling-1"></script>
     <script src="dropdowns.js?v=1"></script>
-    <script type="module" src="captionLayout.js?v=1"></script>
   </body>
 </html>

@@ -2841,6 +2841,15 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 .caption-smooth-word--classic { animation-name: caption-soft-fade; }
 .caption-smooth-word--elevate { animation-name: caption-soft-rise; }
 .caption-smooth-word--pop { animation-name: caption-soft-pop; }
+.caption-smooth-word--reveal { animation-name: capReveal; }
+.caption-smooth-word--highlight { animation-name: capHighlight; }
+.caption-smooth-word--neon { animation-name: capNeon; }
+.caption-smooth-word--cinematic { animation-name: capCinematic; }
+.caption-smooth-word--typewriter { animation-name: capTypewriter; animation-timing-function: step-end; }
+.caption-smooth-word--oneword, .caption-smooth-word--twoword { animation-name: capWordGroup; }
+.caption-smooth-word--wordcolor { animation-name: capWordColor; }
+.caption-smooth-word--wordappend { animation-name: capWordAppend; }
+.caption-smooth-word--highlightimpact { animation-name: capHighlightImpact; }
 @keyframes caption-soft-fade { from { opacity: .8; } to { opacity: 1; } }
 @keyframes caption-soft-rise { from { transform: translateY(3px); } to { transform: translateY(0); } }
 @keyframes caption-soft-pop { from { transform: scale(.96); } to { transform: scale(1); } }
