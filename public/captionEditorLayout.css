@@ -1553,6 +1553,13 @@ body.caption-editor-page.theme-light :is(.ce-pill-opt, .presets-filter-tab, .cf-
 body.caption-editor-page.theme-light :is(.ce-pill-opt.is-active, .presets-filter-tab.is-active, .cf-select-option[aria-selected="true"]) {
   background: #dbeafe !important; color: #132b56 !important;
 }
+body.caption-editor-page.theme-light :is(.ce-val-tag, .ce-input, .ce-input-num, .ce-box-toolbar .ce-btn, .ce-offset-item, .ce-btn--browse-presets, .ce-mini-track) {
+  background: var(--panel-3) !important; color: var(--text) !important;
+}
+body.caption-editor-page.theme-light .ce-range::-webkit-slider-runnable-track { background: #d1cbc1 !important; }
+body.caption-editor-page.theme-light .ce-range::-moz-range-track { background: #d1cbc1 !important; }
+body.caption-editor-page.theme-light .ce-range::-webkit-slider-thumb { background: #2563eb !important; }
+body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #2563eb !important; }
 @media (max-width: 760px) {
   .caption-editor-page .ce-layout, #controlsWorkspace[data-grid] { height: auto !important; overflow: visible !important; }
   #controlsWorkspace[data-grid] { grid-template-rows: auto auto !important; }
