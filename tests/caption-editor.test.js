@@ -255,7 +255,7 @@ test('actual 30.88s speech transcript displays every recognized word through the
 test('caption color and motion survive word replacement without changing speech times', () => {
   const h = harness();
   const timing = h.run('JSON.stringify(editorState.segments)');
-  h.run('editorState.style.textColor="#ff6e5e"; editorState.style.highlightColor="#4ade80"; editorState.style.animationStyle="pop"; applyStyleToOverlay(); renderSmoothCaption(captionOverlayText,"hello world","s",0,editorState.style);');
+  h.run('editorState.style.highlightMode="word"; editorState.style.textColor="#ff6e5e"; editorState.style.highlightColor="#4ade80"; editorState.style.animationStyle="pop"; applyStyleToOverlay(); renderSmoothCaption(captionOverlayText,"hello world","s",0,editorState.style);');
   assert.equal(h.controls.captionOverlayText.style.color, '#ff6e5e');
   assert.equal(h.controls.captionOverlayText.children[0].style.color, '#4ade80');
   assert.equal(h.controls.captionOverlayText.children[0].style.display, 'inline-block');
@@ -283,3 +283,33 @@ test('layout loops through all four grids and pauses for editing/reduced motion'
   events.pagehide();reduced=false;next();assert.equal(states.length,4);
 });
 function rootPath(){return path.resolve(__dirname,'..');}
+
+
+test('manual color, highlight, opacity and padding stay independent through presets and export', () => {
+  const h=harness();
+  h.context.applyPresetFromGallery(CAPTION_PRESETS[0].id);
+  h.context.populateStyleControls();
+  h.controls.capBoxPadding.value='0';
+  h.context.syncStyleFromControls();
+  h.run('editorState.style.textOpacity=40; editorState.style.shadowOpacity=20; editorState.style.highlightMode="none"; editorState.style.textShadow=true; editorState.style.shadowColor="#123456"; applyStyleToOverlay(); renderSmoothCaption(captionOverlayText,"hello world","s",0,editorState.style);');
+  const el=h.controls.captionOverlayText;
+  assert.equal(el.style.padding,'0px 0px');
+  assert.match(el.style.color, /0.4\)/);
+  assert.match(el.style.textShadow, /18, 52, 86, 0.2/);
+  assert.equal(el.children[0].style.color,'inherit');
+  const exported=h.context.buildScaledStyleForExport(h.run('editorState.style'));
+  assert.equal(exported.paddingX,0);assert.equal(exported.paddingY,0);
+  assert.equal(exported.textOpacity,40);assert.equal(exported.shadowOpacity,20);
+  const ass=buildAssContent([{start:0,end:1,text:'hello'}],exported);
+  assert.match(ass,/\\1a&H99&/);assert.match(ass,/\\1a&Hcc&/);
+});
+
+test('active pill keeps identical padding when emphasis moves to the next word', () => {
+  const h=harness();h.context.applyPresetFromGallery(CAPTION_PRESETS[0].id);
+  h.run('renderSmoothCaption(captionOverlayText,"hello world","s",0,editorState.style)');
+  const el=h.controls.captionOverlayText, first=el.children[0];
+  const padding=first.style.padding;
+  h.run('renderSmoothCaption(captionOverlayText,"hello world","s",1,editorState.style)');
+  assert.equal(el.children[0],first);assert.equal(first.style.padding,padding);
+  assert.equal(el.children[1].style.padding,padding);
+});

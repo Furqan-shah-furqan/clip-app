@@ -2842,7 +2842,8 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 .caption-smooth-word--highlight { animation-name: capHighlight; }
 .caption-smooth-word--neon { animation-name: capNeon; }
 .caption-smooth-word--cinematic { animation-name: capCinematic; }
-.caption-smooth-word--typewriter { animation-name: capTypewriter; animation-timing-function: step-end; }
+.caption-smooth-word--typewriter { animation-name: caption-typewriter; animation-timing-function: steps(5, end); }
+@keyframes caption-typewriter { from { clip-path: inset(0 95% 0 0); } to { clip-path: inset(0); } }
 .caption-smooth-word--oneword, .caption-smooth-word--twoword { animation-name: capWordGroup; }
 .caption-smooth-word--wordcolor { animation-name: capWordColor; }
 .caption-smooth-word--wordappend { animation-name: capWordAppend; }
@@ -2854,3 +2855,13 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
   .caption-smooth-word:not([data-motion-preview="true"]) { animation: none; }
 }
 .preset-gallery-card:focus-visible { outline: 2px solid #83deff; outline-offset: 3px; }
+
+/* Editor words wrap within the box; effect layers never determine line spacing. */
+.caption-video-text { white-space: normal !important; overflow-wrap: anywhere !important; }
+.caption-smooth-word { max-width: 100%; white-space: normal; overflow-wrap: anywhere; text-shadow: inherit; }
+.ce-caption-details { color: var(--text-main); font-size: 12px; }
+.ce-caption-details summary { cursor: pointer; padding: 4px 0; }
+.ce-caption-details[open] summary { margin-bottom: 6px; }
+.caption-smooth-word--neon { animation-name: caption-glow-pulse; }
+.caption-smooth-word--highlightimpact { animation-name: caption-soft-pop; }
+@keyframes caption-glow-pulse { from { filter: brightness(1.5); } to { filter: brightness(1); } }

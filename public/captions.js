@@ -25,6 +25,10 @@ const DEFAULT_STYLE = {
   fontFamily: "'Montserrat', sans-serif",
   fontSize: 28,
   textColor: "#ffffff",
+  textOpacity: 100,
+  shadowOpacity: 100,
+  highlightMode: "none",
+  highlightBg: "#ffe600",
   highlightColor: "#22c55e",
   bgColor: "transparent",
   bgOpacity: 0,
@@ -953,9 +957,9 @@ function buildScaledStyleForExport(baseStyle) {
     shadowBlur: Math.round((Number(style.shadowBlur) || 0) * scale),
     shadowOffsetX: Math.round((Number(style.shadowOffsetX) || 0) * scale),
     shadowOffsetY: Math.round((Number(style.shadowOffsetY) || 0) * scale),
-    paddingX: Math.round((Number(style.paddingX) || 14) * scale),
-    paddingY: Math.round((Number(style.paddingY) || 10) * scale),
-    borderRadius: Math.round((Number(style.borderRadius) || 14) * scale),
+    paddingX: Math.round(Number(style.paddingX ?? 14) * scale),
+    paddingY: Math.round(Number(style.paddingY ?? 10) * scale),
+    borderRadius: Math.round(Number(style.borderRadius ?? 14) * scale),
     letterSpacing: parseFloat(
       ((Number(style.letterSpacing) || 0) * scale).toFixed(2),
     ),
@@ -983,7 +987,7 @@ function wrapExportToBox(segments, style) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return segments;
   ctx.font = `${style.fontWeight || 700} ${style.fontSize}px ${style.fontFamily}`;
-  const width = Math.max(20, (captionVideoWrap?.clientWidth || captionVideo?.clientWidth || 300) * (style.boxWidth || 88) / 100 - (style.bgOpacity > 0 ? Number(style.paddingX || 0) * 2 : 0));
+  const width = Math.max(20, (captionVideoWrap?.clientWidth || captionVideo?.clientWidth || 300) * (style.boxWidth || 88) / 100 - (Number(style.paddingX || 0) * 2));
   const measure = text => {
     const shown = style.textTransform === "uppercase" ? text.toUpperCase() : style.textTransform === "lowercase" ? text.toLowerCase() : text;
     return ctx.measureText(shown).width + Math.max(0, shown.length - 1) * Number(style.letterSpacing || 0);
@@ -2159,7 +2163,8 @@ function getShadowCss(style) {
   const blur = clamp(Number(style.shadowBlur) || 0, 0, 30);
   const offX = clamp(Number(style.shadowOffsetX) || 0, -20, 20);
   const offY = clamp(Number(style.shadowOffsetY) || 0, -20, 20);
-  return `${offX}px ${offY}px ${blur}px ${style.shadowColor || "#000"}, ${offX}px ${offY}px ${Math.min(2, blur)}px ${style.shadowColor || "#000"}`;
+  const color = hexToRgba(style.shadowColor || "#000000", style.shadowOpacity ?? 100);
+  return `${offX}px ${offY}px ${blur}px ${color}, ${offX}px ${offY}px ${Math.min(2, blur)}px ${color}`;
 }
 function getTextTransformCss(style) {
   return style.textTransform || "none";
@@ -2192,12 +2197,15 @@ function normalizeStyle(style = {}) {
   const merged = { ...DEFAULT_STYLE, ...(style || {}) };
   const legacyFonts = { Impact: "'Anton', sans-serif", "Arial Black": "'Archivo Black', sans-serif", Georgia: "'Libre Caslon Text', serif" };
   if (legacyFonts[captionFontName(merged.fontFamily)]) merged.fontFamily = legacyFonts[captionFontName(merged.fontFamily)];
+  merged.textOpacity = clamp(Number(merged.textOpacity ?? 100), 0, 100);
+  merged.shadowOpacity = clamp(Number(merged.shadowOpacity ?? 100), 0, 100);
+  merged.fontWeight = clamp(Number(merged.fontWeight) || 700, 100, 900);
   merged.positionX = Number(merged.positionX ?? 50);
   merged.positionY = Math.min(Math.max(Number(merged.positionY ?? 60), 20), 75);
   merged.wordsPerRow = Number(merged.wordsPerRow ?? 0);
   merged.fontSize = clamp(Number(merged.fontSize ?? 28), 12, 72);
-  merged.paddingX = clamp(parseInt(merged.paddingX ?? 14, 10) || 14, 0, 60);
-  merged.paddingY = clamp(parseInt(merged.paddingY ?? 8, 10) || 8, 0, 40);
+  merged.paddingX = clamp(parseInt(merged.paddingX ?? 14, 10), 0, 60);
+  merged.paddingY = clamp(parseInt(merged.paddingY ?? 8, 10), 0, 40);
   merged.lineSpacing = clamp(parseFloat(merged.lineSpacing ?? 1.35), 0.8, 2.5);
   merged.presetDuration = clamp(parseFloat(merged.presetDuration ?? 0.6), 0.2, 2.5);
   merged.letterSpacing = clamp(parseFloat(merged.letterSpacing ?? 0), -2, 14);
@@ -2248,39 +2256,17 @@ function applyTextBoxVisuals(element, style) {
   element.style.fontSynthesis = merged.curated ? "none" : "";
   element.style.fontFamily = merged.fontFamily;
   element.style.fontSize = `${merged.fontSize}px`;
-  element.style.color = merged.textColor;
+  element.style.color = merged.textOpacity === 100 ? merged.textColor : hexToRgba(merged.textColor, merged.textOpacity);
   element.style.fontWeight = String(merged.fontWeight || 800);
   element.style.textTransform = getTextTransformCss(merged);
   element.style.letterSpacing = `${Number(merged.letterSpacing) || 0}px`;
 
-  // 1. Force Background Pill Rendering
-  const bgOpacity = Number(merged.bgOpacity !== undefined ? merged.bgOpacity : 0);
-  const bgColor = merged.bgColor || "#000000";
-  const boxPadding = parseInt(merged.boxPadding ?? merged.paddingX ?? 14, 10) || 14;
-  if (bgOpacity > 0 && bgColor !== "transparent") {
-    element.style.backgroundColor = hexToRgba(bgColor, bgOpacity);
-    element.style.padding = `${boxPadding}px ${Math.round(boxPadding * 1.5)}px`;
-    element.style.borderRadius = `${parseInt(merged.borderRadius, 10) || 14}px`;
-    element.style.display = "inline-block";
-    element.style.backdropFilter = "blur(4px)";
-    element.style.webkitBackdropFilter = "blur(4px)";
-    if (merged.curated) {
-      element.style.padding = `${merged.paddingY}px ${merged.paddingX}px`;
-      element.style.borderRadius = `${Number(merged.borderRadius) || 0}px`;
-      element.style.backdropFilter = "none";
-      element.style.webkitBackdropFilter = "none";
-    }
-  } else {
-    element.style.backgroundColor = "transparent";
-    element.style.padding = "0px";
-    element.style.backdropFilter = "none";
-    element.style.webkitBackdropFilter = "none";
-  }
-
-  // Border Radius fallback
-  if (!element.style.borderRadius) {
-    element.style.borderRadius = `${Number(merged.borderRadius) || 14}px`;
-  }
+  const bgOpacity = Number(merged.bgOpacity ?? 0);
+  element.style.backgroundColor = bgOpacity > 0 && merged.bgColor !== "transparent"
+    ? hexToRgba(merged.bgColor, bgOpacity) : "transparent";
+  element.style.padding = `${merged.paddingY}px ${merged.paddingX}px`;
+  element.style.borderRadius = `${Number(merged.borderRadius) || 0}px`;
+  element.style.display = "block";
 
   // Line Height
   const lineSpacing = Number(merged.lineSpacing || 1.2);
@@ -2310,53 +2296,28 @@ function applyTextBoxVisuals(element, style) {
     element.style.webkitTextStroke = "0px transparent";
   }
 
-  // 2. Force Neon Glow Rendering (Layered textShadow + drop-shadow filter)
-  const neonGlow = Number(merged.glowIntensity || merged.neonGlow || 0);
-  let computedTextShadow = "none";
+  const neonGlow = Number(merged.glowIntensity ?? 0);
+  const shadows = [];
+  if (merged.textShadow && merged.textShadow !== "none") shadows.push(getShadowCss(merged));
   if (neonGlow > 0) {
-    const glowColor = merged.textColor || "#FFDE00";
-    const g = neonGlow;
-    computedTextShadow = `0 0 ${g * 0.25}px ${glowColor}, 0 0 ${g * 0.6}px ${glowColor}, 0 0 ${g * 1.2}px ${glowColor}, 0 0 ${g * 2}px ${glowColor}`;
-    element.style.filter = `drop-shadow(0 0 ${Math.max(2, g * 0.4)}px ${glowColor}) drop-shadow(0 0 ${Math.max(4, g * 0.8)}px ${glowColor})`;
-  } else if (merged.textShadow && typeof merged.textShadow === "string" && merged.textShadow !== "none" && merged.textShadow !== "true") {
-    computedTextShadow = merged.textShadow;
-    element.style.removeProperty("filter");
-  } else if (merged.textShadow === false || merged.textShadow === "none") {
-    computedTextShadow = "none";
-    element.style.removeProperty("filter");
-  } else if (merged.textShadow === true || Number(merged.shadowBlur) > 0) {
-    computedTextShadow = getShadowCss(merged);
-    element.style.removeProperty("filter");
-  } else {
-    computedTextShadow = "none";
-    element.style.removeProperty("filter");
+    const color = merged.textColor || "#ffffff";
+    shadows.push(`0 0 ${neonGlow * .5}px ${color}, 0 0 ${neonGlow}px ${color}`);
   }
-  element.style.textShadow = computedTextShadow;
+  element.style.textShadow = shadows.join(", ") || "none";
 
   // Box Shadow (e.g. for badges or neon presets)
   if (merged.boxShadow && merged.boxShadow !== "none") {
     element.style.boxShadow = merged.boxShadow;
   }
 
-  // Backdrop Filter (e.g. for Editorial styles)
-  if (merged.backdropFilter && merged.backdropFilter !== "none") {
+  element.style.backdropFilter = "none";
+  element.style.webkitBackdropFilter = "none";
+  // Backdrop Filter (legacy non-curated styles)
+  if (!merged.curated && merged.backdropFilter && merged.backdropFilter !== "none") {
     element.style.backdropFilter = merged.backdropFilter;
     element.style.webkitBackdropFilter = merged.backdropFilter;
   }
 
-  // Filter / Diffuse Drop Shadow / Glow
-  if (neonGlow > 0) {
-    // Explicit glow follows text color, independently of shadow/preset colors.
-    element.style.filter = `drop-shadow(0 0 ${Math.max(2, neonGlow * .4)}px ${merged.textColor || "#ffffff"})`;
-  } else if (merged.filter && merged.filter !== "none") {
-    element.style.filter = merged.filter;
-  } else {
-    const glow = Number(merged.glowIntensity) || 0;
-    if (glow > 0) {
-      const glowColor = merged.textColor || "#ffffff";
-      element.style.filter = `drop-shadow(0 0 ${glow}px ${glowColor})`;
-    }
-  }
 
   // Tilt / Rotation
   const rot = Number(merged.rotateAngle) || 0;
@@ -2402,9 +2363,7 @@ function bindColorSwatches() {
       const target = document.getElementById(btn.dataset.target);
       if (target && btn.dataset.value) {
         target.value = toHexColor(btn.dataset.value, target.value || "#000000");
-        if (target === capTextColor && editorState.style.highlightMode === "word") {
-          editorState.style.highlightColor = target.value;
-        }
+
         syncStyleFromControls();
         updateColorSwatchState();
       }
@@ -2567,11 +2526,12 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
     span.classList.toggle("is-active", isCurrentActive);
     span.classList.toggle("caption-word-active", isCurrentActive);
 
-    if (isCurrentActive) {
+    span.style.padding = style.highlightMode === "pill" ? "2px 8px" : "0px";
+    if ((isCurrentActive || style.highlightMode === "phrase") && style.highlightMode !== "none") {
       if (style.highlightMode === "pill") {
         span.dataset.highlightMode = "pill";
         span.style.backgroundColor = style.highlightBg || "#FFE600";
-        span.style.color = style.highlightColor || "#000000";
+        span.style.color = Number(style.textOpacity ?? 100) === 100 ? (style.highlightColor || "#000000") : hexToRgba(style.highlightColor || "#000000", style.textOpacity);
         span.style.borderRadius = `${Number(style.borderRadius) || 12}px`;
         span.style.padding = "2px 8px";
         span.style.display = "inline-block";
@@ -2581,13 +2541,13 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
         span.style.backgroundColor = "transparent";
         span.style.padding = "0px";
         span.style.display = "inline-block";
-        span.style.color = style.highlightColor || style.textColor || "inherit";
+        span.style.color = Number(style.textOpacity ?? 100) === 100 ? (style.highlightColor || style.textColor || "inherit") : hexToRgba(style.highlightColor || style.textColor || "#ffffff", style.textOpacity);
         if (style.fontStyle === "italic") span.style.fontStyle = "italic";
       }
     } else {
       delete span.dataset.highlightMode;
       span.style.backgroundColor = "transparent";
-      span.style.padding = "0px";
+      span.style.padding = style.highlightMode === "pill" ? "2px 8px" : "0px";
       span.style.display = "inline-block";
       span.style.color = "inherit";
       span.style.fontStyle = style.fontStyle === "italic" ? "normal" : "inherit";
@@ -2599,7 +2559,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
 function renderAnimatedCaption(text, segId, activeWordIdx = 0) {
   if (!captionOverlayText) return;
 
-  if (editorState.style.curated) {
+  if (editorState.style.curated || editorState.style.boxWidth) {
     renderSmoothCaption(captionOverlayText, text, segId, activeWordIdx, editorState.style);
     return;
   }
@@ -3118,10 +3078,27 @@ function stopCaptionSync() {
 }
 
 // Style controls
+const captionDetailControls = {
+  capFontWeight: "fontWeight", capTextOpacity: "textOpacity", capShadowOpacity: "shadowOpacity",
+  capHighlightMode: "highlightMode", capHighlightColor: "highlightColor", capHighlightBg: "highlightBg",
+};
+function populateDetailControls() {
+  const weights = document.getElementById("capFontWeight");
+  const family = captionFontName(editorState.style.fontFamily);
+  const fixed = {Anton:400,"Bebas Neue":400,"Archivo Black":400,"Space Mono":400,Barlow:700,"Barlow Condensed":700,Poppins:700};
+  if (weights) for (const option of weights.options) {
+    option.disabled = fixed[family] ? Number(option.value) !== fixed[family] : ["Libre Caslon Text", "Oswald"].includes(family) ? Number(option.value) > 700 : ["JetBrains Mono", "Syne"].includes(family) ? Number(option.value) > 800 : false;
+  }
+  for (const [id, key] of Object.entries(captionDetailControls)) {
+    const control = document.getElementById(id);
+    if (control) control.value = String(editorState.style[key] ?? DEFAULT_STYLE[key]);
+  }
+}
 function populateStyleControls() {
   editorState.style = normalizeStyle(editorState.style);
   const s = editorState.style;
   selectCaptionFont(s.fontFamily);
+  populateDetailControls();
   if (capFontSize) capFontSize.value = String(s.fontSize);
   if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
   if (capLineSpacing) capLineSpacing.value = String(s.lineSpacing ?? 1.35);
@@ -3130,8 +3107,8 @@ function populateStyleControls() {
   if (capBgColor) capBgColor.value = toHexColor(s.bgColor, "#000000");
   if (capBgOpacity) capBgOpacity.value = String(s.bgOpacity);
   if (capBgOpacityVal) capBgOpacityVal.textContent = String(s.bgOpacity);
-  if (capBoxPadding) capBoxPadding.value = String(parseInt(s.paddingX ?? 14, 10) || 14);
-  if (capBoxPaddingVal) capBoxPaddingVal.textContent = String(parseInt(s.paddingX ?? 14, 10) || 14);
+  if (capBoxPadding) capBoxPadding.value = String(s.paddingX ?? 14);
+  if (capBoxPaddingVal) capBoxPaddingVal.textContent = String(s.paddingX ?? 14);
   if (capBoxSizeLabel) capBoxSizeLabel.textContent = `${s.fontSize ?? 28}px`;
   if (capTextShadow) capTextShadow.checked = Boolean(s.textShadow && s.textShadow !== "none");
   if (capShadowColor) capShadowColor.value = toHexColor(s.shadowColor, "#000000");
@@ -3201,9 +3178,11 @@ function syncStyleFromControls(options = {}) {
     100,
   );
   if (capBoxPadding) {
-    const pad = clamp(parseInt(capBoxPadding.value || "14", 10), 4, 40);
-    editorState.style.paddingX = pad;
-    editorState.style.paddingY = Math.max(2, Math.round(pad * 0.7));
+    const pad = clamp(Number(capBoxPadding.value), 0, 50);
+    if (pad !== editorState.style.paddingX) {
+      editorState.style.paddingX = pad;
+      editorState.style.paddingY = Math.round(pad * .7);
+    }
   }
   editorState.style.textShadow = Boolean(capTextShadow?.checked);
   editorState.style.shadowColor = toHexColor(capShadowColor?.value, "#000000");
@@ -3264,7 +3243,7 @@ function syncStyleFromControls(options = {}) {
   if (capBgOpacityVal)
     capBgOpacityVal.textContent = String(editorState.style.bgOpacity);
   if (capBoxPaddingVal)
-    capBoxPaddingVal.textContent = String(parseInt(editorState.style.paddingX ?? 14, 10) || 14);
+    capBoxPaddingVal.textContent = String(editorState.style.paddingX ?? 14);
   if (capBoxSizeLabel)
     capBoxSizeLabel.textContent = `${editorState.style.fontSize ?? 28}px`;
   if (capShadowBlurVal)
@@ -3286,6 +3265,7 @@ function syncStyleFromControls(options = {}) {
   if (isLiveSlider) {
     // Direct CSS visual updates — eliminates font refreshing and preserves running animations
     applyStyleToOverlay();
+    syncCaptionOverlay();
     debouncedPersistCaptions();
     return;
   }
@@ -3668,9 +3648,9 @@ function applyPresetFromGallery(id) {
     bgColor: s.bgColor !== undefined ? s.bgColor : "transparent",
     bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
     bgPadding: Number(s.bgPadding) || 12,
-    paddingX: Number(s.bgPadding) || 14,
-    paddingY: Number(s.bgPadding) ? Math.round(Number(s.bgPadding) * 0.7) : 8,
-    borderRadius: Number(s.borderRadius) || 10,
+    paddingX: Number(s.paddingX ?? s.bgPadding ?? 14),
+    paddingY: Number(s.paddingY ?? (s.bgPadding !== undefined ? Math.round(Number(s.bgPadding) * .7) : 8)),
+    borderRadius: Number(s.borderRadius ?? 10),
     boxShadow: s.boxShadow || "none",
     backdropFilter: s.backdropFilter || "none",
     textShadow: s.textShadow ?? false,
@@ -4155,6 +4135,20 @@ function selectWordAnimation(mode) {
 }
 
 function bindControls() {
+  for (const [id, key] of Object.entries(captionDetailControls)) {
+    const control = document.getElementById(id);
+    const update = () => {
+      editorState.style[key] = ["fontWeight", "textOpacity", "shadowOpacity"].includes(key)
+        ? Number(control.value) : control.value;
+      applyStyleToOverlay();
+      syncCaptionOverlay();
+      updateLivePreview();
+      debouncedPersistCaptions();
+    };
+    control?.addEventListener("input", update);
+    control?.addEventListener("change", update);
+  }
+
   ensurePublishNavButton();
 
   backBtn?.addEventListener("click", goBack);
@@ -4187,12 +4181,17 @@ function bindControls() {
   const onLiveSliderInput = () => syncStyleFromControls({ isLiveSlider: true });
   const onSliderCommit = () => syncStyleFromControls({ isLiveSlider: false });
 
-  capFontFamily?.addEventListener("change", () => {
-    const name = captionFontName(capFontFamily.value);
-    const weights = { "Archivo Black": 400, Poppins: 700, Barlow: 700, "Barlow Condensed": 700, Anton: 400, "Bebas Neue": 400, "Libre Caslon Text": 400, "Space Mono": 400 };
-    if (weights[name]) editorState.style.fontWeight = weights[name];
+  capFontFamily?.addEventListener("change", async () => {
+    const family = capFontFamily.value;
+    const name = captionFontName(family);
+    const weights = { "Archivo Black":400, Poppins:700, Barlow:700, "Barlow Condensed":700, Anton:400, "Bebas Neue":400, "Space Mono":400 };
+    const maxWeight = ["Libre Caslon Text", "Oswald"].includes(name) ? 700 : ["JetBrains Mono", "Syne"].includes(name) ? 800 : 900;
+    const weight = weights[name] || Math.min(editorState.style.fontWeight, maxWeight);
+    await ensureCaptionFont({fontFamily:family, fontWeight:weight});
+    if (capFontFamily.value !== family) return;
+    editorState.style.fontWeight = weight;
     onSliderCommit();
-    ensureCaptionFont(editorState.style).catch(error => setBoxHint(error.message));
+    populateDetailControls();
   });
   capAnimStyle?.addEventListener("change", () => selectWordAnimation(capAnimStyle.value));
   capTextShadow?.addEventListener("change", onSliderCommit);
@@ -4222,11 +4221,9 @@ function bindControls() {
   capRotateAngle?.addEventListener("change", onSliderCommit);
 
   capTextColor?.addEventListener("input", () => {
-    if (editorState.style.highlightMode === "word") editorState.style.highlightColor = capTextColor.value;
     onLiveSliderInput();
   });
   capTextColor?.addEventListener("change", () => {
-    if (editorState.style.highlightMode === "word") editorState.style.highlightColor = capTextColor.value;
     onSliderCommit();
   });
 

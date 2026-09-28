@@ -1054,26 +1054,6 @@ body.caption-editor-page {
   cursor: pointer !important;
 }
 
-/* ─── ANIMATION DEFINITIONS ─── */
-.caption-smooth-word--classic { animation-name: capClassic; }
-.caption-smooth-word--pop { animation-name: capPop; }
-.caption-smooth-word--elevate { animation-name: capElevate; }
-.caption-smooth-word--highlight { animation-name: capHighlight; }
-.caption-smooth-word--oneword,
-.caption-smooth-word--twoword { animation-name: capWordGroup; }
-.caption-smooth-word--wordcolor { animation-name: capWordColor; }
-.caption-smooth-word--highlightimpact { animation-name: capHighlightImpact; }
-.caption-smooth-word--reveal { animation: editor-reveal var(--smooth-duration, .18s) ease-out both; }
-.caption-smooth-word--cinematic { animation: editor-cinematic var(--smooth-duration, .18s) ease-out both; }
-.caption-smooth-word--typewriter { animation: editor-typewriter var(--smooth-duration, .18s) steps(5, end) both; }
-.caption-smooth-word--wordappend { animation: editor-reveal var(--smooth-duration, .18s) ease-out both; }
-.caption-smooth-word--neon { animation: editor-neon var(--smooth-duration, .18s) ease-out both; }
-
-@keyframes editor-reveal { from { opacity: .35; transform: translateY(.12em); } to { opacity: 1; transform: translateY(0); } }
-@keyframes editor-cinematic { from { opacity: .35; filter: blur(2px); } to { opacity: 1; filter: blur(0); } }
-@keyframes editor-typewriter { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
-@keyframes editor-neon { from { text-shadow: 0 0 .45em currentColor; } to { text-shadow: 0 0 .15em currentColor; } }
-
 /* CapCut Bounding Box */
 .cap-box-frame {
   position: absolute !important;

@@ -261,7 +261,9 @@ function buildCuratedDialogueText(text, style, durationMs, anchor) {
     : `\\pos(${anchor.x},${anchor.y})`;
   const align = style.textAlign === 'left' ? 4 : style.textAlign === 'right' ? 6 : 5;
   const origin = anchor.origin || anchor;
-  const tag = `{\\an${align}${position}\\org(${origin.x},${origin.y})\\frz${-Number(style.rotateAngle || 0)}\\q2}`;
+  const textAlpha = Math.round(255 * (1 - clamp(Number(style.textOpacity ?? 100), 0, 100) / 100)).toString(16).padStart(2, '0').toUpperCase();
+  const phraseColor = style.highlightMode === "phrase" ? `\\1c${hexToABGR(style.highlightColor || style.textColor, 100)}&` : "";
+  const tag = `{${phraseColor}\\1a&H${textAlpha}&\\an${align}${position}\\org(${origin.x},${origin.y})\\frz${-Number(style.rotateAngle || 0)}\\q2}`;
   const parts = text.split(/(\\N|\s+)/);
   let last = parts.length - 1;
   while (last >= 0 && (!parts[last] || parts[last] === '\\N' || /^\s+$/.test(parts[last]))) last--;
@@ -271,7 +273,7 @@ function buildCuratedDialogueText(text, style, durationMs, anchor) {
     let overrides = '';
     if (style.highlightMode === 'word' || ['highlight', 'highlightimpact', 'wordcolor'].includes(style.animationStyle)) overrides += `\\1c${hexToABGR(style.highlightColor, 100)}&`;
     if (['pop', 'highlightimpact'].includes(style.animationStyle)) overrides += `\\fscx96\\fscy96\\t(0,${motionMs},\\fscx100\\fscy100)`;
-    if (['classic', 'reveal', 'wordappend'].includes(style.animationStyle)) overrides += `\\1a&H33&\\t(0,${motionMs},\\1a&H00&)`;
+    if (['classic', 'reveal', 'wordappend'].includes(style.animationStyle)) overrides += `\\1a&H${Math.max(51, parseInt(textAlpha, 16)).toString(16)}&\\t(0,${motionMs},\\1a&H${textAlpha}&)`;
     if (style.animationStyle === 'typewriter') overrides += `\\2a&HFF&\\kf${Math.max(1, Math.round(motionMs / 10))}`;
     if (style.animationStyle === 'cinematic') overrides += `\\blur2\\t(0,${motionMs},\\blur0)`;
     if (style.animationStyle === 'neon') overrides += `\\bord1\\blur2\\t(0,${motionMs},\\blur0)`;
@@ -295,7 +297,7 @@ function buildAssContent(segments, style = {}) {
   const bgOpacity = clamp(Number(style.bgOpacity ?? 0), 0, 100);
   const hasShadow = Boolean(style.textShadow && style.textShadow !== 'none');
 
-  const primaryColor = hexToABGR(style.textColor || '#ffffff', 100);
+  const primaryColor = hexToABGR(style.textColor || '#ffffff', clamp(Number(style.textOpacity ?? 100), 0, 100));
   const backColor = (style.curated || style.editorBox) && bgOpacity === 0
     ? hexToABGR(style.shadowColor || '#000000', hasShadow ? 100 : 0)
     : hexToABGR(style.bgColor || '#000000', bgOpacity);
@@ -394,7 +396,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     if (style.editorBox) {
       const lines = text.split('\\N');
       const boxWidth = videoW * clamp(Number(style.boxWidth) || 88, 15, 100) / 100;
-      const inset = bgOpacity > 0 ? Number(style.paddingX) || 0 : 0;
+      const inset = Number(style.paddingX) || 0;
       const x = anchor.x + (style.textAlign === 'left' ? -boxWidth / 2 + inset : style.textAlign === 'right' ? boxWidth / 2 - inset : 0);
       const step = fontSize * (Number(style.lineSpacing) || 1.35);
       const event = (layer, content) => `Dialogue: ${layer},${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${content}`;
@@ -405,7 +407,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if (!hasShadow) return foreground;
         const shadowPoint = {...point, x:point.x + (Number(style.shadowOffsetX) || 0), y:point.y + (Number(style.shadowOffsetY) || 0)};
         const align = style.textAlign === 'left' ? 4 : style.textAlign === 'right' ? 6 : 5;
-        const shadowTags = `{\\an${align}\\pos(${shadowPoint.x},${shadowPoint.y})\\org(${anchor.x},${anchor.y})\\frz${-Number(style.rotateAngle || 0)}\\q2\\bord0\\shad0\\1c${hexToABGR(style.shadowColor || '#000000', 100)}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
+        const shadowTags = `{\\an${align}\\pos(${shadowPoint.x},${shadowPoint.y})\\org(${anchor.x},${anchor.y})\\frz${-Number(style.rotateAngle || 0)}\\q2\\bord0\\shad0\\1a&H${Math.round(255 * (1 - clamp(Number(style.shadowOpacity ?? 100), 0, 100) / 100)).toString(16).padStart(2, '0')}&\\1c${hexToABGR(style.shadowColor || '#000000', clamp(Number(style.shadowOpacity ?? 100), 0, 100))}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
         const crispShadow = shadowTags.replace(/\\blur[0-9.]+/, `\\blur${Math.min(2, Math.max(0, Number(style.shadowBlur) || 0))}`);
         return event(-2, shadowTags + line) + '\n' + event(-1, crispShadow + line) + '\n' + foreground;
       }).join('\n');

@@ -160,9 +160,9 @@ test('explicit neon glow follows every text color despite preset filters and sha
   const h=editor(),el=new Element();
   for(const textColor of ['#ffffff','#ff3366','#00e5ff','#39ff14','#ffd700','#7c3aed']) {
     h.context.applyTextBoxVisuals(el,{...CAPTION_PRESETS[0].style,textColor,glowIntensity:16,neonGlow:0,shadowColor:'#000000',filter:'drop-shadow(0 0 8px white)'});
-    assert.ok(el.style.filter.includes(textColor));
+    assert.ok(!el.style.filter || el.style.filter === "none");
     assert.ok(el.style.textShadow.includes(textColor));
-    assert.ok(!el.style.filter.includes('white'));
+    assert.ok(!el.style.textShadow.includes('white'));
   }
 });
 
