@@ -520,11 +520,8 @@ body.caption-editor-page .scene-grid {
 
 /* 4K Enhanced crisp rendering on video element */
 .caption-video-wrap.is-enhanced .caption-editor-video {
-  filter: contrast(1.08) saturate(1.15) brightness(1.02);
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  transform: translateZ(0);
-  backface-visibility: hidden;
+  filter: contrast(1.04) saturate(1.04);
+  image-rendering: auto;
 }
 
 /* ✦ Real-time Subject Segmentation Canvas (Layer 3: Behind the Person) */
