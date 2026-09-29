@@ -313,3 +313,23 @@ test('active pill keeps identical padding when emphasis moves to the next word',
   assert.equal(el.children[0],first);assert.equal(first.style.padding,padding);
   assert.equal(el.children[1].style.padding,padding);
 });
+
+test('moving X/Y preserves box dimensions, rotation and the other axis', () => {
+  const h=harness(), box=h.controls.captionOverlay;
+  h.run('editorState.style.boxWidth=78; editorState.style.boxHeight=30; editorState.style.rotateAngle=25; editorState.style.positionX=50; editorState.style.positionY=50; applyStyleToOverlay();');
+  const geometry=()=>[box.style.width, box.style.height, box.style.transform];
+  const before=geometry();
+  for(const x of [5,95,50]) {
+    h.run(`editorState.style.positionX=${x}; applyStyleToOverlay();`);
+    assert.equal(box.style.left, `${x}%`); assert.equal(box.style.top, '50%');
+    assert.deepEqual(geometry(),before);
+  }
+  for(const y of [20,75,50]) {
+    h.run(`editorState.style.positionY=${y}; applyStyleToOverlay();`);
+    assert.equal(box.style.top, `${y}%`); assert.equal(box.style.left, '50%');
+    assert.deepEqual(geometry(),before);
+  }
+  const css=fs.readFileSync(path.join(root,'public/captionEditorLayout.css'),'utf8');
+  const overlay=css.match(/\.caption-video-overlay\s*\{([^}]+)\}/)[1];
+  assert.doesNotMatch(overlay,/width:\s*auto\s*!important/);
+});

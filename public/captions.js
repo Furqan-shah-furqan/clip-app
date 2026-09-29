@@ -3289,8 +3289,8 @@ function getActivePresetsList() {
 function renderPresetsUI() {
   if (!presetsGrid) return;
   const allPresets = getActivePresetsList();
-  // Display all 8 curated creator presets in Card 4
-  const quickPicks = allPresets.slice(0, 8);
+  // Keep every preset available in the scrollable panel.
+  const quickPicks = allPresets;
 
   const activeId = editorState.style?.activePresetId || allPresets[0]?.id;
 
@@ -3310,10 +3310,12 @@ function renderPresetsUI() {
     const active = activeId ? activeId === preset.id : (editorState.style?.animationStyle && editorState.style.animationStyle === preset.style?.animationStyle);
     const displayName = shortNames[preset.id] || preset.name;
     const isPill = s.highlightMode === "pill";
-    const swatchBg = isPill ? (s.highlightBg || "#FFE600") : (s.bgColor && s.bgColor !== "transparent" ? s.bgColor : "#161922");
-    const swatchColor = isPill ? (s.highlightColor || "#000000") : (s.highlightColor || s.textColor || "#ffffff");
+    const swatchBg = isPill ? (s.highlightBg || "#FFE600") : "transparent";
+    const swatchColor = s.textColor || "#ffffff";
     const swatchShadow = s.glowIntensity > 0 ? `0 0 8px ${s.highlightColor || "#06B6D4"}` : "none";
-    const swatchStroke = s.strokeWidth > 0 ? `1px ${s.strokeColor || "#000000"}` : "none";
+    const swatchStroke = s.strokeWidth > 0 ? `${Math.min(.6, s.strokeWidth / 2)}px ${s.strokeColor || "#000000"}` : "0px transparent";
+    const sample = escapeHtml(preset.previewText || preset.name).split(" ");
+    const preview = sample.map((word, i) => `<span style="color:${i === sample.length - 1 ? s.highlightColor || swatchColor : swatchColor}">${word}</span>`).join(" ");
 
     return `
       <button
@@ -3329,14 +3331,14 @@ function renderPresetsUI() {
             background:${swatchBg};
             color:${swatchColor};
             font-family:${s.fontFamily || "Montserrat"}, sans-serif;
-            font-size: 11px;
-            font-weight:${s.fontWeight || 800};
+            font-size: 16px;
+            font-weight:${s.fontWeight || 800} !important;
             text-transform:${s.textTransform || "none"};
             font-style:${s.fontStyle || "normal"};
             text-shadow:${swatchShadow};
             -webkit-text-stroke:${swatchStroke};
           "
-        >Aa</div>
+        >${preview}</div>
         <span class="preset-name">${displayName}</span>
       </button>
     `;
@@ -3647,7 +3649,7 @@ function applyPresetFromGallery(id) {
     strokeWidth: Number(s.strokeWidth) || 0,
     bgColor: s.bgColor !== undefined ? s.bgColor : "transparent",
     bgOpacity: s.bgOpacity !== undefined ? Number(s.bgOpacity) : (s.bgColor && s.bgColor !== "transparent" ? 70 : 0),
-    bgPadding: Number(s.bgPadding) || 12,
+    bgPadding: Number(s.bgPadding ?? 12),
     paddingX: Number(s.paddingX ?? s.bgPadding ?? 14),
     paddingY: Number(s.paddingY ?? (s.bgPadding !== undefined ? Math.round(Number(s.bgPadding) * .7) : 8)),
     borderRadius: Number(s.borderRadius ?? 10),

@@ -725,8 +725,14 @@ body.caption-editor-page {
   font-weight: 700 !important;
 }
 
-/* Preset Cards Grid (8 styles in clean 4-column responsive grid) */
+/* Preset library: fixed-size cards in a vertically scrolling grid. */
 .presets-grid {
+  max-height: 210px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  grid-auto-rows: 100px;
+  padding: 3px;
   display: grid !important;
   grid-template-columns: repeat(4, 1fr) !important;
   gap: 6px !important;
@@ -736,9 +742,9 @@ body.caption-editor-page {
 }
 
 .preset-card {
-  height: 48px !important;
-  min-height: 48px !important;
-  max-height: 48px !important;
+  height: 100px !important;
+  min-height: 100px !important;
+  max-height: 100px !important;
   width: 100% !important;
   min-width: 0 !important;
   max-width: 100% !important;
@@ -942,7 +948,8 @@ body.caption-editor-page {
   pointer-events: auto !important;
   box-sizing: border-box !important;
   cursor: pointer !important;
-  width: auto !important;
+  right: auto;
+  /* Explicit width from the editor prevents position-dependent shrink-to-fit. */
   max-width: 92% !important;
 }
 
@@ -1274,6 +1281,9 @@ body.caption-editor-page {
 }
 
 .preset-gallery-card {
+  height: 100px;
+  min-height: 100px;
+  box-sizing: border-box;
   position: relative !important;
   background: #161821 !important;
   border-radius: 14px !important;
@@ -1302,7 +1312,9 @@ body.caption-editor-page {
 }
 
 .preset-card-stage {
-  height: 104px !important;
+  height: 58px !important;
+  flex: 1;
+  min-height: 0;
   background: #0a0b10 !important;
   display: flex !important;
   align-items: center !important;
@@ -1337,7 +1349,7 @@ body.caption-editor-page {
 }
 
 .preset-card-info {
-  padding: 10px 12px !important;
+  padding: 4px 8px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: space-between !important;
@@ -1545,4 +1557,15 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
   #controlsWorkspace[data-grid] { grid-template-rows: auto auto !important; }
   #controlsWorkspace[data-grid] > .item { overflow: visible !important; }
   .caption-editor-page .ce-preview-panel { height: 520px !important; }
+}
+
+/* Samples use each preset's own typography; the grid alone scrolls. */
+.caption-editor-page .preset-swatch {
+  display: block !important; height: auto !important; min-height: 40px !important;
+  font-size: 16px !important; line-height: 1.2; text-align: center;
+  white-space: normal; overflow-wrap: break-word;
+}
+.caption-editor-page .presets-grid { min-height: 0; flex: 1 1 auto; }
+.caption-editor-page :is(.preset-card.is-active, .preset-gallery-card.is-active) {
+  outline: 1px solid var(--text); outline-offset: -2px;
 }

@@ -70,7 +70,7 @@ test('all presets survive control sync/save without changing transcript, timings
     assert.equal(exported.fontFamily,style.fontFamily);
     await h.context.ensureCaptionFont(style);
   }
-  assert.equal(CAPTION_PRESETS.length,8);
+  assert.equal(CAPTION_PRESETS.length,13);
 });
 
 test('font selection tolerates quotes, serif fallbacks, and saved custom families', () => {
@@ -172,7 +172,7 @@ test('ordinary shadows do not become glow and label backgrounds honor preset pad
   h.context.applyTextBoxVisuals(el,{...cleanPreset.style,fontFamily:"'Barlow', sans-serif"});
   assert.ok(!el.style.filter || el.style.filter==='none');
   const labelPreset = CAPTION_PRESETS.find(p=>p.name==='Dark Label') || CAPTION_PRESETS[6];
-  h.context.applyTextBoxVisuals(el,{...labelPreset.style,paddingX:8,paddingY:6});
+  h.context.applyTextBoxVisuals(el,{...labelPreset.style,paddingX:8,paddingY:6,textShadow:false});
   assert.equal(el.style.padding,'6px 8px');
   assert.equal(el.style.backdropFilter,'none');
   assert.equal(el.style.textShadow,'none');
@@ -223,5 +223,15 @@ test('actual caption burn produces an MP4 using a curated preset', {skip:!hasFfm
   } finally {
     if(output) fs.rmSync(output.outputPath,{force:true});
     fs.rmSync(dir,{recursive:true,force:true});
+  }
+});
+
+ test('preset library has distinct fonts and no caption background boxes', () => {
+  assert.equal(new Set(CAPTION_PRESETS.map(p => p.style.fontFamily)).size, CAPTION_PRESETS.length);
+  for (const {id, style} of CAPTION_PRESETS) {
+    assert.equal(style.bgOpacity, 0, id);
+    assert.equal(style.bgColor, 'transparent', id);
+    assert.equal(style.highlightBg, 'transparent', id);
+    assert.notEqual(style.highlightMode, 'pill', id);
   }
 });
