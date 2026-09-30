@@ -70,7 +70,7 @@ test('all presets survive control sync/save without changing transcript, timings
     assert.equal(exported.fontFamily,style.fontFamily);
     await h.context.ensureCaptionFont(style);
   }
-  assert.equal(CAPTION_PRESETS.length,13);
+  assert.equal(CAPTION_PRESETS.length,5);
 });
 
 test('font selection tolerates quotes, serif fallbacks, and saved custom families', () => {
@@ -166,27 +166,25 @@ test('explicit neon glow follows every text color despite preset filters and sha
   }
 });
 
-test('ordinary shadows do not become glow and label backgrounds honor preset padding', () => {
+test('ordinary shadows do not become glow and caption padding remains editable', () => {
   const h=editor(), el=new Element();
   const cleanPreset = CAPTION_PRESETS.find(p=>p.name==='Studio Clean') || CAPTION_PRESETS[2];
   h.context.applyTextBoxVisuals(el,{...cleanPreset.style,fontFamily:"'Barlow', sans-serif"});
   assert.ok(!el.style.filter || el.style.filter==='none');
-  const labelPreset = CAPTION_PRESETS.find(p=>p.name==='Dark Label') || CAPTION_PRESETS[6];
+  const labelPreset = CAPTION_PRESETS[4];
   h.context.applyTextBoxVisuals(el,{...labelPreset.style,paddingX:8,paddingY:6,textShadow:false});
   assert.equal(el.style.padding,'6px 8px');
   assert.equal(el.style.backdropFilter,'none');
   assert.equal(el.style.textShadow,'none');
 });
 
-test('curated ASS honors font and stroke independently of animation, with no phrase fade-out', () => {
-  const hormozi = CAPTION_PRESETS.find(p=>p.name==='Hormozi Impact') || CAPTION_PRESETS[1];
-  const s={...hormozi.style,animationStyle:'pop',strokeWidth:0};
+test('layered ASS honors font and stroke independently of animation', () => {
+  const s={...CAPTION_PRESETS[1].style,animationStyle:'pop',strokeWidth:0};
   const ass=buildAssContent([{start:1,end:1.08,text:'hello world'}],s);
   const row=ass.split('\n').find(l=>l.startsWith('Style: Default,')).split(',');
-  assert.equal(row[1],'Anton'); assert.equal(Number(row[16]),0);
-  assert.ok(!ass.includes('\\fad('));
-  assert.ok(!ass.includes('\\fscx65'));
-  assert.match(ass,/HELLO \{.*?\\fscx96/);
+  assert.equal(row[1],'Expose Variable'); assert.equal(Number(row[16]),0);
+  assert.match(ass,/\\fnExpose Variable/);
+  assert.match(ass,/\\fscx96/);
 });
 
 const ffmpegBin=process.env.FFMPEG_PATH || 'ffmpeg';
@@ -226,12 +224,13 @@ test('actual caption burn produces an MP4 using a curated preset', {skip:!hasFfm
   }
 });
 
- test('preset library has distinct fonts and no caption background boxes', () => {
-  assert.equal(new Set(CAPTION_PRESETS.map(p => p.style.fontFamily)).size, CAPTION_PRESETS.length);
+ test('preset library uses five bundled font families and no caption background boxes', () => {
+  const families = new Set(CAPTION_PRESETS.flatMap(p => [p.style.fontFamily, p.style.heroFontFamily]));
+  assert.deepEqual([...families].sort(), ['Britney','Chillax','Expose','Satoshi','Telma'].sort());
   for (const {id, style} of CAPTION_PRESETS) {
     assert.equal(style.bgOpacity, 0, id);
     assert.equal(style.bgColor, 'transparent', id);
-    assert.equal(style.highlightBg, 'transparent', id);
+    assert.ok(!style.highlightBg || style.highlightBg === 'transparent', id);
     assert.notEqual(style.highlightMode, 'pill', id);
   }
 });

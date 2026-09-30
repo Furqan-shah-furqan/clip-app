@@ -2865,3 +2865,28 @@ body.caption-editor-page.theme-light .ce-btn--export-hero:hover {
 .caption-smooth-word--neon { animation-name: caption-glow-pulse; }
 .caption-smooth-word--highlightimpact { animation-name: caption-soft-pop; }
 @keyframes caption-glow-pulse { from { filter: brightness(1.5); } to { filter: brightness(1); } }
+/* Layered Fontshare presets: the middle spoken word carries the visual hook. */
+.caption-layered { text-align: inherit; }
+.caption-layered .caption-smooth-word { vertical-align: baseline; }
+.caption-layered .caption-preset-small { font-size: .78em; }
+.caption-layered .caption-preset-hero {
+  font-family: var(--caption-hero-font), sans-serif;
+  font-size: 1.58em;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.045em;
+}
+.caption-smooth-word--float-up { animation-name: caption-preset-float; }
+.caption-smooth-word--slide-up { animation-name: caption-preset-slide-up; }
+.caption-smooth-word--slide-down { animation-name: caption-preset-slide-down; }
+.caption-smooth-word--bouncy { animation-name: caption-preset-bounce; }
+.caption-smooth-word--letters-up .caption-smooth-letter { animation-name: caption-preset-letter-up; }
+.caption-smooth-word--typewriter .caption-smooth-letter { animation-name: caption-preset-type; animation-timing-function: steps(1,end); }
+.caption-smooth-letter { display: inline-block; animation-duration: var(--smooth-duration, .3s); animation-fill-mode: both; animation-timing-function: cubic-bezier(.22,1,.36,1); }
+@keyframes caption-preset-float { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes caption-preset-slide-up { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes caption-preset-slide-down { from { opacity: 0; transform: translateY(-28px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes caption-preset-bounce { 0% { opacity: 0; transform: scale(.72); } 62% { opacity: 1; transform: scale(1.07); } 100% { transform: scale(1); } }
+@keyframes caption-preset-letter-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes caption-preset-type { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .caption-smooth-letter { animation: none !important; opacity: 1 !important; } }

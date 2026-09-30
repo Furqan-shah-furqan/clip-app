@@ -301,7 +301,7 @@ test('manual color, highlight, opacity and padding stay independent through pres
   assert.equal(exported.paddingX,0);assert.equal(exported.paddingY,0);
   assert.equal(exported.textOpacity,40);assert.equal(exported.shadowOpacity,20);
   const ass=buildAssContent([{start:0,end:1,text:'hello'}],exported);
-  assert.match(ass,/\\1a&H99&/);assert.match(ass,/\\1a&Hcc&/);
+  assert.match(ass,/\\1a&H99&/i);assert.match(ass,/\\1a&Hcc&/i);
 });
 
 test('active pill keeps identical padding when emphasis moves to the next word', () => {

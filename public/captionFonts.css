@@ -23,3 +23,9 @@
 @font-face { font-family: 'JetBrains Mono'; src: url('fonts/JetBrainsMono-Variable.ttf?v=2') format('truetype'); font-weight: 100 800; font-style: normal; font-display: swap; }
 
 @font-face { font-family: 'Syne'; src: url('fonts/Syne-Variable.ttf?v=2') format('truetype'); font-weight: 400 800; font-style: normal; font-display: swap; }
+/* Local Fontshare families used by the five layered caption presets. */
+@font-face { font-family: 'Satoshi'; src: url('fonts/Satoshi-Variable.ttf?v=1') format('truetype'); font-weight: 300 900; font-display: block; }
+@font-face { font-family: 'Chillax'; src: url('fonts/Chillax-Variable.ttf?v=1') format('truetype'); font-weight: 200 700; font-display: block; }
+@font-face { font-family: 'Expose'; src: url('fonts/Expose-Variable.ttf?v=1') format('truetype'); font-weight: 400 900; font-display: block; }
+@font-face { font-family: 'Telma'; src: url('fonts/Telma-Variable.ttf?v=1') format('truetype'); font-weight: 300 900; font-display: block; }
+@font-face { font-family: 'Britney'; src: url('fonts/Britney-Variable.ttf?v=1') format('truetype'); font-weight: 300 900; font-display: block; }

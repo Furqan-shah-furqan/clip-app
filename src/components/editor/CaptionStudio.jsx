@@ -90,7 +90,7 @@ export default function CaptionStudio({
       const localFonts = document.createElement("link");
       localFonts.id = "clipflow-caption-local-fonts";
       localFonts.rel = "stylesheet";
-      localFonts.href = "/captionFonts.css?v=curated-1";
+      localFonts.href = "/captionFonts.css?v=layered-1";
       document.head.appendChild(localFonts);
     }
     const fontLinkId = "clipflow-caption-google-fonts";
@@ -576,7 +576,7 @@ export default function CaptionStudio({
       ...prev,
       fontFamily: s.fontFamily || "Montserrat",
       fontSize: isBtp ? Math.max(s.fontSize || 54, 52) : (s.fontSize || 28),
-      fontWeight: "900",
+      fontWeight: String(s.fontWeight || 900),
       letterSpacing: s.letterSpacing !== undefined ? s.letterSpacing : 0,
       lineSpacing: s.lineSpacing || 1.2,
       letterCase:
@@ -1136,6 +1136,11 @@ export default function CaptionStudio({
                       }
                       style={csStyles.selectInput}
                     >
+                      <option value="Satoshi">Satoshi</option>
+                      <option value="Chillax">Chillax</option>
+                      <option value="Expose">Expose</option>
+                      <option value="Telma">Telma</option>
+                      <option value="Britney">Britney</option>
                       <option value="Barlow">Barlow</option>
                       <option value="Barlow Condensed">Barlow Condensed</option>
                       <option value="Anton">Anton</option>
@@ -1510,7 +1515,7 @@ export default function CaptionStudio({
                   <div>
                     <h4 style={csStyles.cardTitle}>Presets &amp; Export</h4>
                     <span style={{ fontSize: "11px", color: "#64748B" }}>
-                      1-Click Styles modeled after Moonshot &amp; Submagic
+                      Five layered caption styles
                     </span>
                   </div>
                 </div>
@@ -1521,8 +1526,8 @@ export default function CaptionStudio({
                   style={csStyles.browsePresetsBtn}
                 >
                   <span>✦</span>
-                  <span>Browse Presets Library (24 Styles)</span>
-                  <span style={csStyles.valBadge}>24 STYLES</span>
+                  <span>Browse Presets Library (5 Styles)</span>
+                  <span style={csStyles.valBadge}>5 STYLES</span>
                 </button>
 
                 <div style={{ marginTop: "16px" }}>

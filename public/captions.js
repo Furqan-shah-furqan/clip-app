@@ -65,176 +65,6 @@ const DEFAULT_STYLE = {
 };
 
 // ─── STYLE PRESETS ────────────────────────────────────────
-const STYLE_PRESETS = [
-  {
-    id: "classic",
-    name: "Classic",
-    label: "Clean look",
-    style: {
-      fontFamily: "'Montserrat', sans-serif",
-      fontSize: 26,
-      textColor: "#ffffff",
-      bgColor: "#000000",
-      bgOpacity: 65,
-      position: "bottom",
-      positionX: 50,
-      positionY: 60,
-      wordsPerRow: 0,
-      textShadow: false,
-      shadowColor: "#000000",
-      shadowBlur: 0,
-      shadowOffsetX: 0,
-      shadowOffsetY: 0,
-      animationStyle: "none",
-      fontWeight: 700,
-      textTransform: "none",
-      letterSpacing: 0,
-      borderRadius: 14,
-      paddingX: 14,
-      paddingY: 10,
-    },
-  },
-  {
-    id: "highlight",
-    name: "Highlight",
-    label: "Bold pop",
-    style: {
-      fontFamily: "'Poppins', sans-serif",
-      fontSize: 28,
-      textColor: "#111111",
-      bgColor: "#F5D76E",
-      bgOpacity: 100,
-      position: "bottom",
-      positionX: 50,
-      positionY: 60,
-      wordsPerRow: 2,
-      textShadow: false,
-      shadowColor: "#000000",
-      shadowBlur: 0,
-      shadowOffsetX: 0,
-      shadowOffsetY: 0,
-      animationStyle: "highlight",
-      fontWeight: 900,
-      textTransform: "uppercase",
-      letterSpacing: 0.5,
-      borderRadius: 10,
-      paddingX: 20,
-      paddingY: 10,
-    },
-  },
-  {
-    id: "neon",
-    name: "Neon",
-    label: "Glow effect",
-    style: {
-      fontFamily: "Impact, sans-serif",
-      fontSize: 32,
-      textColor: "#00ffff",
-      bgColor: "#000000",
-      bgOpacity: 0,
-      position: "bottom",
-      positionX: 50,
-      positionY: 60,
-      wordsPerRow: 0,
-      textShadow: true,
-      shadowColor: "#00e5ff",
-      shadowBlur: 26,
-      shadowOffsetX: 0,
-      shadowOffsetY: 0,
-      animationStyle: "neon",
-      fontWeight: 900,
-      textTransform: "uppercase",
-      letterSpacing: 1.5,
-      borderRadius: 0,
-      paddingX: 10,
-      paddingY: 8,
-    },
-  },
-  {
-    id: "hormozi",
-    name: "Hormozi Gold",
-    label: "High energy punch",
-    style: {
-      fontFamily: "'Montserrat', sans-serif",
-      fontSize: 34,
-      textColor: "#f5d76e",
-      bgColor: "#111111",
-      bgOpacity: 85,
-      position: "center",
-      positionX: 50,
-      positionY: 50,
-      wordsPerRow: 1,
-      textShadow: true,
-      shadowColor: "#000000",
-      shadowBlur: 14,
-      shadowOffsetX: 0,
-      shadowOffsetY: 3,
-      animationStyle: "pop",
-      fontWeight: 900,
-      textTransform: "uppercase",
-      letterSpacing: 1,
-      borderRadius: 12,
-      paddingX: 16,
-      paddingY: 10,
-    },
-  },
-  {
-    id: "minimal",
-    name: "Minimalist",
-    label: "Subtitle clean",
-    style: {
-      fontFamily: "Inter, sans-serif",
-      fontSize: 22,
-      textColor: "#ffffff",
-      bgColor: "#000000",
-      bgOpacity: 40,
-      position: "bottom",
-      positionX: 50,
-      positionY: 60,
-      wordsPerRow: 0,
-      textShadow: true,
-      shadowColor: "#000000",
-      shadowBlur: 6,
-      shadowOffsetX: 0,
-      shadowOffsetY: 2,
-      animationStyle: "classic",
-      fontWeight: 600,
-      textTransform: "none",
-      letterSpacing: 0,
-      borderRadius: 8,
-      paddingX: 12,
-      paddingY: 6,
-    },
-  },
-  {
-    id: "pop",
-    name: "Pop Dynamic",
-    label: "Spring bounce",
-    style: {
-      fontFamily: "'Montserrat', sans-serif",
-      fontSize: 30,
-      textColor: "#ffffff",
-      bgColor: "#000000",
-      bgOpacity: 75,
-      position: "bottom",
-      positionX: 50,
-      positionY: 60,
-      wordsPerRow: 2,
-      textShadow: true,
-      shadowColor: "#000000",
-      shadowBlur: 10,
-      shadowOffsetX: 0,
-      shadowOffsetY: 2,
-      animationStyle: "pop",
-      fontWeight: 900,
-      textTransform: "none",
-      letterSpacing: 0.5,
-      borderRadius: 12,
-      paddingX: 18,
-      paddingY: 10,
-    },
-  },
-];
 
 const editorState = {
   clip: null,
@@ -2225,6 +2055,7 @@ function normalizeStyle(style = {}) {
   if (style?.textShadow !== undefined) merged.textShadow = style.textShadow;
   if (style?.highlightColor !== undefined) merged.highlightColor = style.highlightColor;
   if (style?.behindPerson !== undefined) merged.behindPerson = style.behindPerson;
+  if (!window.CAPTION_PRESETS?.some(p => p.id === merged.activePresetId)) merged.activePresetId = null;
   return merged;
 }
 
@@ -2495,10 +2326,12 @@ function renderWordSpan(w, idx, anim, delay, activeWordIdx) {
 let explicitMotionPreview = false;
 function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
   const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  container.classList.toggle("caption-layered", Boolean(style.layered));
+  container.style.setProperty("--caption-hero-font", `"${captionFontName(style.heroFontFamily || style.fontFamily)}"`);
   const signature = `${segId}|${style.activePresetId}|${style.animationStyle}|${style.presetDuration}`;
   const existing = Array.from(container.children);
   const canAppend = container.dataset.smoothKey === signature &&
-    existing.length <= words.length && existing.every((el, i) => el.textContent === words[i]);
+    existing.length <= words.length && existing.every((el, i) => el.dataset.captionWord === words[i]);
   if (!canAppend) container.replaceChildren();
   container.dataset.smoothKey = signature;
   container.classList.remove("has-cap-rows");
@@ -2509,7 +2342,16 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
     if (!span) {
       if (i) container.appendChild(document.createTextNode(" "));
       span = document.createElement("span");
-      span.textContent = word;
+      span.dataset.captionWord = word;
+      if (style.layered && ["typewriter", "letters-up"].includes(style.animationStyle)) {
+        Array.from(word).forEach((letter, letterIndex) => {
+          const glyph = document.createElement("span");
+          glyph.className = "caption-smooth-letter";
+          glyph.textContent = letter;
+          glyph.style.animationDelay = `${letterIndex * 0.025}s`;
+          span.appendChild(glyph);
+        });
+      } else span.textContent = word;
       const motion = style.animationStyle || "none";
       span.className = `caption-smooth-word caption-smooth-word--${motion}`;
       span.dataset.motionPreview = String(explicitMotionPreview);
@@ -2522,6 +2364,8 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
         animation.play();
       }
     }
+    span.classList.toggle("caption-preset-hero", Boolean(style.layered && i === Math.min(1, words.length - 1)));
+    span.classList.toggle("caption-preset-small", Boolean(style.layered && i === 0 && words.length > 1));
     const isCurrentActive = i === activeWordIdx;
     span.classList.toggle("is-active", isCurrentActive);
     span.classList.toggle("caption-word-active", isCurrentActive);
@@ -2549,7 +2393,7 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       span.style.backgroundColor = "transparent";
       span.style.padding = style.highlightMode === "pill" ? "2px 8px" : "0px";
       span.style.display = "inline-block";
-      span.style.color = "inherit";
+      span.style.color = style.layered && style.highlightMode !== "none" && i === Math.min(1, words.length - 1) ? style.highlightColor : "inherit";
       span.style.fontStyle = style.fontStyle === "italic" ? "normal" : "inherit";
     }
   });
@@ -3283,7 +3127,7 @@ function getActivePresetsList() {
   if (typeof window !== "undefined" && Array.isArray(window.CAPTION_PRESETS) && window.CAPTION_PRESETS.length > 0) {
     return window.CAPTION_PRESETS;
   }
-  return STYLE_PRESETS;
+  return [];
 }
 
 function renderPresetsUI() {
@@ -3294,21 +3138,11 @@ function renderPresetsUI() {
 
   const activeId = editorState.style?.activePresetId || allPresets[0]?.id;
 
-  const shortNames = {
-    "preset-moonshot-viral": "Moonshot",
-    "preset-hormozi-impact": "Hormozi",
-    "preset-studio-clean": "Studio Clean",
-    "preset-headline-punch": "Headline",
-    "preset-cyber-glow": "Cyber Glow",
-    "preset-editorial-serif": "Editorial",
-    "preset-dark-label": "Dark Label",
-    "preset-retro-pop": "Retro Pop",
-  };
 
   presetsGrid.innerHTML = quickPicks.map((preset) => {
     const s = preset.style || {};
     const active = activeId ? activeId === preset.id : (editorState.style?.animationStyle && editorState.style.animationStyle === preset.style?.animationStyle);
-    const displayName = shortNames[preset.id] || preset.name;
+    const displayName = preset.name;
     const isPill = s.highlightMode === "pill";
     const swatchBg = isPill ? (s.highlightBg || "#FFE600") : "transparent";
     const swatchColor = s.textColor || "#ffffff";
@@ -3608,15 +3442,14 @@ function applyPresetFromGallery(id) {
   if (!preset) return;
 
   const cur = editorState.style || {};
+  const s = preset.style || {};
   const preservedPosition = {
     position: cur.position || "bottom",
-    positionX: cur.positionX !== undefined ? cur.positionX : 50,
-    positionY: Math.min(Math.max(Number(cur.positionY !== undefined && cur.positionY !== null ? cur.positionY : 60), 20), 75),
+    positionX: cur.positionX !== DEFAULT_STYLE.positionX ? cur.positionX : (s.positionX ?? 50),
+    positionY: cur.positionY !== DEFAULT_STYLE.positionY ? cur.positionY : (s.positionY ?? 60),
     rotateAngle: cur.rotateAngle !== undefined ? cur.rotateAngle : 0,
-    boxWidth: cur.boxWidth || 88, boxHeight: cur.boxHeight || 0, textAlign: cur.textAlign || "center",
+    boxWidth: cur.boxWidth || s.boxWidth || 88, boxHeight: cur.boxHeight || 0, textAlign: cur.textAlign !== DEFAULT_STYLE.textAlign ? cur.textAlign : (s.textAlign || "center"),
   };
-
-  const s = preset.style || {};
 
   let wordsPerRowVal = 0;
   if (typeof s.wordsInRow === "string") {
@@ -3633,6 +3466,8 @@ function applyPresetFromGallery(id) {
     ...DEFAULT_STYLE,
     ...preservedPosition,
     curated: Boolean(s.curated),
+    layered: Boolean(s.layered),
+    heroFontFamily: s.heroFontFamily || s.fontFamily,
     highlightMode: s.highlightMode || "none",
     highlightBg: s.highlightBg || "transparent",
     presetDuration: Number(s.presetDuration) || 0.2,

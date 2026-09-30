@@ -75,7 +75,7 @@ export default function PresetsGallery({
             <div style={styles.headerKicker}>CAPTION STUDIO · STYLES ENGINE</div>
             <h2 style={styles.headerTitle}>Preset Styles Library</h2>
             <p style={styles.headerSubtitle}>
-              Explore 150+ high-retention caption styles modeled after top creators &amp; viral platforms.
+              Five layered caption styles using your Fontshare fonts.
             </p>
           </div>
 

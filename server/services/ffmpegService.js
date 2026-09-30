@@ -256,15 +256,22 @@ function buildAssDialogueText(text, animStyle, durationMs, anchor) {
 function buildCuratedDialogueText(text, style, durationMs, anchor) {
   const motionMs = Math.max(1, Math.min(durationMs, (Number(style.presetDuration) || .12) * 1000));
   const rise = Math.max(1, Math.round((Number(style.fontSize) || 28) * .1));
-  const position = style.animationStyle === 'elevate'
-    ? `\\move(${anchor.x},${anchor.y + rise},${anchor.x},${anchor.y},0,${motionMs})`
+  const offset = style.animationStyle === 'slide-down' ? -Math.max(24, rise * 3)
+    : style.animationStyle === 'slide-up' ? Math.max(24, rise * 3)
+      : ['elevate', 'float-up', 'letters-up'].includes(style.animationStyle) ? rise : 0;
+  const position = offset
+    ? `\\move(${anchor.x},${anchor.y + offset},${anchor.x},${anchor.y},0,${motionMs})`
     : `\\pos(${anchor.x},${anchor.y})`;
   const align = style.textAlign === 'left' ? 4 : style.textAlign === 'right' ? 6 : 5;
   const origin = anchor.origin || anchor;
   const textAlpha = Math.round(255 * (1 - clamp(Number(style.textOpacity ?? 100), 0, 100) / 100)).toString(16).padStart(2, '0').toUpperCase();
   const phraseColor = style.highlightMode === "phrase" ? `\\1c${hexToABGR(style.highlightColor || style.textColor, 100)}&` : "";
-  const tag = `{${phraseColor}\\1a&H${textAlpha}&\\an${align}${position}\\org(${origin.x},${origin.y})\\frz${-Number(style.rotateAngle || 0)}\\q2}`;
-  const parts = text.split(/(\\N|\s+)/);
+  const bounce = style.animationStyle === 'bouncy' ? `\\fscx78\\fscy78\\t(0,${Math.round(motionMs * .65)},\\fscx108\\fscy108)\\t(${Math.round(motionMs * .65)},${motionMs},\\fscx100\\fscy100)` : '';
+  const fade = ['float-up', 'slide-up', 'slide-down', 'letters-up'].includes(style.animationStyle) ? `\\fad(${Math.min(100, motionMs)},40)` : '';
+  const tag = `{${phraseColor}\\1a&H${textAlpha}&\\an${align}${position}${bounce}${fade}\\org(${origin.x},${origin.y})\\frz${-Number(style.rotateAngle || 0)}\\q2}`;
+  // Font override tags can contain spaces (for example "Satoshi Variable").
+  // Split spoken words without splitting the tags themselves.
+  const parts = text.split(/(\\N|\s+(?![^{}]*\}))/);
   let last = parts.length - 1;
   while (last >= 0 && (!parts[last] || parts[last] === '\\N' || /^\s+$/.test(parts[last]))) last--;
   // Expanded events already contain only the words whose speech has begun.
@@ -274,10 +281,15 @@ function buildCuratedDialogueText(text, style, durationMs, anchor) {
     if (style.highlightMode === 'word' || ['highlight', 'highlightimpact', 'wordcolor'].includes(style.animationStyle)) overrides += `\\1c${hexToABGR(style.highlightColor, 100)}&`;
     if (['pop', 'highlightimpact'].includes(style.animationStyle)) overrides += `\\fscx96\\fscy96\\t(0,${motionMs},\\fscx100\\fscy100)`;
     if (['classic', 'reveal', 'wordappend'].includes(style.animationStyle)) overrides += `\\1a&H${Math.max(51, parseInt(textAlpha, 16)).toString(16)}&\\t(0,${motionMs},\\1a&H${textAlpha}&)`;
-    if (style.animationStyle === 'typewriter') overrides += `\\2a&HFF&\\kf${Math.max(1, Math.round(motionMs / 10))}`;
+    if (style.animationStyle === 'typewriter' && !style.layered) overrides += `\\2a&HFF&\\kf${Math.max(1, Math.round(motionMs / 10))}`;
     if (style.animationStyle === 'cinematic') overrides += `\\blur2\\t(0,${motionMs},\\blur0)`;
     if (style.animationStyle === 'neon') overrides += `\\bord1\\blur2\\t(0,${motionMs},\\blur0)`;
-    if (overrides) parts[last] = `{${overrides}}${parts[last]}`;
+    if (style.layered && ['typewriter', 'letters-up'].includes(style.animationStyle)) {
+      const match = parts[last].match(/^((?:\{[^}]*\})*)(.*)$/);
+      const letters = Array.from(match?.[2] || '');
+      const interval = Math.max(1, Math.floor(motionMs / Math.max(letters.length, 1)));
+      parts[last] = (match?.[1] || '') + (overrides ? `{${overrides}}` : '') + letters.map((letter, index) => `{\\1a&HFF&\\t(${index * interval},${(index + 1) * interval},\\1a&H${textAlpha}&)}${letter}`).join('');
+    } else if (overrides) parts[last] = `{${overrides}}${parts[last]}`;
   }
   return tag + parts.join('');
 }
@@ -286,7 +298,9 @@ function buildCuratedDialogueText(text, style, durationMs, anchor) {
 
 function buildAssContent(segments, style = {}) {
   const fontSize = Math.round(Number(style.fontSize) || 28);
-  const fontName = String(style.fontFamily || 'Arial').replace(/['"]/g, '').split(',')[0].trim() || 'Arial';
+  const requestedFont = String(style.fontFamily || 'Arial').replace(/['"]/g, '').split(',')[0].trim() || 'Arial';
+  const variableFontFamilies = new Set(['Satoshi', 'Chillax', 'Expose', 'Telma', 'Britney']);
+  const fontName = style.layered && variableFontFamilies.has(requestedFont) ? `${requestedFont} Variable` : requestedFont;
   const bold = Number(style.fontWeight) >= 700 ? -1 : 0;
   const italic = style.fontStyle === 'italic' ? -1 : 0;
   const textTransform = style.textTransform || 'none';
@@ -312,7 +326,7 @@ function buildAssContent(segments, style = {}) {
     borderStyle = bgOpacity > 0 ? 3 : 1;
     outlineColor = bgOpacity > 0 ? backColor : hexToABGR(style.strokeColor || '#111318', 100);
     outline = bgOpacity > 0 ? Math.max(0, Number(style.paddingY) || 6) : Math.max(0, Number(style.strokeWidth) || 0);
-    shadow = style.editorBox || bgOpacity > 0 || !hasShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
+    shadow = (style.editorBox && !style.layered) || bgOpacity > 0 || !hasShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
   } else switch (animStyle) {
     case 'neon':
       outlineColor = hexToABGR(style.shadowColor || '#00e5ff', 90);
@@ -393,6 +407,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     text = text.replace(/\r?\n/g, '\\N');
     if (!style.editorBox && !text.includes('\\N')) text = wrapText(text, charsPerLine);
     text = escapeAssText(text);
+    if (style.layered) {
+      const allWords = text.split(/(?:\\N|\s)+/).filter(Boolean);
+      const words = allWords.length > 3
+        ? [allWords[0], allWords[1], allWords.slice(2).join(' ')]
+        : allWords;
+      const sizes = [0.78, 1.58, 1];
+      const requestedHeroFont = String(style.heroFontFamily || requestedFont).replace(/['"{}\\]/g, '').split(',')[0].trim();
+      const heroFont = variableFontFamilies.has(requestedHeroFont) ? `${requestedHeroFont} Variable` : requestedHeroFont;
+      const layeredText = words.map((word, index) => {
+        const size = Math.round(fontSize * sizes[index]);
+        const font = index === 1 || words.length === 1 ? heroFont : fontName;
+        const color = style.highlightMode !== 'none' && (index === 1 || words.length === 1) ? style.highlightColor : style.textColor;
+        return `{\\fn${font}\\fs${size}\\1c${hexToABGR(color, 100)}&}${word}`;
+      }).join('\\N');
+      const foreground = `Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${buildCuratedDialogueText(layeredText, style, durationMs, anchor)}`;
+      if (!hasShadow) return foreground;
+      const shadowText = layeredText.replace(/\\1c&H[0-9A-F]+&/gi, '');
+      const shadowAnchor = {...anchor, x: anchor.x + (Number(style.shadowOffsetX) || 0), y: anchor.y + (Number(style.shadowOffsetY) || 0)};
+      const shadowStyle = {...style, highlightMode:'none', animationStyle:'none', textOpacity:Number(style.shadowOpacity ?? 100)};
+      const shadowTag = `{\\1c${hexToABGR(style.shadowColor || '#000000', 100)}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
+      const shadow = `Dialogue: -1,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${shadowTag}${buildCuratedDialogueText(shadowText, shadowStyle, durationMs, shadowAnchor)}`;
+      return shadow + '\n' + foreground;
+    }
     if (style.editorBox) {
       const lines = text.split('\\N');
       const boxWidth = videoW * clamp(Number(style.boxWidth) || 88, 15, 100) / 100;

@@ -10,8 +10,8 @@
       href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Barlow+Condensed:wght@600;700;800&family=Barlow:ital,wght@0,400;0,600;0,700;0,800;0,900;1,400&family=Bebas+Neue&family=Cinzel:wght@700;900&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@600;700;800;900&family=Oswald:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=Poppins:wght@600;700;800;900&family=Syne:wght@700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="captionFonts.css?v=editor-6" />
-    <link rel="stylesheet" href="captions.css?v=editor-6" />
+    <link rel="stylesheet" href="captionFonts.css?v=layered-1" />
+    <link rel="stylesheet" href="captions.css?v=layered-1" />
     <link rel="stylesheet" href="captionEditorLayout.css?v=editor-6" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
@@ -239,6 +239,11 @@
                   <div class="ce-select-wrap">
                     <select id="capAnimStyle" class="ce-select">
                       <option value="none">None — Static</option>
+                      <option value="float-up">Float Up</option>
+                      <option value="slide-up">Slide Up</option>
+                      <option value="slide-down">Slide Down</option>
+                      <option value="bouncy">Bouncy</option>
+                      <option value="letters-up">Letters Up</option>
                       <option value="classic">Classic — Smooth Fade</option>
                       <option value="pop">Pop — Bounce In</option>
                       <option value="elevate">Elevate — Float Up</option>
@@ -580,8 +585,8 @@
                 type="button"
               >
                 <span class="preset-sparkle">✦</span>
-                <span class="preset-browse-text">Browse Presets Library (13 Styles)</span>
-                <span class="preset-browse-badge">13 STYLES</span>
+                <span class="preset-browse-text">Browse Presets Library (5 Styles)</span>
+                <span class="preset-browse-badge">5 STYLES</span>
               </button>
 
               <div class="presets-grid" id="presetsGrid"></div>
@@ -693,7 +698,7 @@
       </main>
     </div>
 
-    <!-- ─── PRESETS GALLERY MODAL DRAWER (24 STYLES) ──────── -->
+    <!-- ─── PRESETS GALLERY ──────── -->
     <div class="presets-drawer-backdrop" id="presetsGalleryDrawer" style="display: none;">
       <div class="presets-drawer-panel" role="dialog" aria-modal="true" aria-label="Caption Presets Library">
         <!-- Header: Clean 30px Title without icon or subtitle -->
@@ -740,10 +745,10 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js" crossorigin="anonymous"></script>
-    <script src="captionPresets.js?v=editor-6"></script>
+    <script src="captionPresets.js?v=layered-1"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=timeline-1"></script>
-    <script src="captions.js?v=editor-6"></script>
+    <script src="captions.js?v=layered-1"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>
