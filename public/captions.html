@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=layered-1" />
     <link rel="stylesheet" href="captions.css?v=layered-1" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-6" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=usability-1" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -29,12 +29,12 @@
           <div class="ce-topbar-divider"></div>
           <div class="ce-topbar-title-block">
             <span class="ce-kicker">Caption Studio</span>
-            <h2 class="ce-clip-title" id="clipTitleDisplay">Selected Clip</h2>
+            <h1 class="ce-clip-title" id="clipTitleDisplay">Selected Clip</h1>
           </div>
         </div>
 
         <div class="ce-topbar-center">
-          <div class="ce-status-chip">
+          <div class="ce-status-chip" role="status">
             <span class="ce-status-dot"></span>
             <span class="ce-status-label" id="captionStatusLabel">Style Studio · Realtime Parity</span>
           </div>
@@ -96,7 +96,7 @@
               <path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.9L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
             </svg>
           </div>
-          <h3 class="ce-empty-title">No clip selected</h3>
+          <h2 class="ce-empty-title">No clip selected</h2>
           <p class="ce-empty-sub">
             Go back to the studio and open a generated clip in the caption editor.
           </p>
@@ -114,7 +114,7 @@
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🔤</span>
-                  <h4 class="ce-card-title">Typography &amp; Motion</h4>
+                  <h2 class="ce-card-title">Typography &amp; Motion</h2>
                 </div>
               </div>
 
@@ -220,10 +220,10 @@
               <!-- LETTER CASE / TEXT TRANSFORM -->
               <div class="ce-field ce-field--case">
                 <div class="ce-label-with-val">
-                  <label class="ce-label">Letter Case</label>
-                  <span class="ce-hint">Hormozi / Viral</span>
+                  <span class="ce-label">Letter Case</span>
+                  <span class="ce-hint">Text transform</span>
                 </div>
-                <div class="ce-pill-group" id="textTransformGroup">
+                <div class="ce-pill-group" id="textTransformGroup" role="group" aria-label="Letter case">
                   <button class="ce-pill-opt is-active" type="button" data-case="none">Normal</button>
                   <button class="ce-pill-opt" type="button" data-case="uppercase">ALL CAPS</button>
                   <button class="ce-pill-opt" type="button" data-case="capitalize">Title</button>
@@ -285,7 +285,7 @@
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">🎨</span>
-                  <h4 class="ce-card-title">Colors &amp; Outline</h4>
+                  <h2 class="ce-card-title">Colors &amp; Outline</h2>
                 </div>
               </div>
 
@@ -484,9 +484,8 @@
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">📍</span>
-                  <h4 class="ce-card-title">Text Box &amp; Position</h4>
+                  <h2 class="ce-card-title">Text Box &amp; Position</h2>
                 </div>
-                <span class="ce-badge ce-badge--gold">Drag Anywhere</span>
               </div>
 
               <div class="ce-position-alignment-row">
@@ -504,6 +503,7 @@
                   <button type="button" class="ce-align-btn" data-text-align="center" aria-label="Align center" title="Align center" aria-pressed="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button>
                   <button type="button" class="ce-align-btn" data-text-align="right" aria-label="Align right" title="Align right" aria-pressed="false"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18M9 10h12M3 15h18M9 20h12"/></svg></button>
                 </div>
+                <span class="ce-badge ce-badge--gold">Drag captions in the preview</span>
               </div>
 
               <div class="ce-box-toolbar">
@@ -573,7 +573,7 @@
               <div class="ce-card-head">
                 <div class="ce-card-title-group">
                   <span class="ce-card-icon">⚡</span>
-                  <h4 class="ce-card-title">Presets &amp; Export</h4>
+                  <h2 class="ce-card-title">Presets &amp; Export</h2>
                 </div>
                 <span class="ce-hint">1-click styles</span>
               </div>
@@ -644,7 +644,7 @@
 
                       <!-- Bottom Video Playback Mini Bar -->
                       <div class="ce-video-controls-bar" id="videoControlsBar">
-                        <button class="ce-video-bar-play-btn" id="barPlayBtn" type="button" aria-label="Play/Pause">
+                        <button class="ce-video-bar-play-btn" id="barPlayBtn" type="button" aria-label="Play video">
                           <svg class="bar-icon-play" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
                           <svg class="bar-icon-pause" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:none;"><rect x="5" y="4" width="4" height="16" rx="1"/><rect x="15" y="4" width="4" height="16" rx="1"/></svg>
                         </button>
@@ -748,7 +748,7 @@
     <script src="captionPresets.js?v=layered-1"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=timeline-1"></script>
-    <script src="captions.js?v=layered-1"></script>
+    <script src="captions.js?v=usability-1"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>

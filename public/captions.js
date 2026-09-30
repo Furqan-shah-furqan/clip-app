@@ -343,6 +343,7 @@ function updatePlaybackUI() {
     if (pauseIcon) pauseIcon.style.display = isPlaying ? "block" : "none";
   }
   if (barPlayBtn) {
+    barPlayBtn.setAttribute("aria-label", isPlaying ? "Pause video" : "Play video");
     if (barPlayIcon) barPlayIcon.style.display = isPlaying ? "none" : "block";
     if (barPauseIcon) barPauseIcon.style.display = isPlaying ? "block" : "none";
   }

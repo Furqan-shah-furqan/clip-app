@@ -7598,3 +7598,16 @@ body.home-page {
   flex-shrink: 0;
 }
 
+/* Keep result actions usable in five-column cards, including keyboard and touch. */
+.expected-output-card .smart-clip-hover-actions { top: auto; bottom: 8px; right: 6px; display: grid; grid-template-columns: repeat(2, 30px); gap: 5px; }
+.expected-output-card .smart-clip-mini-btn { width: 30px; height: 30px; border-radius: 8px; }
+.expected-output-card .smart-clip-card:focus-within .smart-clip-hover-actions { opacity: 1; }
+.expected-output-card .smart-clip-mini-btn:focus-visible { outline: 2px solid #fff !important; outline-offset: 1px; }
+@media (hover: none) { .expected-output-card .smart-clip-hover-actions { opacity: 1; } }
+body.home-page .created-clips-strip-head h3 { font-size: 20px; line-height: 1.25; }
+.expected-output-kicker { text-transform: none !important; }
+/* Shared geometry and text roles for the home page controls. */
+body.home-page { --ui-control-radius: 15px; --ui-detail-size: 12px; --ui-body-size: 14px; }
+body.home-page :is(.home-nav-tab, .created-clips-actions .action-btn, .hero-clear-btn) { border-radius: var(--ui-control-radius) !important; }
+body.home-page :is(.hero-toolbar-note, .expected-output-kicker, .smart-clip-title-overlay) { font-size: var(--ui-detail-size) !important; }
+body.home-page :is(.hero-subtitle, .hero-source-pill) { font-size: var(--ui-body-size) !important; }

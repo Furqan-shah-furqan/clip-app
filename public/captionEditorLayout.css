@@ -1569,3 +1569,34 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
 .caption-editor-page :is(.preset-card.is-active, .preset-gallery-card.is-active) {
   outline: 1px solid var(--text); outline-offset: -2px;
 }
+
+/* Interface typography stays consistent; caption and preset typography stays editable. */
+.caption-editor-page :is(.ce-topbar, .ce-card, .ce-preview-panel, .presets-drawer-panel) {
+  font-family: 'Barlow', sans-serif;
+}
+.caption-editor-page .ce-clip-title { font-size: 18px !important; }
+.caption-editor-page .ce-card-title { font-size: 15px !important; line-height: 20px !important; font-weight: 700 !important; }
+.caption-editor-page :is(.ce-status-label, .ce-hint, .ce-box-hint) { font-size: 12px !important; }
+.caption-editor-page .ce-label { font-size: 11px !important; }
+.caption-editor-page .ce-color-rows-grid { gap: 10px !important; }
+.caption-editor-page :is(.ce-color-block, .ce-shadow-block) { padding: 9px !important; background: var(--panel-3) !important; border-radius: 15px !important; }
+.caption-editor-page .ce-box-toolbar .ce-btn { min-height: 32px !important; height: 32px !important; padding: 0 12px !important; font-size: 12px !important; font-weight: 700 !important; background: var(--panel-3) !important; color: var(--text) !important; }
+.caption-editor-page .ce-box-toolbar #capDoneEditing { background: #2563eb !important; color: #fff !important; }
+.caption-editor-page .ce-topbar :is(.ce-back-btn, .ce-sync-btn, .day-night-toggle, .ce-btn) { border-radius: 15px !important; padding-inline: 12px !important; }
+
+/* Trade 100px from the lower editor row to the upper row; scrolling stays inside each card. */
+@media (min-width: 761px) {
+  #controlsWorkspace[data-grid] { grid-template-rows: minmax(0, calc(50% + 96px)) minmax(0, calc(50% - 104px)) !important; }
+  .caption-editor-page #cardPresets .presets-grid { flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow-y: auto !important; }
+}
+@media (max-width: 760px) {
+  .caption-editor-page #cardPresets .presets-grid { max-height: 210px !important; overflow-y: auto !important; }
+}
+
+/* The track stays thin visually while the range and play targets are larger. */
+.caption-editor-page .ce-video-controls-bar { height: 48px !important; padding: 0 10px 4px !important; }
+.caption-editor-page .ce-video-bar-play-btn { width: 32px !important; height: 32px !important; flex: 0 0 32px !important; }
+.caption-editor-page .ce-video-bar-play-btn svg { width: 17px !important; height: 17px !important; }
+.caption-editor-page .ce-video-scrubber-track { height: 28px !important; min-height: 28px !important; background: transparent !important; }
+.caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }
+.caption-editor-page .ce-video-scrubber-track::-moz-range-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }

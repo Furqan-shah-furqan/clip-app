@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClipFlow Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="style.css?v=20260922" />
+    <link rel="stylesheet" href="style.css?v=usability-1" />
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
-    <link rel="stylesheet" href="hero.css?v=2" />
+    <link rel="stylesheet" href="hero.css?v=usability-1" />
   </head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
@@ -154,24 +154,6 @@
               </div>
 
               </div>
-              <div class="hero-showcase">
-                <section class="hero-loading-card" aria-label="Clip generation progress">
-                  <div class="hero-loading-main">
-                    <div class="hero-loading-gauge" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="heroLoadingGauge">
-                      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="heroLoadingGradient"><stop stop-color="#00d9ff"/><stop offset=".5" stop-color="#7679ff"/><stop offset="1" stop-color="#e22bdc"/></linearGradient></defs><circle class="hero-gauge-track" cx="60" cy="60" r="49"/><circle class="hero-gauge-fill" id="heroLoadingArc" cx="60" cy="60" r="49"/></svg>
-                      <div class="hero-loading-value"><strong id="heroLoadingPercent">0%</strong><span>Loading</span></div>
-                    </div>
-                    <div class="hero-loading-copy"><h2>Your next<br>great clips</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-                  </div>
-                  <p class="hero-loading-status" id="heroLoadingStatus" role="status">Add a video to get started</p>
-                </section>
-                <div class="hero-media-card">
-                  <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a link or upload a video below.</span></div>
-                  <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
-                  <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
-                  <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
-                </div>
-              </div>
               <div class="hero-source-toolbar">
               <!-- Hidden file upload -->
               <input type="file" id="videoInput" accept="video/*" hidden />
@@ -185,16 +167,35 @@
                   <span><strong>Upload:</strong> Video file (MP4, MOV, etc.)</span>
                 </label>
 
-                <button class="hero-source-pill is-disabled" type="button" disabled>
+                <button class="hero-source-pill is-disabled" type="button" disabled title="Google Drive import is unavailable">
                   <svg class="pill-icon text-drive" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm4.87 0l6.55 11.5h-6.86L5.72 3.5h6.86zm7.71 12.5L16.86 21H3.14l3.43-5h13.72z"/>
                   </svg>
-                  <span><strong>Google Drive:</strong> Import from your Drive</span>
+                  <span><strong>Google Drive:</strong> Import unavailable</span>
                 </button>
               </div>
 
                 <span class="hero-toolbar-note">Long videos. Standout moments.</span>
               </div>
+              <div class="hero-showcase">
+                <section class="hero-loading-card" aria-label="Clip generation progress">
+                  <div class="hero-loading-main">
+                    <div class="hero-loading-gauge" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="heroLoadingGauge">
+                      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="heroLoadingGradient"><stop stop-color="#00d9ff"/><stop offset=".5" stop-color="#7679ff"/><stop offset="1" stop-color="#e22bdc"/></linearGradient></defs><circle class="hero-gauge-track" cx="60" cy="60" r="49"/><circle class="hero-gauge-fill" id="heroLoadingArc" cx="60" cy="60" r="49"/></svg>
+                      <div class="hero-loading-value"><strong id="heroLoadingPercent">0%</strong><span>Loading</span></div>
+                    </div>
+                    <div class="hero-loading-copy"><h2>Your next great clips</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+                  </div>
+                  <p class="hero-loading-status" id="heroLoadingStatus" role="status">Add a video to get started</p>
+                </section>
+                <div class="hero-media-card">
+                  <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a link or upload a video below.</span></div>
+                  <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
+                  <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
+                  <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
+                </div>
+              </div>
+
             </div>
 
             <!-- ─── EMBEDDED DARK LUXURY PROGRESS CARD (DURING GENERATION) ─── -->
@@ -354,7 +355,7 @@
             <div class="expected-output-card" id="expectedOutputCard">
               <!-- Left Summary Column -->
               <div class="expected-output-summary" id="expectedOutputSummary">
-                <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span id="expectedOutputKickerText">EXPECTED OUTPUT</span></div>
+                <div class="expected-output-kicker"><span aria-hidden="true">▣</span><span id="expectedOutputKickerText">Expected output</span></div>
                 <p id="expectedOutputDuration">Add a video to estimate your output</p>
                 <strong id="expectedOutputCount">5 clips</strong>
                 <div id="expectedOutputProgressBar" style="display: none; width: 100%; max-width: 480px; height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; margin-top: 12px; overflow: hidden;">
@@ -680,7 +681,7 @@
     </div>
 
     <script src="captionClient.js?v=20260922"></script>
-    <script src="app.js?v=20260922"></script>
+    <script src="app.js?v=usability-1"></script>
     <script src="dropdowns.js?v=20260922"></script>
     <script src="hero.js?v=1"></script>
   </body>

@@ -994,7 +994,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const expClipsGrid = document.getElementById("expectedOutputClipsGrid");
   const expCount = getAutoSmartClipCount();
 
-  if (expKicker) expKicker.textContent = "⚡ GENERATING CLIPS...";
+  if (expKicker) expKicker.textContent = "Generating clips…";
   if (expectedOutputDuration) expectedOutputDuration.textContent = label || `Generating ${expCount} viral clips with AI...`;
   if (expectedOutputCount) expectedOutputCount.textContent = `Clip generation in progress (${Math.round(p)}%)`;
   if (expBar) expBar.style.display = "block";
@@ -1314,12 +1314,12 @@ function updateExpectedOutputCard() {
   const expectedClipsGrid = document.getElementById("expectedOutputClipsGrid");
 
   if (!state.isGenerating) {
-    if (kicker) kicker.textContent = "EXPECTED OUTPUT";
+    if (kicker) kicker.textContent = "Expected output";
     if (bar) bar.style.display = "none";
     if (eta) eta.style.display = "none";
 
     if (state.generatedClips && state.generatedClips.length > 0) {
-      if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
+      if (kicker) kicker.textContent = "Generated clips";
       if (expectedOutputDuration) expectedOutputDuration.textContent = `Created ${state.generatedClips.length} viral clips from your video`;
       if (expectedOutputCount) expectedOutputCount.textContent = `${state.generatedClips.length} ${state.generatedClips.length === 1 ? "clip" : "clips"} generated`;
       renderGeneratedClips();
@@ -1756,6 +1756,7 @@ function renderGeneratedClips() {
             data-action="preview"
             data-index="${index}"
             title="Preview / Open in new tab"
+            aria-label="Preview clip ${index + 1} in a new tab"
           >
             ${SVG_PLAY}
           </a>
@@ -1766,6 +1767,7 @@ function renderGeneratedClips() {
             data-action="edit"
             data-index="${index}"
             title="Edit Captions"
+            aria-label="Edit captions for clip ${index + 1}"
           >
             ${SVG_EDIT}
           </a>
@@ -1778,6 +1780,7 @@ function renderGeneratedClips() {
             data-action="download"
             data-index="${index}"
             title="Download / Open in new tab"
+            aria-label="Download clip ${index + 1}"
           >
             ${SVG_DOWNLOAD}
           </a>
@@ -1788,6 +1791,7 @@ function renderGeneratedClips() {
             data-action="delete"
             data-index="${index}"
             title="Delete"
+            aria-label="Delete clip ${index + 1}"
           >
             ${SVG_DELETE}
           </button>
