@@ -1586,7 +1586,7 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
 
 /* Trade 100px from the lower editor row to the upper row; scrolling stays inside each card. */
 @media (min-width: 761px) {
-  #controlsWorkspace[data-grid] { grid-template-rows: minmax(0, calc(50% + 96px)) minmax(0, calc(50% - 104px)) !important; }
+  #controlsWorkspace[data-grid] { grid-template-rows: minmax(0, calc(50% + 92px)) minmax(0, calc(50% - 100px)) !important; }
   .caption-editor-page #cardPresets .presets-grid { flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow-y: auto !important; }
 }
 @media (max-width: 760px) {
