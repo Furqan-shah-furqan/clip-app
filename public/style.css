@@ -7611,3 +7611,20 @@ body.home-page { --ui-control-radius: 15px; --ui-detail-size: 12px; --ui-body-si
 body.home-page :is(.home-nav-tab, .created-clips-actions .action-btn, .hero-clear-btn) { border-radius: var(--ui-control-radius) !important; }
 body.home-page :is(.hero-toolbar-note, .expected-output-kicker, .smart-clip-title-overlay) { font-size: var(--ui-detail-size) !important; }
 body.home-page :is(.hero-subtitle, .hero-source-pill) { font-size: var(--ui-body-size) !important; }
+
+/* Results panel and thumbnails share the requested rounded geometry. */
+body.home-page #expectedOutputCard { border-radius: 35px !important; }
+body.home-page #expectedOutputClipsGrid :is(.clip-card, .smart-clip-card, .smart-clip-media) { border-radius: 25px !important; }
+body.home-page .expected-output-kicker { font-size: .54rem !important; }
+body.home-page .expected-output-summary p { font-size: .66rem !important; }
+body.home-page .expected-output-summary strong { font-size: clamp(1.35rem, 2.4vw, 2.06rem) !important; }
+
+/* Project markup uses direct strong/p/em children, rather than the old title classes. */
+body.home-page.theme-light .opus-projects-panel { color: #111827 !important; }
+body.home-page.theme-light .opus-project-card > strong { color: #111827 !important; }
+body.home-page.theme-light .opus-project-card > p { color: #4b5563 !important; }
+body.home-page.theme-light .opus-project-card > em { color: #6b7280 !important; }
+
+body.home-page.theme-light .dnt-thumb { transform: translateX(114px) !important; }
+.home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll) { scrollbar-width: none !important; -ms-overflow-style: none; }
+.home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll)::-webkit-scrollbar { display: none !important; }

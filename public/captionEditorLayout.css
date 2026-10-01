@@ -1,7 +1,7 @@
 /* ==========================================================================
    ClipFlow Studio — Caption Studio First-Fold Architecture & Strict Tokens
    - 50px Fixed Top Navigation Bar
-   - Zero-Border Policy (Visual separation via contrast: #0B0D10 / #15181E / #1E232B)
+   - Zero-Border Policy (Visual separation via contrast: #0B0D10 / #15181E / #252629)
    - First-Fold Single Non-Scrolling Screen (100vh)
    - Strict Border Radii: 35px Large, 15px Medium, 5px Small
    - Expanded Mobile Preview Frame (+30px Width: 330px, +100px Height)
@@ -129,7 +129,7 @@ body.caption-editor-page {
 }
 
 .ce-topbar .ce-back-btn {
-  background: #1E232B !important;
+  background: #252629 !important;
   color: #FFFFFF !important;
 }
 
@@ -141,7 +141,7 @@ body.caption-editor-page {
   height: 28px !important;
   padding: 0 10px !important;
   font-size: 11px !important;
-  background: #1E232B !important;
+  background: #252629 !important;
   color: #94A3B8 !important;
   border-radius: 5px !important;
   border: none !important;
@@ -159,7 +159,7 @@ body.caption-editor-page {
 }
 
 .ce-topbar .ce-sync-btn {
-  background: #1E232B !important;
+  background: #252629 !important;
   color: #38BDF8 !important;
 }
 
@@ -168,12 +168,12 @@ body.caption-editor-page {
 }
 
 .ce-topbar .day-night-toggle {
-  background: #1E232B !important;
+  background: #252629 !important;
   color: #94A3B8 !important;
 }
 
 .ce-topbar .ce-btn--publish {
-  background: #1E232B !important;
+  background: #252629 !important;
   color: #FFFFFF !important;
 }
 
@@ -304,7 +304,7 @@ body.caption-editor-page {
   font-size: 10px !important;
   font-weight: 600 !important;
   color: #FFFFFF !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 5px !important;
   padding: 1px 5px !important;
   border: none !important;
@@ -349,7 +349,7 @@ body.caption-editor-page {
   gap: 2px !important;
 }
 
-/* ─── INNER FORM INPUTS & DROPDOWNS: #1E232B, 15PX RADIUS, ZERO BORDER ─── */
+/* ─── INNER FORM INPUTS & DROPDOWNS: #252629, 15PX RADIUS, ZERO BORDER ─── */
 .ce-select,
 .ce-input,
 .ce-input-num {
@@ -358,7 +358,7 @@ body.caption-editor-page {
   max-height: 28px !important;
   font-size: 11px !important;
   color: #FFFFFF !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 15px !important;
   border: none !important;
   outline: none !important;
@@ -393,7 +393,7 @@ body.caption-editor-page {
 /* Segmented Pill Groups */
 .ce-pill-group {
   display: flex !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 15px !important;
   padding: 2px !important;
   gap: 2px !important;
@@ -429,7 +429,7 @@ body.caption-editor-page {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Range Sliders & Tracks: #1E232B, 5px Thumb */
+/* Range Sliders & Tracks: #252629, 5px Thumb */
 .ce-range {
   -webkit-appearance: none !important;
   appearance: none !important;
@@ -445,7 +445,7 @@ body.caption-editor-page {
 .ce-range::-webkit-slider-runnable-track {
   width: 100% !important;
   height: 6px !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 5px !important;
   border: none !important;
 }
@@ -453,7 +453,7 @@ body.caption-editor-page {
 .ce-range::-moz-range-track {
   width: 100% !important;
   height: 6px !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 5px !important;
   border: none !important;
 }
@@ -551,7 +551,7 @@ body.caption-editor-page {
 .ce-placement-presets,
 .ce-align-buttons {
   display: flex !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   border-radius: 15px !important;
   padding: 2px !important;
   gap: 2px !important;
@@ -599,7 +599,7 @@ body.caption-editor-page {
   padding: 0 8px !important;
   font-size: 10px !important;
   border-radius: 15px !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   color: #FFFFFF !important;
   border: none !important;
   outline: none !important;
@@ -607,7 +607,7 @@ body.caption-editor-page {
 }
 
 .ce-shadow-subcard {
-  background: #1E232B !important;
+  background: #252629 !important;
   border-radius: 15px !important;
   padding: 8px 10px !important;
   border: none !important;
@@ -701,7 +701,7 @@ body.caption-editor-page {
   padding: 0 10px !important;
   font-size: 11px !important;
   border-radius: 15px !important;
-  background-color: #1E232B !important;
+  background-color: #252629 !important;
   color: #FFFFFF !important;
   border: none !important;
   outline: none !important;
@@ -1586,7 +1586,7 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
 
 /* Trade 100px from the lower editor row to the upper row; scrolling stays inside each card. */
 @media (min-width: 761px) {
-  #controlsWorkspace[data-grid] { grid-template-rows: minmax(0, calc(50% + 92px)) minmax(0, calc(50% - 100px)) !important; }
+  #controlsWorkspace[data-grid] { grid-template-rows: minmax(0, calc(50% + 42px)) minmax(0, calc(50% - 50px)) !important; }
   .caption-editor-page #cardPresets .presets-grid { flex: 1 1 auto !important; min-height: 0 !important; max-height: none !important; overflow-y: auto !important; }
 }
 @media (max-width: 760px) {
@@ -1600,3 +1600,32 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
 .caption-editor-page .ce-video-scrubber-track { height: 28px !important; min-height: 28px !important; background: transparent !important; }
 .caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }
 .caption-editor-page .ce-video-scrubber-track::-moz-range-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }
+
+/* Match the home page's white/black frame and main surface in both themes. */
+body.caption-editor-page.theme-dark { background: #fff !important; padding: 7px !important; }
+body.caption-editor-page.theme-light { background: #000 !important; padding: 7px !important; }
+body.caption-editor-page .ce-main-container { height: 100% !important; max-height: 100% !important; border-radius: 45px !important; }
+body.caption-editor-page.theme-dark .ce-main-container { background: #000 !important; }
+body.caption-editor-page.theme-light .ce-main-container { background: #fff !important; }
+body.caption-editor-page.theme-dark .ce-topbar { background: #000 !important; }
+body.caption-editor-page.theme-light .ce-topbar { background: #fff !important; }
+body.caption-editor-page .ce-topbar .dnt-thumb { width: 26px !important; height: 26px !important; top: 2px !important; left: 3px !important; }
+body.caption-editor-page.theme-light .ce-topbar .dnt-thumb { transform: translateX(122px) !important; }
+
+/* Compact editor controls without shrinking the caption overlay or video seek targets. */
+.caption-editor-page .ce-card { padding: 9px 12px !important; gap: 2px !important; }
+.caption-editor-page .ce-card-title { font-size: 11.25px !important; line-height: 15px !important; }
+.caption-editor-page .ce-field-row { gap: 4px !important; }
+.caption-editor-page :is(.ce-select, .ce-input, .cf-select-trigger) { height: 24px !important; min-height: 24px !important; font-size: 10px !important; }
+.caption-editor-page :is(.ce-btn--browse-presets, .ce-pill-opt, .duration-btn, .ce-align-btn) { font-size: 10px !important; }
+.caption-editor-page .ce-color-rows-grid { gap: 7.5px !important; }
+.caption-editor-page :is(.ce-color-block, .ce-shadow-block) { padding: 7px !important; }
+.caption-editor-page .presets-grid { grid-auto-rows: 75px !important; }
+.caption-editor-page .preset-card { height: 75px !important; min-height: 75px !important; max-height: 75px !important; }
+.caption-editor-page .preset-card-stage { height: 43px !important; }
+
+/* Wheel, touch, and keyboard scrolling remain available without visible bars. */
+.caption-editor-page :is(.ce-card, .presets-grid, .presets-drawer-body, .presets-drawer-categories, .ce-caption-details),
+.home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll) { scrollbar-width: none !important; -ms-overflow-style: none; }
+.caption-editor-page :is(.ce-card, .presets-grid, .presets-drawer-body, .presets-drawer-categories, .ce-caption-details)::-webkit-scrollbar,
+.home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll)::-webkit-scrollbar { display: none !important; }

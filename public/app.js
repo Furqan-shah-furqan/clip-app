@@ -760,6 +760,7 @@ function updateThemeState() {
   if (modePill) modePill.textContent = isDark ? "Dark" : "Light";
   if (themeSwitchBtn) {
     themeSwitchBtn.setAttribute("aria-checked", isDark ? "true" : "false");
+    themeSwitchBtn.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
     themeSwitchBtn.classList.toggle("is-day", !isDark);
     themeSwitchBtn.classList.toggle("is-night", isDark);
   }
@@ -786,12 +787,6 @@ function toggleTheme() {
 }
 
 themeSwitchBtn?.addEventListener("click", toggleTheme);
-themeSwitchBtn?.addEventListener("keydown", (e) => {
-  if (e.key === " " || e.key === "Enter") {
-    e.preventDefault();
-    toggleTheme();
-  }
-});
 
 themeToggle?.addEventListener("change", () => {
   localStorage.setItem(
