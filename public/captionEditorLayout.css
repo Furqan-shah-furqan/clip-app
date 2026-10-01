@@ -1629,3 +1629,35 @@ body.caption-editor-page.theme-light .ce-topbar .dnt-thumb { transform: translat
 .home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll) { scrollbar-width: none !important; -ms-overflow-style: none; }
 .caption-editor-page :is(.ce-card, .presets-grid, .presets-drawer-body, .presets-drawer-categories, .ce-caption-details)::-webkit-scrollbar,
 .home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll)::-webkit-scrollbar { display: none !important; }
+
+/* Editor-specific finishing touches; the shared dropdown is mounted under body. */
+body.caption-editor-page .cf-select-menu { scrollbar-width: none !important; -ms-overflow-style: none; }
+body.caption-editor-page .cf-select-menu::-webkit-scrollbar { display: none !important; }
+body.caption-editor-page .ce-topbar .ce-status-chip { border-radius: 15px !important; }
+
+body.caption-editor-page .ce-color-input,
+body.caption-editor-page .color-swatch-btn { width: 20px !important; height: 20px !important; border-radius: 50% !important; flex: 0 0 20px; }
+body.caption-editor-page .ce-color-input::-webkit-color-swatch,
+body.caption-editor-page .ce-color-input::-moz-color-swatch { border-radius: 50% !important; }
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg),
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg)::-webkit-color-swatch,
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg)::-moz-color-swatch { width: 20px !important; height: 20px !important; padding: 0 !important; border-radius: 4px !important; }
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg)::-webkit-color-swatch-wrapper { padding: 0 !important; }
+
+body.caption-editor-page .shadow-controls-grid { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+body.caption-editor-page #capShadowBlur { display: block !important; width: 100% !important; flex: none; }
+body.caption-editor-page .ce-offset-item { background: transparent !important; }
+body.caption-editor-page .ce-offset-item .ce-input-num { background: transparent !important; color-scheme: dark; }
+body.caption-editor-page.theme-light .ce-offset-item .ce-input-num { background: transparent !important; color-scheme: light; }
+
+/* Reuse the home switch's 154 x 42 capsule and sliding 34px thumb. */
+body.caption-editor-page .ce-topbar .day-night-toggle { width: 154px !important; flex: 0 0 154px; height: 42px !important; min-height: 42px !important; max-height: 42px !important; border-radius: 9999px !important; border: 1.5px solid rgba(255, 255, 255, .28) !important; padding: 0 4px !important; background: #000 !important; }
+body.caption-editor-page.theme-light .ce-topbar .day-night-toggle { background: #e9ecef !important; border-color: #ced4da !important; }
+body.caption-editor-page .ce-topbar .dnt-thumb { width: 34px !important; height: 34px !important; top: 3px !important; left: 3px !important; }
+body.caption-editor-page.theme-light .ce-topbar .dnt-thumb { transform: translateX(114px) !important; }
+
+body.caption-editor-page .ce-phone-frame { width: calc(100% - 15px) !important; max-width: 315px !important; }
+body.caption-editor-page .presets-grid { grid-auto-rows: 90px !important; }
+body.caption-editor-page .preset-card { height: 90px !important; min-height: 90px !important; max-height: 90px !important; }
+body.caption-editor-page .preset-card-stage { height: 58px !important; }
+body.caption-editor-page .ce-quality-enhancer { width: 30px !important; height: 30px !important; padding: 0 !important; border-radius: 50% !important; color: #fff !important; }
