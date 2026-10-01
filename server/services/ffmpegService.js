@@ -300,7 +300,7 @@ function buildAssContent(segments, style = {}) {
   const fontSize = Math.round(Number(style.fontSize) || 28);
   const requestedFont = String(style.fontFamily || 'Arial').replace(/['"]/g, '').split(',')[0].trim() || 'Arial';
   const variableFontFamilies = new Set(['Satoshi', 'Chillax', 'Expose', 'Telma', 'Britney']);
-  const fontName = style.layered && variableFontFamilies.has(requestedFont) ? `${requestedFont} Variable` : requestedFont;
+  const fontName = variableFontFamilies.has(requestedFont) ? `${requestedFont} Variable` : requestedFont;
   const bold = Number(style.fontWeight) >= 700 ? -1 : 0;
   const italic = style.fontStyle === 'italic' ? -1 : 0;
   const textTransform = style.textTransform || 'none';
@@ -326,7 +326,7 @@ function buildAssContent(segments, style = {}) {
     borderStyle = bgOpacity > 0 ? 3 : 1;
     outlineColor = bgOpacity > 0 ? backColor : hexToABGR(style.strokeColor || '#111318', 100);
     outline = bgOpacity > 0 ? Math.max(0, Number(style.paddingY) || 6) : Math.max(0, Number(style.strokeWidth) || 0);
-    shadow = (style.editorBox && !style.layered) || bgOpacity > 0 || !hasShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
+    shadow = style.editorBox || bgOpacity > 0 || !hasShadow ? 0 : Math.max(0, Number(style.shadowOffsetY) || 0);
   } else switch (animStyle) {
     case 'neon':
       outlineColor = hexToABGR(style.shadowColor || '#00e5ff', 90);
@@ -409,27 +409,32 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     text = escapeAssText(text);
     if (style.layered) {
       const allWords = text.split(/(?:\\N|\s)+/).filter(Boolean);
-      const words = allWords.length > 3
-        ? [allWords[0], allWords[1], allWords.slice(2).join(' ')]
-        : allWords;
-      const sizes = [0.78, 1.58, 1];
       const requestedHeroFont = String(style.heroFontFamily || requestedFont).replace(/['"{}\\]/g, '').split(',')[0].trim();
       const heroFont = variableFontFamilies.has(requestedHeroFont) ? `${requestedHeroFont} Variable` : requestedHeroFont;
-      const layeredText = words.map((word, index) => {
-        const size = Math.round(fontSize * sizes[index]);
-        const font = index === 1 || words.length === 1 ? heroFont : fontName;
-        const color = style.highlightMode !== 'none' && (index === 1 || words.length === 1) ? style.highlightColor : style.textColor;
-        return `{\\fn${font}\\fs${size}\\1c${hexToABGR(color, 100)}&}${word}`;
-      }).join('\\N');
-      const foreground = `Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${buildCuratedDialogueText(layeredText, style, durationMs, anchor)}`;
+      let wordIndex = 0;
+      const layeredText = text.split(/(\\N|\s+)/).map(word => {
+        if (!word || word === '\\N' || /^\s+$/.test(word)) return word;
+        const index = wordIndex++;
+        const hero = index === Math.min(1, allWords.length - 1);
+        const size = Math.round(fontSize * (hero ? 1.58 : index === 0 ? .78 : 1));
+        const color = style.highlightMode !== 'none' && (hero || index === allWords.length - 1) ? style.highlightColor : style.textColor;
+        return `{\\fn${hero ? heroFont : fontName}\\fs${size}\\b${hero ? 1 : bold}\\1c${hexToABGR(color, clamp(Number(style.textOpacity ?? 100), 0, 100))}&}${word}`;
+      }).join('');
+      // ASS alignment anchors the text edge; the editor positions the box center.
+      const boxWidth = videoW * clamp(Number(style.boxWidth) || 88, 15, 100) / 100;
+      const inset = Number(style.paddingX) || 0;
+      const point = {...anchor, origin:anchor, x: anchor.x + (style.textAlign === 'left' ? -boxWidth / 2 + inset : style.textAlign === 'right' ? boxWidth / 2 - inset : 0)};
+      const foreground = `Dialogue: 0,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${buildCuratedDialogueText(layeredText, style, durationMs, point)}`;
       if (!hasShadow) return foreground;
       const shadowText = layeredText.replace(/\\1c&H[0-9A-F]+&/gi, '');
-      const shadowAnchor = {...anchor, x: anchor.x + (Number(style.shadowOffsetX) || 0), y: anchor.y + (Number(style.shadowOffsetY) || 0)};
+      const shadowPoint = {...point, x: point.x + (Number(style.shadowOffsetX) || 0), y: point.y + (Number(style.shadowOffsetY) || 0)};
       const shadowStyle = {...style, highlightMode:'none', animationStyle:'none', textOpacity:Number(style.shadowOpacity ?? 100)};
-      const shadowTag = `{\\1c${hexToABGR(style.shadowColor || '#000000', 100)}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
-      const shadow = `Dialogue: -1,${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${shadowTag}${buildCuratedDialogueText(shadowText, shadowStyle, durationMs, shadowAnchor)}`;
-      return shadow + '\n' + foreground;
+      const shadowTag = `{\\bord0\\shad0\\1c${hexToABGR(style.shadowColor || '#000000', 100)}&\\blur${Math.max(0, Number(style.shadowBlur) || 0)}}`;
+      const crispTag = shadowTag.replace(/\\blur[0-9.]+/, `\\blur${Math.min(2, Math.max(0, Number(style.shadowBlur) || 0))}`);
+      const shadow = layer => `Dialogue: ${layer},${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${layer === -2 ? shadowTag : crispTag}${buildCuratedDialogueText(shadowText, shadowStyle, durationMs, shadowPoint)}`;
+      return shadow(-2) + '\n' + shadow(-1) + '\n' + foreground;
     }
+
     if (style.editorBox) {
       const lines = text.split('\\N');
       const boxWidth = videoW * clamp(Number(style.boxWidth) || 88, 15, 100) / 100;

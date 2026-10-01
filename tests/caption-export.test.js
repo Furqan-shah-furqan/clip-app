@@ -41,3 +41,19 @@ test('caption export polling survives a dropped connection and returns only the 
   assert.deepEqual(await wait({ jobId: 'fixture' }), { downloadUrl: '/exports/ready.mp4' });
   assert.equal(calls, 3);
 });
+
+test('layered export keeps left/right box anchors, real font names and independent shadows', () => {
+  const style = { editorBox:true, layered:true, fontFamily:'Satoshi', heroFontFamily:'Telma', fontSize:40, fontWeight:700, exportVideoWidth:1000, exportVideoHeight:1000, positionX:30, positionY:60, boxWidth:40, paddingX:10, textAlign:'left', textShadow:true, shadowColor:'#123456', shadowOpacity:40, shadowOffsetX:3, shadowOffsetY:5, shadowBlur:7, textColor:'#ffffff', highlightMode:'none', animationStyle:'none' };
+  const ass = buildAssContent([{ start:0, end:2, text:'hello world again' }], style);
+  assert.match(ass, /Style: Default,Satoshi Variable/);
+  assert.match(ass, /\\fnTelma Variable/);
+  assert.match(ass, /\\an4\\pos\(110,600\)/);
+  assert.match(ass, /\\pos\(113,605\)/);
+  assert.match(ass, /\\1a&H99&/);
+  assert.match(ass, /\\bord0\\shad0/);
+  assert.equal(ass.includes('\\N'), false, 'do not invent extra lines');
+  const right = buildAssContent([{ start:0, end:2, text:'hello world' }], {...style,textAlign:'right'});
+  assert.match(right, /\\an6\\pos\(490,600\)/);
+  const manual = buildAssContent([{start:0,end:1,text:'manual'}],{...style,layered:false});
+  assert.match(manual,/Style: Default,Satoshi Variable/);
+});

@@ -807,6 +807,22 @@ function wrapExportToBox(segments, style) {
   };
   return segments.map(segment => {
     const words = String(segment.text).split(/\s+/).filter(Boolean), lines = []; let line = "";
+    if (style.layered) {
+      let usedWidth = 0;
+      words.forEach((word, index) => {
+        const hero = index === Math.min(1, words.length - 1);
+        const size = Number(style.fontSize) * (hero ? 1.58 : index === 0 ? .78 : 1);
+        ctx.font = `${style.fontStyle || "normal"} ${hero ? 900 : style.fontWeight || 700} ${size}px "${captionFontName(hero ? style.heroFontFamily || style.fontFamily : style.fontFamily)}"`;
+        const shown = style.textTransform === "uppercase" ? word.toUpperCase() : style.textTransform === "lowercase" ? word.toLowerCase() : word;
+        const wordWidth = ctx.measureText(shown).width + Math.max(0, shown.length - 1) * (hero ? -.045 * size : Number(style.letterSpacing) || 0);
+        const gap = line ? ctx.measureText(" ").width : 0;
+        if (line && usedWidth + gap + wordWidth > width) { lines.push(line); line = ""; usedWidth = 0; }
+        usedWidth += (line ? gap : 0) + wordWidth;
+        line = line ? `${line} ${word}` : word;
+      });
+      if (line) lines.push(line);
+      return { ...segment, text: lines.join("\n") };
+    }
     for (const word of words) {
       const candidate = line ? `${line} ${word}` : word;
       if (line && measure(candidate) > width) { lines.push(line); line = ""; }
@@ -2006,9 +2022,10 @@ async function ensureCaptionFont(style) {
   if (!document.fonts?.load) return;
   try {
     const name = captionFontName(style?.fontFamily);
-    await document.fonts.load(
-      `${Number(style?.fontWeight) || 800} 28px "${name}"`
-    );
+    await Promise.all([
+      document.fonts.load(`${Number(style?.fontWeight) || 800} 28px "${name}"`),
+      ...(style?.layered ? [document.fonts.load(`900 28px "${captionFontName(style.heroFontFamily || style.fontFamily)}"`)] : []),
+    ]);
   } catch (err) {
     console.warn("ensureCaptionFont preload warning:", err);
   }

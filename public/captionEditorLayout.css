@@ -1686,3 +1686,5 @@ body.caption-editor-page .ce-video-scrubber-track::-moz-range-thumb { background
 body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) { background: #6b7280 !important; border-radius: 15px !important; }
 body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt { border-radius: 15px !important; color: #fff !important; }
 body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #6b7280 !important; box-shadow: inset 0 -2px #fff !important; font-weight: 700 !important; }
+
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #4b5563 !important; }
