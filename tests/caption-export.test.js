@@ -26,3 +26,18 @@ test("ASS export preserves short caption durations and carries rounded seconds",
     assert.ok(ass.includes(expected));
   }
 });
+
+test('caption export polling survives a dropped connection and returns only the completed file', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../public/captions.js'), 'utf8');
+  const start = source.indexOf('async function waitForCaptionExport(');
+  const end = source.indexOf('\nasync function exportCaptionedVideo', start);
+  let calls = 0;
+  const wait = new Function('fetch', 'setTimeout', 'API_BASE', source.slice(start, end) + '; return waitForCaptionExport;')(
+    async () => {
+      if (++calls === 1) throw new Error('connection reset');
+      return { ok: true, json: async () => calls === 2 ? { status: 'processing' } : { status: 'completed', result: { downloadUrl: '/exports/ready.mp4' } } };
+    }, resolve => resolve(), '/api'
+  );
+  assert.deepEqual(await wait({ jobId: 'fixture' }), { downloadUrl: '/exports/ready.mp4' });
+  assert.equal(calls, 3);
+});

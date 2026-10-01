@@ -2888,10 +2888,13 @@ function updateLivePreview() {
 function startCaptionSync() {
   if (!captionVideo) return;
   stopCaptionSync();
-  const loop = () => {
+  let lastFrame = 0;
+  const loop = (now) => {
     try {
-      syncCaptionOverlay();
-      updateLivePreview();
+      if (now - lastFrame >= 1000 / 30) {
+        syncCaptionOverlay();
+        lastFrame = now;
+      }
     } catch (err) {
       console.warn("syncCaptionOverlay frame error:", err);
     }
@@ -3606,6 +3609,35 @@ function downloadTextFile(content, filename, mime) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+async function waitForCaptionExport(data) {
+  if (data?.jobId) {
+    const deadline = Date.now() + 15 * 60 * 1000;
+    let failures = 0;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      let statusResponse;
+      try {
+        statusResponse = await fetch(`${API_BASE}/captions/burn-jobs/${encodeURIComponent(data.jobId)}`, { cache: "no-store" });
+      } catch (error) {
+        if (++failures < 4) continue;
+        throw new Error("Caption export connection was interrupted. Please retry Publish.");
+      }
+      const status = await statusResponse.json().catch(() => null);
+      if (!statusResponse.ok || status?.status === "failed") {
+        throw new Error(status?.error || "Caption export failed. Please retry Publish.");
+      }
+      if (status?.status === "completed") {
+        data = status.result;
+        break;
+      }
+      failures = 0;
+    }
+    if (data?.jobId) throw new Error("Caption export timed out. Please retry Publish.");
+  }
+
+  return data;
+}
+
 async function exportCaptionedVideo() {
   if (!editorState.clip) {
     alert("No clip loaded.");
@@ -3672,10 +3704,11 @@ async function exportCaptionedVideo() {
         videoUrl: sourceUrl,
         segments: wrapExportToBox(exportSegments, normalizedStyle),
         style: scaledStyle,
+        async: true,
       }),
     });
 
-    const data = await response.json().catch(() => null);
+    let data = await response.json().catch(() => null);
 
     console.log("====== EXPORT RESPONSE ======");
     console.log(data);
@@ -3687,6 +3720,8 @@ async function exportCaptionedVideo() {
         `Export failed with status ${response.status}`,
       );
     }
+
+    data = await waitForCaptionExport(data);
 
     if (!data?.downloadUrl) {
       throw new Error("Server did not return a download URL.");
@@ -3807,30 +3842,7 @@ async function buildCaptionedClipForPublish() {
     );
   }
 
-  if (data?.jobId) {
-    const deadline = Date.now() + 15 * 60 * 1000;
-    let failures = 0;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      let statusResponse;
-      try {
-        statusResponse = await fetch(`${API_BASE}/captions/burn-jobs/${encodeURIComponent(data.jobId)}`, { cache: "no-store" });
-      } catch (error) {
-        if (++failures < 4) continue;
-        throw new Error("Caption export connection was interrupted. Please retry Publish.");
-      }
-      const status = await statusResponse.json().catch(() => null);
-      if (!statusResponse.ok || status?.status === "failed") {
-        throw new Error(status?.error || "Caption export failed. Please retry Publish.");
-      }
-      if (status?.status === "completed") {
-        data = status.result;
-        break;
-      }
-      failures = 0;
-    }
-    if (data?.jobId) throw new Error("Caption export timed out. Please retry Publish.");
-  }
+  data = await waitForCaptionExport(data);
 
   if (!data?.directUrl && !data?.downloadUrl) {
     throw new Error("Caption export finished but no video URL was returned.");

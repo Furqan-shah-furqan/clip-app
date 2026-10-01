@@ -1671,3 +1671,18 @@ body.caption-editor-page .presets-grid { grid-auto-rows: 90px !important; }
 body.caption-editor-page .preset-card { height: 90px !important; min-height: 90px !important; max-height: 90px !important; }
 body.caption-editor-page .preset-card-stage { height: 58px !important; }
 body.caption-editor-page .ce-quality-enhancer { width: 30px !important; height: 30px !important; padding: 0 !important; border-radius: 50% !important; color: #fff !important; }
+
+/* Shared slider geometry and neutral tabs in either theme. */
+body.caption-editor-page .ce-range { height: 13px !important; min-height: 13px !important; }
+body.caption-editor-page .ce-range::-webkit-slider-runnable-track { height: 9px !important; background: #6b7280 !important; }
+body.caption-editor-page .ce-range::-moz-range-track { height: 9px !important; background: #6b7280 !important; }
+body.caption-editor-page .ce-range::-webkit-slider-thumb { margin-top: -2.5px !important; background: #fff !important; }
+body.caption-editor-page .ce-range::-moz-range-thumb { background: #fff !important; }
+body.caption-editor-page .ce-video-scrubber-track { height: 31px !important; min-height: 31px !important; }
+body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { height: 11px !important; background: #6b7280 !important; }
+body.caption-editor-page .ce-video-scrubber-track::-moz-range-track { height: 11px !important; background: #6b7280 !important; }
+body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-thumb { margin-top: -.5px !important; background: #fff !important; }
+body.caption-editor-page .ce-video-scrubber-track::-moz-range-thumb { background: #fff !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) { background: #6b7280 !important; border-radius: 15px !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt { border-radius: 15px !important; color: #fff !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #6b7280 !important; box-shadow: inset 0 -2px #fff !important; font-weight: 700 !important; }

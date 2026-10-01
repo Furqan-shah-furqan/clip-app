@@ -555,7 +555,8 @@ function burnSubtitles({ inputPath, segments, style }) {
       '-i', inputPath,
       '-vf', `ass='${safeAssPath}':fontsdir='${escapeFilterPath(captionFontsDir)}'`,
       '-c:v', 'libx264',
-      '-preset', 'medium',
+      '-preset', 'veryfast',
+      '-threads', '2',
       '-crf', '18',
       '-pix_fmt', 'yuv420p',
       '-c:a', 'aac',
@@ -564,7 +565,7 @@ function burnSubtitles({ inputPath, segments, style }) {
     ], { windowsHide: true });
 
     let stderr = '';
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
+    proc.stderr.on('data', (d) => { stderr = (stderr + d.toString()).slice(-16000); });
 
     proc.on('error', (err) => {
       try { fs.unlinkSync(assPath); } catch {}
