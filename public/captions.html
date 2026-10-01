@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="captionFonts.css?v=layered-1" />
     <link rel="stylesheet" href="captions.css?v=layered-1" />
-    <link rel="stylesheet" href="captionEditorLayout.css?v=editor-finish-1" />
+    <link rel="stylesheet" href="captionEditorLayout.css?v=colors-grid-1" />
     <link rel="stylesheet" href="dropdowns.css?v=1" />
   </head>
   <body class="caption-editor-page theme-dark">
@@ -289,194 +289,71 @@
                 </div>
               </div>
 
-              <div class="ce-color-rows-grid">
-                <!-- Text Color -->
-                <div class="ce-color-block">
-                  <div class="ce-color-row">
-                    <span class="ce-label">Text Color</span>
-                    <input
-                      type="color"
-                      id="capTextColor"
-                      class="ce-color-input"
-                      value="#ffffff"
-                    />
-                  </div>
-                  <div class="ce-swatches">
-                    <button class="color-swatch-btn active" type="button" data-target="capTextColor" data-value="#ffffff" style="--sw: #ffffff" title="White"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#f5d76e" style="--sw: #f5d76e" title="Gold"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#00e5ff" style="--sw: #00e5ff" title="Cyan"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#4ade80" style="--sw: #4ade80" title="Green"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#ff6e5e" style="--sw: #ff6e5e" title="Coral"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#111111" style="--sw: #111111" title="Black"></button>
+              <div class="ce-effects-grid">
+                <div class="ce-effect-tile ce-palette-tile">
+                  <label class="ce-effect-title" for="capTextColor">Text Color</label>
+                  <div class="ce-palette-row">
+                    <div class="ce-swatches">
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#ffe600" style="--sw:#ffe600" aria-label="Yellow text"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#ff6e5e" style="--sw:#ff6e5e" aria-label="Red-orange text"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#00e5ff" style="--sw:#00e5ff" aria-label="Cyan text"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capTextColor" data-value="#22c55e" style="--sw:#22c55e" aria-label="Green text"></button>
+                    </div>
+                    <input type="color" id="capTextColor" class="ce-color-input" value="#ffffff" aria-label="Custom text color" />
                   </div>
                 </div>
 
-                <!-- Background Color & Opacity -->
-                <div class="ce-color-block">
-                  <div class="ce-color-row">
-                    <span class="ce-label">Background</span>
-                    <input
-                      type="color"
-                      id="capBgColor"
-                      class="ce-color-input"
-                      value="#000000"
-                    />
+                <div class="ce-effect-tile ce-palette-tile">
+                  <label class="ce-effect-title" for="capBgColor">Background Color</label>
+                  <div class="ce-palette-row">
+                    <div class="ce-swatches">
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#ffe600" style="--sw:#ffe600" aria-label="Yellow background"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#ff6e5e" style="--sw:#ff6e5e" aria-label="Red-orange background"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#00e5ff" style="--sw:#00e5ff" aria-label="Cyan background"></button>
+                      <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#22c55e" style="--sw:#22c55e" aria-label="Green background"></button>
+                    </div>
+                    <input type="color" id="capBgColor" class="ce-color-input" value="#000000" aria-label="Custom background color" />
                   </div>
-                  <div class="ce-swatches">
-                    <button class="color-swatch-btn active" type="button" data-target="capBgColor" data-value="#000000" style="--sw: #000000" title="Black"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#1a1b1d" style="--sw: #1a1b1d" title="Charcoal"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#252629" style="--sw: #252629" title="Dark Gray"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#f5d76e" style="--sw: #f5d76e" title="Gold"></button>
-                    <button class="color-swatch-btn" type="button" data-target="capBgColor" data-value="#ffffff" style="--sw: #ffffff" title="White"></button>
-                  </div>
-                  <div class="ce-field-row" style="margin-top: 4px; gap: 8px;">
-                    <div class="ce-field ce-field--compact" style="flex: 1;">
-                      <div class="ce-label-with-val">
-                        <label class="ce-label" for="capBgOpacity">Bg Opacity</label>
-                        <span class="ce-val-tag"><span id="capBgOpacityVal">70</span>%</span>
+                </div>
+
+                <div class="ce-effect-tile ce-text-effects-tile">
+                  <div class="ce-effects-top">
+                    <div class="ce-effects-pills">
+                      <button type="button" class="ce-effect-pill" data-effect-toggle="stroke" aria-label="Toggle outline stroke" aria-pressed="false" title="Outline stroke">OFF ×</button>
+                      <button type="button" class="ce-effect-pill" data-effect-toggle="glow" aria-label="Toggle neon glow" aria-pressed="false" title="Neon glow">OFF ×</button>
+                    </div>
+                    <div class="ce-shadow-compact">
+                      <span class="ce-effect-title">Text Shadow</span>
+                      <div class="ce-shadow-actions">
+                        <label class="ce-toggle-row" aria-label="Text shadow"><input type="checkbox" id="capTextShadow" checked /><span class="ce-mini-track"><span class="ce-mini-thumb"></span></span></label>
+                        <input type="color" id="capShadowColor" class="ce-color-input ce-color-input--sm" value="#000000" aria-label="Shadow color" />
                       </div>
-                      <input
-                        class="ce-range"
-                        type="range"
-                        id="capBgOpacity"
-                        min="0"
-                        max="100"
-                        value="70"
-                      />
                     </div>
-                    <div class="ce-field ce-field--compact" style="flex: 1;">
-                      <div class="ce-label-with-val">
-                        <label class="ce-label" for="capBoxPadding">Box Padding</label>
-                        <span class="ce-val-tag"><span id="capBoxPaddingVal">14</span>px</span>
-                      </div>
-                      <input
-                        class="ce-range"
-                        type="range"
-                        id="capBoxPadding"
-                        min="0"
-                        max="50"
-                        value="14"
-                      />
+                  </div>
+                  <label class="ce-effect-title" for="capHighlightMode">Highlight</label>
+                  <select class="ce-select" id="capHighlightMode"><option value="none">None</option><option value="word">Word Color</option><option value="phrase">Phrase Color</option><option value="pill">Word Background</option></select>
+                  <label class="ce-highlight-row" for="capHighlightColor"><span class="ce-effect-title">Highlight Text</span><input id="capHighlightColor" type="color" value="#22c55e" /></label>
+                  <details class="ce-effects-advanced">
+                    <summary>More effects</summary>
+                    <div class="ce-field"><label class="ce-label" for="capStrokeWidth">Outline Stroke <span id="capStrokeWidthVal">0</span>px</label><div class="ce-inline-input-group"><input class="ce-range" id="capStrokeWidth" type="range" min="0" max="10" step="1" value="0" /><input type="color" id="capStrokeColor" class="ce-color-input ce-color-input--sm" value="#000000" aria-label="Outline color" /></div></div>
+                    <div class="ce-field"><label class="ce-label" for="capGlowIntensity">Neon Glow <span id="capGlowIntensityVal">0</span>px</label><input class="ce-range" id="capGlowIntensity" type="range" min="0" max="60" step="1" value="0" /></div>
+                    <div class="ce-field-offsets" id="shadowControlsGrid">
+                      <label class="ce-offset-item"><span>Off X</span><input class="ce-input-num" type="number" id="capShadowOffsetX" min="-20" max="20" value="0" /></label>
+                      <label class="ce-offset-item"><span>Off Y</span><input class="ce-input-num" type="number" id="capShadowOffsetY" min="-20" max="20" value="2" /></label>
                     </div>
+                    <label class="ce-highlight-row" for="capHighlightBg"><span class="ce-label">Highlight background</span><input id="capHighlightBg" type="color" value="#ffe600" /></label>
+                  </details>
+                </div>
+
+                <div class="ce-effect-tile ce-effect-sliders-tile">
+                  <div class="ce-effect-metrics">
+                    <div class="ce-effect-metric"><label for="capBgOpacity">BG Opacity</label><div><input class="ce-range" id="capBgOpacity" type="range" min="0" max="100" value="70" /><span class="ce-val-tag"><span id="capBgOpacityVal">70</span>%</span></div></div>
+                    <div class="ce-effect-metric"><label for="capBoxPadding">Box Padding</label><div><input class="ce-range" id="capBoxPadding" type="range" min="0" max="50" value="14" /><span class="ce-val-tag"><span id="capBoxPaddingVal">14</span>px</span></div></div>
+                    <div class="ce-effect-metric"><label for="capShadowOpacity">Shadow Opacity</label><div><input class="ce-range" id="capShadowOpacity" type="range" min="0" max="100" value="100" /><span class="ce-val-tag"><span id="capShadowOpacityVal">100</span>%</span></div></div>
+                    <div class="ce-effect-metric"><label for="capShadowBlur">Blur</label><div><input class="ce-range" id="capShadowBlur" type="range" min="0" max="30" value="8" /><span class="ce-val-tag"><span id="capShadowBlurVal">8</span>px</span></div></div>
                   </div>
                 </div>
               </div>
-
-              <!-- STROKE & GLOW CONTROLS -->
-              <div class="ce-field-row">
-                <div class="ce-field">
-                  <div class="ce-label-with-val">
-                    <label class="ce-label" for="capStrokeWidth">Outline Stroke</label>
-                    <span class="ce-val-tag"><span id="capStrokeWidthVal">0</span>px</span>
-                  </div>
-                  <div class="ce-inline-input-group">
-                    <input
-                      class="ce-range"
-                      type="range"
-                      id="capStrokeWidth"
-                      min="0"
-                      max="10"
-                      step="1"
-                      value="0"
-                    />
-                    <input
-                      type="color"
-                      id="capStrokeColor"
-                      class="ce-color-input ce-color-input--sm"
-                      value="#000000"
-                      title="Stroke Color"
-                    />
-                  </div>
-                </div>
-
-                <div class="ce-field">
-                  <div class="ce-label-with-val">
-                    <label class="ce-label" for="capGlowIntensity">Neon Glow</label>
-                    <span class="ce-val-tag"><span id="capGlowIntensityVal">0</span>px</span>
-                  </div>
-                  <input
-                    class="ce-range"
-                    type="range"
-                    id="capGlowIntensity"
-                    min="0"
-                    max="60"
-                    step="1"
-                    value="0"
-                  />
-                </div>
-              </div>
-
-              <!-- Text Shadow Controls -->
-              <div class="ce-shadow-subcard">
-                <div class="ce-shadow-head">
-                  <label class="ce-toggle-row">
-                    <input type="checkbox" id="capTextShadow" checked />
-                    <span class="ce-mini-track"><span class="ce-mini-thumb"></span></span>
-                    <span class="ce-toggle-text">Text Shadow</span>
-                  </label>
-
-                  <div class="ce-inline-color-pick">
-                    <input
-                      type="color"
-                      id="capShadowColor"
-                      class="ce-color-input ce-color-input--sm"
-                      value="#000000"
-                    />
-                  </div>
-                </div>
-
-                <div class="shadow-controls-grid" id="shadowControlsGrid">
-                  <div class="ce-field ce-field--compact">
-                    <div class="ce-label-with-val">
-                      <label class="ce-label" for="capShadowBlur">Blur</label>
-                      <span class="ce-val-tag"><span id="capShadowBlurVal">8</span>px</span>
-                    </div>
-                    <input
-                      class="ce-range"
-                      type="range"
-                      id="capShadowBlur"
-                      min="0"
-                      max="30"
-                      value="8"
-                    />
-                  </div>
-
-                  <div class="ce-field-offsets">
-                    <label class="ce-offset-item">
-                      <span>Off X</span>
-                      <input
-                        class="ce-input-num"
-                        type="number"
-                        id="capShadowOffsetX"
-                        min="-20"
-                        max="20"
-                        value="0"
-                      />
-                    </label>
-                    <label class="ce-offset-item">
-                      <span>Off Y</span>
-                      <input
-                        class="ce-input-num"
-                        type="number"
-                        id="capShadowOffsetY"
-                        min="-20"
-                        max="20"
-                        value="2"
-                      />
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <details class="ce-caption-details"><summary>Highlight &amp; shadow opacity</summary>
-                <div class="ce-field-row">
-                  <div class="ce-field"><label class="ce-label" for="capHighlightMode">Highlight</label><select class="ce-select" id="capHighlightMode"><option value="none">None</option><option value="word">Word color</option><option value="phrase">Phrase color</option><option value="pill">Word background</option></select></div>
-                  <div class="ce-field"><label class="ce-label" for="capShadowOpacity">Shadow opacity (%)</label><input class="ce-range" id="capShadowOpacity" type="range" min="0" max="100" value="100" /></div>
-                </div>
-                <div class="ce-field-row">
-                  <div class="ce-field"><label class="ce-label" for="capHighlightColor">Highlight text</label><input id="capHighlightColor" type="color" value="#22c55e" /></div>
-                  <div class="ce-field"><label class="ce-label" for="capHighlightBg">Highlight background</label><input id="capHighlightBg" type="color" value="#ffe600" /></div>
-                </div>
-              </details>
             </section>
 
             <!-- BOTTOM-LEFT: CARD 2 (Text Box & Position) -->
@@ -748,7 +625,7 @@
     <script src="captionPresets.js?v=layered-1"></script>
     <script src="subjectSegmentation.js?v=3.0.0"></script>
     <script src="captionClient.js?v=timeline-1"></script>
-    <script src="captions.js?v=compact-1"></script>
+    <script src="captions.js?v=colors-grid-1"></script>
     <script src="dropdowns.js?v=1"></script>
   </body>
 </html>

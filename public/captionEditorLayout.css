@@ -1661,3 +1661,44 @@ body.caption-editor-page .presets-grid { grid-auto-rows: 90px !important; }
 body.caption-editor-page .preset-card { height: 90px !important; min-height: 90px !important; max-height: 90px !important; }
 body.caption-editor-page .preset-card-stage { height: 58px !important; }
 body.caption-editor-page .ce-quality-enhancer { width: 30px !important; height: 30px !important; padding: 0 !important; border-radius: 50% !important; color: #fff !important; }
+
+/* Four equal Colors & Outline surfaces, using the current theme tokens. */
+body.caption-editor-page #cardColors .ce-effects-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%; min-width: 0; }
+body.caption-editor-page #cardColors .ce-effect-tile { display: flex; flex-direction: column; min-width: 0; gap: 10px; padding: 12px; box-sizing: border-box; border: 0 !important; outline: 0 !important; border-radius: 18px !important; background: var(--panel-3) !important; box-shadow: none !important; }
+body.caption-editor-page #cardColors .ce-effect-title,
+body.caption-editor-page #cardColors .ce-effect-metric > label { color: var(--text) !important; font-size: 12px !important; font-weight: 700 !important; line-height: 1.2; letter-spacing: 0; text-transform: none; }
+body.caption-editor-page #cardColors .ce-palette-tile { min-height: 98px; justify-content: space-between; }
+body.caption-editor-page #cardColors .ce-palette-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+body.caption-editor-page #cardColors .ce-swatches { display: flex !important; flex: 1 1 auto; justify-content: space-between; min-width: 0; gap: 3px !important; }
+body.caption-editor-page #cardColors .color-swatch-btn { width: 20px !important; height: 20px !important; flex: 0 0 20px; border: 0 !important; border-radius: 50% !important; box-shadow: none !important; }
+body.caption-editor-page #cardColors .color-swatch-btn.active { transform: scale(1.12) !important; box-shadow: none !important; }
+body.caption-editor-page #cardColors .ce-palette-row .ce-color-input { width: 30px !important; height: 30px !important; flex: 0 0 30px; border: 0 !important; outline: 0 !important; box-shadow: none !important; }
+body.caption-editor-page #cardColors .ce-color-input::-webkit-color-swatch,
+body.caption-editor-page #cardColors .ce-color-input::-moz-color-swatch { border: 0 !important; box-shadow: none !important; }
+body.caption-editor-page #cardColors .ce-effect-tile :is(button, input, select):focus-visible { outline: 2px solid var(--text) !important; outline-offset: 2px !important; }
+body.caption-editor-page #cardColors .ce-text-effects-tile { justify-content: space-between; }
+body.caption-editor-page #cardColors .ce-effects-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+body.caption-editor-page #cardColors .ce-effects-pills { display: flex; gap: 5px; }
+body.caption-editor-page #cardColors .ce-effect-pill { border: 0; border-radius: 999px; background: var(--panel); color: var(--text); font: inherit; font-size: 10px; min-width: 48px; min-height: 23px; padding: 2px 6px; cursor: pointer; }
+body.caption-editor-page #cardColors .ce-shadow-compact { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+body.caption-editor-page #cardColors .ce-shadow-actions { display: flex; align-items: center; gap: 9px; }
+body.caption-editor-page #cardColors .ce-toggle-row { min-height: 20px; }
+body.caption-editor-page #cardColors .ce-toggle-row input { display: block !important; position: absolute; width: 1px; height: 1px; opacity: 0; }
+body.caption-editor-page #cardColors .ce-toggle-row input:focus-visible + .ce-mini-track { outline: 2px solid var(--text) !important; outline-offset: 2px; }
+body.caption-editor-page #cardColors .ce-highlight-row { display: flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%; }
+body.caption-editor-page #cardColors .ce-highlight-row input[type=color] { flex: 0 0 20px; }
+body.caption-editor-page #cardColors .ce-effects-advanced { color: var(--text); font-size: 10px; }
+body.caption-editor-page #cardColors .ce-effects-advanced summary { cursor: pointer; }
+body.caption-editor-page #cardColors .ce-effects-advanced[open] { display: grid; gap: 7px; }
+body.caption-editor-page #cardColors .ce-effect-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 18px 10px; height: 100%; }
+body.caption-editor-page #cardColors .ce-effect-metric { display: flex; flex-direction: column; justify-content: space-around; min-width: 0; gap: 8px; }
+body.caption-editor-page #cardColors .ce-effect-metric > div { display: flex; align-items: center; min-width: 0; gap: 5px; }
+body.caption-editor-page #cardColors .ce-effect-metric .ce-range { flex: 1 1 auto; min-width: 0; width: auto !important; }
+body.caption-editor-page #cardColors .ce-effect-metric .ce-val-tag { flex: 0 0 auto; display: inline-flex !important; flex-direction: row !important; gap: 0 !important; width: auto !important; white-space: nowrap; padding: 3px 5px !important; border-radius: 10px !important; }
+@media (max-width: 560px) {
+  body.caption-editor-page #cardColors .ce-effect-tile { padding: 8px; }
+  body.caption-editor-page #cardColors .color-swatch-btn { width: 16px !important; height: 16px !important; flex-basis: 16px; }
+  body.caption-editor-page #cardColors .ce-palette-row .ce-color-input { width: 24px !important; height: 24px !important; flex-basis: 24px; }
+  body.caption-editor-page #cardColors .ce-effect-title,
+  body.caption-editor-page #cardColors .ce-effect-metric > label { font-size: 10px !important; }
+}

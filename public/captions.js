@@ -2167,6 +2167,15 @@ function updateShadowControlsState() {
   if (shadowControlsGrid)
     shadowControlsGrid.classList.toggle("is-disabled", !capTextShadow?.checked);
 }
+function updateEffectsPills() {
+  for (const [name, control] of [["stroke", capStrokeWidth], ["glow", capGlowIntensity]]) {
+    const button = document.querySelector(`[data-effect-toggle="${name}"]`);
+    if (!button) continue;
+    const enabled = Number(control?.value) > 0;
+    button.textContent = enabled ? "ON ✓" : "OFF ×";
+    button.setAttribute("aria-pressed", String(enabled));
+  }
+}
 function updateColorSwatchState() {
   if (!colorSwatchButtons.length) return;
   const map = {
@@ -2178,10 +2187,9 @@ function updateColorSwatchState() {
     const target = btn.dataset.target;
     const targetVal = map[target];
     const swatchVal = toHexColor(btn.dataset.value, "").toLowerCase();
-    btn.classList.toggle(
-      "active",
-      Boolean(targetVal && swatchVal && targetVal === swatchVal),
-    );
+    const selected = Boolean(targetVal && swatchVal && targetVal === swatchVal);
+    btn.classList.toggle("active", selected);
+    btn.setAttribute("aria-pressed", String(selected));
   });
 }
 function bindColorSwatches() {
@@ -2939,6 +2947,8 @@ function populateStyleControls() {
   const s = editorState.style;
   selectCaptionFont(s.fontFamily);
   populateDetailControls();
+  const shadowOpacityVal = document.getElementById("capShadowOpacityVal");
+  if (shadowOpacityVal) shadowOpacityVal.textContent = String(s.shadowOpacity);
   if (capFontSize) capFontSize.value = String(s.fontSize);
   if (capFontSizeVal) capFontSizeVal.textContent = String(s.fontSize);
   if (capLineSpacing) capLineSpacing.value = String(s.lineSpacing ?? 1.35);
@@ -2987,6 +2997,7 @@ function populateStyleControls() {
 
   updatePositionUI();
   updateShadowControlsState();
+  updateEffectsPills();
   updateColorSwatchState();
   renderPresetsUI();
   applyStyleToOverlay();
@@ -3082,6 +3093,9 @@ function syncStyleFromControls(options = {}) {
     capLineSpacingVal.textContent = `${Number(editorState.style.lineSpacing).toFixed(2)}x`;
   if (capBgOpacityVal)
     capBgOpacityVal.textContent = String(editorState.style.bgOpacity);
+  const shadowOpacityVal = document.getElementById("capShadowOpacityVal");
+  if (shadowOpacityVal)
+    shadowOpacityVal.textContent = String(editorState.style.shadowOpacity);
   if (capBoxPaddingVal)
     capBoxPaddingVal.textContent = String(editorState.style.paddingX ?? 14);
   if (capBoxSizeLabel)
@@ -3100,6 +3114,7 @@ function syncStyleFromControls(options = {}) {
     capRotateAngleVal.textContent = String(editorState.style.rotateAngle);
 
   updateShadowControlsState();
+  updateEffectsPills();
   updateColorSwatchState();
 
   if (isLiveSlider) {
@@ -4049,6 +4064,14 @@ function bindControls() {
 
   capGlowIntensity?.addEventListener("input", onLiveSliderInput);
   capGlowIntensity?.addEventListener("change", onSliderCommit);
+  document.querySelectorAll("[data-effect-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const control = button.dataset.effectToggle === "stroke" ? capStrokeWidth : capGlowIntensity;
+      if (!control) return;
+      control.value = Number(control.value) > 0 ? "0" : button.dataset.effectToggle === "stroke" ? "2" : "12";
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  });
 
   capRotateAngle?.addEventListener("input", onLiveSliderInput);
   capRotateAngle?.addEventListener("change", onSliderCommit);
