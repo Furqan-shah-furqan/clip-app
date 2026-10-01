@@ -649,8 +649,8 @@ function getClipSource(clip = {}) {
 
     if (!isPlayableVideoUrl(trimmed)) continue;
 
-    // Relative endpoint or server static path already pointing to streaming endpoints
-    if (trimmed.startsWith("/clips/") || trimmed.startsWith("/public/renders/")) {
+    // Keep the original route and query string for generated, exported, or uploaded videos.
+    if (/^\/(?:api\/files\/download|clips|public\/renders|renders|exports|uploads|captions)\//.test(trimmed)) {
       return trimmed;
     }
 
@@ -658,11 +658,9 @@ function getClipSource(clip = {}) {
     if (/^https?:\/\//i.test(trimmed)) {
       if (!trimmed.includes("localhost") && !trimmed.includes("127.0.0.1")) {
         const urlObj = new URL(trimmed, window.location.origin);
-        const pathFn = urlObj.pathname.split("/").pop();
-        if (pathFn && pathFn.toLowerCase().endsWith(".mp4") && urlObj.origin === window.location.origin) {
-          return `/clips/${encodeURIComponent(pathFn)}`;
-        }
-        return trimmed;
+        return urlObj.origin === window.location.origin
+          ? `${urlObj.pathname}${urlObj.search}`
+          : trimmed;
       }
     }
 
@@ -670,17 +668,6 @@ function getClipSource(clip = {}) {
     const normalized = trimmed.replace(/\\/g, "/");
     const rawFn = normalized.split("/").pop();
     const fn = rawFn ? rawFn.split(/[?#]/)[0] : "";
-    if (fn && fn.toLowerCase().endsWith(".mp4")) {
-      return `/clips/${encodeURIComponent(fn)}`;
-    }
-    if (
-      trimmed.startsWith("/api/files/download/") ||
-      trimmed.startsWith("/exports/") ||
-      trimmed.startsWith("/uploads/") ||
-      trimmed.startsWith("/captions/")
-    ) {
-      return trimmed;
-    }
     if (fn) {
       return `/api/files/download/${encodeURIComponent(fn)}`;
     }
@@ -1105,6 +1092,13 @@ function loadSession() {
   const hasParamIndex = clipIndex !== null && !isNaN(parseInt(clipIndex, 10));
   const requestedIdx = hasParamIndex ? parseInt(clipIndex, 10) : null;
   const targetIdx = requestedIdx !== null ? requestedIdx : (session?.index != null ? Number(session.index) : 0);
+
+  // A clip explicitly selected in the studio is authoritative during navigation.
+  // Old currentClips/project caches can contain another clip at the same index.
+  if (session?.clip && getClipSource(session.clip) && requestedIdx !== null &&
+      Number(session.index) === requestedIdx && Number(session.updatedAt) > Date.now() - 60000) {
+    return session;
+  }
 
   // 1. Check currentClips from localStorage
   let currentClips = null;
@@ -3799,10 +3793,11 @@ async function buildCaptionedClipForPublish() {
       videoUrl: sourceUrl,
       segments: wrapExportToBox(exportSegments, normalizedStyle),
       style: scaledStyle,
+      async: true,
     }),
   });
 
-  const data = await response.json().catch(() => null);
+  let data = await response.json().catch(() => null);
 
   if (!response.ok) {
     throw new Error(
@@ -3810,6 +3805,31 @@ async function buildCaptionedClipForPublish() {
       data?.error ||
       `Could not prepare captioned video. Status ${response.status}`,
     );
+  }
+
+  if (data?.jobId) {
+    const deadline = Date.now() + 15 * 60 * 1000;
+    let failures = 0;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      let statusResponse;
+      try {
+        statusResponse = await fetch(`${API_BASE}/captions/burn-jobs/${encodeURIComponent(data.jobId)}`, { cache: "no-store" });
+      } catch (error) {
+        if (++failures < 4) continue;
+        throw new Error("Caption export connection was interrupted. Please retry Publish.");
+      }
+      const status = await statusResponse.json().catch(() => null);
+      if (!statusResponse.ok || status?.status === "failed") {
+        throw new Error(status?.error || "Caption export failed. Please retry Publish.");
+      }
+      if (status?.status === "completed") {
+        data = status.result;
+        break;
+      }
+      failures = 0;
+    }
+    if (data?.jobId) throw new Error("Caption export timed out. Please retry Publish.");
   }
 
   if (!data?.directUrl && !data?.downloadUrl) {

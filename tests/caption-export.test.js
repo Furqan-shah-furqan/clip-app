@@ -7,7 +7,7 @@ const { buildAssContent } = require("../server/services/ffmpegService");
 test("burn source resolution tries all local paths then trusted remote video", async () => {
   const source = fs.readFileSync(path.join(__dirname, "../server/routes/captions.js"), "utf8");
   const start = source.indexOf("async function resolveBurnVideo(");
-  const end = source.indexOf('\nrouter.post("/burn"', start);
+  const end = source.indexOf("\nasync function renderCaptionedClip", start);
   const helper = source.slice(start, end);
   const resolve = new Function("resolveInputVideo", "allowedCaptionSource", "restoreCaptionSource", helper + "return resolveBurnVideo;")(
     value => value === "/exists.mp4" ? value : null,

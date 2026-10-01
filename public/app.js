@@ -1660,8 +1660,8 @@ function editClipCaptions(index) {
 
   const clip = state.generatedClips[index];
   if (!clip) {
-    console.error("Clip not found");
-    window.location.href = `captions.html?index=${index}`;
+    console.warn("Clip not found for editor index", index);
+    alert("This clip is no longer available. Select a clip from the current results.");
     return;
   }
 
@@ -1695,9 +1695,6 @@ function renderGeneratedClips() {
     updateExpectedOutputCard();
     return;
   }
-
-  // Automatically keep caption session synced to the newest top clip
-  syncActiveClipToCaptionSession(0);
 
   if (kicker) kicker.textContent = "✨ GENERATED CLIPS";
   if (bar) bar.style.display = "none";

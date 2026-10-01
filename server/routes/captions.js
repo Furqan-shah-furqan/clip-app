@@ -449,22 +449,9 @@ async function resolveBurnVideo(clip = {}, videoUrl = "") {
   return remoteUrl ? restoreCaptionSource(remoteUrl) : null;
 }
 
-router.post("/burn", async (req, res) => {
-  try {
-    const { clip, videoUrl, segments, style } = req.body || {};
-
-    if (!segments || !segments.length) {
-      return res.status(400).json({ error: "No caption segments provided" });
-    }
-
+async function renderCaptionedClip({ clip, videoUrl, segments, style }) {
     const resolvedPath = await resolveBurnVideo(clip, videoUrl);
-
-    if (!resolvedPath) {
-      return res.status(404).json({
-        error: "Video file not found for burning captions",
-        details: "The clip is missing locally and no video URL from the configured Cloudinary account is available.",
-      });
-    }
+    if (!resolvedPath) throw new Error("Clip is missing locally and no video URL from the configured Cloudinary account is available.");
     console.log("BURN STYLE fontSize:", style?.fontSize, "animStyle:", style?.animationStyle || style?.sourceAnimationStyle);
     console.log("BURN START:", resolvedPath, "segments:", segments.length);
     ensureDir(exportsDir);
@@ -479,19 +466,45 @@ router.post("/burn", async (req, res) => {
     const directUrl = `/exports/${result.fileName}`;
 
     console.log("BURN DONE:", result.fileName);
-
-    return res.json({
+    return {
       success: true,
       fileName: result.fileName,
       outputPath: result.outputPath,
       downloadUrl,
       directUrl,
       renderer: "ass-burn",
-    });
+    };
+}
+
+const burnJobs = createCaptionJobQueue({
+  run: renderCaptionedClip,
+  getKey: () => crypto.randomUUID(),
+  maxJobs: 10,
+});
+
+router.post("/burn", async (req, res) => {
+  try {
+    const { clip, videoUrl, segments, style, async: runInBackground } = req.body || {};
+    if (!Array.isArray(segments) || !segments.length) {
+      return res.status(400).json({ error: "No caption segments provided" });
+    }
+    if (runInBackground === true) {
+      const job = burnJobs.start({ clip, videoUrl, segments, style });
+      res.set("Cache-Control", "no-store");
+      return res.status(202).json({ jobId: job.id, status: job.status });
+    }
+    return res.json(await renderCaptionedClip({ clip, videoUrl, segments, style }));
   } catch (error) {
     console.error("CAPTION BURN ERROR:", error);
-    return res.status(500).json({ error: "Caption burn failed", details: error.message });
+    return res.status(error.statusCode || 500).json({ error: "Caption burn failed", details: error.message });
   }
+});
+
+router.get("/burn-jobs/:id", (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const job = burnJobs.get(req.params.id);
+  if (!job) return res.status(404).json({ error: "Caption export was interrupted. Retry Publish." });
+  return res.json({ status: job.status, result: job.status === "completed" ? job.result : undefined, error: job.error });
 });
 
 /**

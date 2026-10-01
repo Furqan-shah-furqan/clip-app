@@ -1601,6 +1601,16 @@ body.caption-editor-page.theme-light .ce-range::-moz-range-thumb { background: #
 .caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }
 .caption-editor-page .ce-video-scrubber-track::-moz-range-track { height: 8px; border-radius: 5px; background: linear-gradient(90deg, #60a5fa var(--seek-progress, 0%), rgba(255,255,255,.4) var(--seek-progress, 0%)); }
 
+/* Keep editor slider tracks blue and thumbs white in both themes. */
+body.caption-editor-page .ce-range::-webkit-slider-runnable-track,
+body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { background: #3b82f6 !important; }
+body.caption-editor-page .ce-range::-moz-range-track,
+body.caption-editor-page .ce-video-scrubber-track::-moz-range-track { background: #3b82f6 !important; }
+body.caption-editor-page .ce-range::-webkit-slider-thumb,
+body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-thumb { background: #fff !important; }
+body.caption-editor-page .ce-range::-moz-range-thumb,
+body.caption-editor-page .ce-video-scrubber-track::-moz-range-thumb { background: #fff !important; }
+
 /* Match the home page's white/black frame and main surface in both themes. */
 body.caption-editor-page.theme-dark { background: #fff !important; padding: 7px !important; }
 body.caption-editor-page.theme-light { background: #000 !important; padding: 7px !important; }
