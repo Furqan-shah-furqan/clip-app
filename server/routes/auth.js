@@ -47,12 +47,18 @@ function buildSafeReturnTo(value = "") {
   return clean;
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, character => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]));
+}
+
 function sendConnectedHtml({
   title,
   message,
   returnTo = "/publish.html?from=oauth",
 }) {
-  const safeReturnTo = buildSafeReturnTo(returnTo);
+  const safeReturnTo = escapeHtml(buildSafeReturnTo(returnTo));
+  title = escapeHtml(title);
+  message = escapeHtml(message);
 
   return `
     <!doctype html>
@@ -101,7 +107,7 @@ function startYouTubeOAuth(req, res) {
 
     return res.status(500).send(`
       <h2>YouTube connection failed</h2>
-      <p>${String(error.message || error)}</p>
+      <p>${escapeHtml(error.message || error)}</p>
       <a href="/publish.html">Back to Publish Center</a>
     `);
   }
@@ -146,7 +152,7 @@ router.get("/youtube/callback", async (req, res) => {
 
     return res.status(500).send(`
       <h2>YouTube auth failed</h2>
-      <p>${String(error.message || error)}</p>
+      <p>${escapeHtml(error.message || error)}</p>
       <a href="/publish.html">Back to Publish Center</a>
     `);
   }
@@ -166,7 +172,7 @@ function startInstagramOAuth(req, res) {
 
     return res.status(500).send(`
       <h2>Instagram connection failed</h2>
-      <p>${String(error.message || error)}</p>
+      <p>${escapeHtml(error.message || error)}</p>
       <a href="/publish.html">Back to Publish Center</a>
     `);
   }
@@ -217,7 +223,7 @@ router.get("/instagram/callback", async (req, res) => {
 
     return res.status(500).send(`
       <h2>Instagram auth failed</h2>
-      <p>${String(error.message || error)}</p>
+      <p>${escapeHtml(error.message || error)}</p>
       <a href="/publish.html">Back to Publish Center</a>
     `);
   }

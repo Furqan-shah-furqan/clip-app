@@ -57,3 +57,16 @@ test('layered export keeps left/right box anchors, real font names and independe
   const manual = buildAssContent([{start:0,end:1,text:'manual'}],{...style,layered:false});
   assert.match(manual,/Style: Default,Satoshi Variable/);
 });
+
+test('browser-measured export keeps individual fonts, sizes, colors and coordinates', () => {
+  const ass = buildAssContent([{start:1,end:2,text:'small BIG',browserLayout:[
+    {text:'small',x:123,y:456,fontFamily:'Satoshi',fontSize:22,fontWeight:700,letterSpacing:.2,color:'#00ff00'},
+    {text:'BIG',x:345,y:456,fontFamily:'Telma',fontSize:48,fontWeight:900,letterSpacing:-2,color:'#ff0000'},
+  ]}],{editorBox:true,layered:true,positionX:50,positionY:50,textShadow:true,shadowOffsetX:3,shadowOffsetY:4,shadowOpacity:40});
+  assert.match(ass,/\\pos\(123,456\)/);
+  assert.match(ass,/\\pos\(345,456\)/);
+  assert.match(ass,/\\fnSatoshi Variable\\fs22\\b700/);
+  assert.match(ass,/\\fnTelma Variable\\fs48\\b900/);
+  assert.match(ass,/\\1c&H0000FF00&/);
+  assert.match(ass,/\\pos\(126,460\)/);
+});

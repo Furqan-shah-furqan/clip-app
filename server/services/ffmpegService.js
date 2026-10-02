@@ -407,6 +407,33 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     text = text.replace(/\r?\n/g, '\\N');
     if (!style.editorBox && !text.includes('\\N')) text = wrapText(text, charsPerLine);
     text = escapeAssText(text);
+    if (style.editorBox && style.layered && Array.isArray(seg.browserLayout) && seg.browserLayout.length) {
+      // Browser-measured word positions, fonts and sizes are authoritative for layered text.
+      const rotation = -Number(style.rotateAngle || 0);
+      const radians = -rotation * Math.PI / 180;
+      return seg.browserLayout.slice(0, 500).map((run, runIndex) => {
+        if (![run.x, run.y, run.fontSize].every(v => Number.isFinite(Number(v)))) throw new Error('Invalid caption layout');
+        const family = String(run.fontFamily || requestedFont).replace(/['"{}\\,\r\n]/g, '');
+        const name = variableFontFamilies.has(family) ? `${family} Variable` : family;
+        const dx = Number(run.x) - anchor.x, dy = Number(run.y) - anchor.y;
+        const point = {x:anchor.x + dx*Math.cos(radians)-dy*Math.sin(radians), y:anchor.y + dx*Math.sin(radians)+dy*Math.cos(radians), origin:anchor};
+        const runStyle = {...style,textAlign:'center',highlightMode:'none',fontSize:Number(run.fontSize), animationStyle:runIndex === seg.browserLayout.length - 1 ? style.animationStyle : 'none'};
+        const typography = `\\fn${name}\\fs${Math.max(1, Math.min(2000, Number(run.fontSize)))}\\b${Number(run.fontWeight)||700}\\i${run.fontStyle === 'italic' ? 1 : 0}\\fsp${Number(run.letterSpacing)||0}`;
+        const word = escapeAssText(normalizeText(run.text, textTransform));
+        const fg = `{${typography}\\1c${hexToABGR(/^#[0-9a-f]{6}$/i.test(run.color) ? run.color : style.textColor, 100)}&}`;
+        const event = (layer, tags, value, p, st) => `Dialogue: ${layer},${toAssTime(start)},${toAssTime(end)},Default,,0,0,0,,${tags}${buildCuratedDialogueText(value, st, durationMs, p)}`;
+        const foreground = event(0, fg, word, point, runStyle);
+        const glow = Number(style.glowIntensity) || 0;
+        const glowStyle = {...runStyle,animationStyle:'none'};
+        const glowEvents = glow > 0 ? [glow*.5,glow].map(blur => event(-3,`{${typography}\\bord0\\shad0\\1c${hexToABGR(style.textColor || '#ffffff',100)}&\\blur${blur}}`,word,point,glowStyle)).join('\n') + '\n' : '';
+        if (!hasShadow) return glowEvents + foreground;
+        const offX = Number(style.shadowOffsetX)||0, offY = Number(style.shadowOffsetY)||0;
+        const shadowPoint = {...point,x:point.x+offX*Math.cos(radians)-offY*Math.sin(radians),y:point.y+offX*Math.sin(radians)+offY*Math.cos(radians)};
+        const shadowStyle = {...runStyle,animationStyle:'none',textOpacity:Number(style.shadowOpacity ?? 100)};
+        const shadowTag = blur => `{${typography}\\bord0\\shad0\\1c${hexToABGR(style.shadowColor || '#000000',100)}&\\blur${blur}}`;
+        return event(-2,shadowTag(Math.max(0,Number(style.shadowBlur)||0)),word,shadowPoint,shadowStyle) + '\n' + event(-1,shadowTag(Math.min(2,Math.max(0,Number(style.shadowBlur)||0))),word,shadowPoint,shadowStyle) + '\n' + glowEvents + foreground;
+      }).join('\n');
+    }
     if (style.layered) {
       const allWords = text.split(/(?:\\N|\s)+/).filter(Boolean);
       const requestedHeroFont = String(style.heroFontFamily || requestedFont).replace(/['"{}\\]/g, '').split(',')[0].trim();
@@ -417,7 +444,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const index = wordIndex++;
         const hero = index === Math.min(1, allWords.length - 1);
         const size = Math.round(fontSize * (hero ? 1.58 : index === 0 ? .78 : 1));
-        const color = style.highlightMode !== 'none' && (hero || index === allWords.length - 1) ? style.highlightColor : style.textColor;
+        const targetColor = hero ? style.bigWordColor : style.smallWordColor;
+        const color = targetColor || (["word", "phrase", "pill"].includes(style.highlightMode) && (hero || index === allWords.length - 1) ? style.highlightColor : style.textColor);
         return `{\\fn${hero ? heroFont : fontName}\\fs${size}\\b${hero ? 1 : bold}\\1c${hexToABGR(color, clamp(Number(style.textOpacity ?? 100), 0, 100))}&}${word}`;
       }).join('');
       // ASS alignment anchors the text edge; the editor positions the box center.

@@ -30,6 +30,8 @@ const DEFAULT_STYLE = {
   highlightMode: "none",
   highlightBg: "#ffe600",
   highlightColor: "#22c55e",
+  bigWordColor: null,
+  smallWordColor: null,
   bgColor: "transparent",
   bgOpacity: 0,
   position: "bottom",
@@ -840,6 +842,40 @@ function wrapExportToBox(segments, style) {
     if (line) lines.push(line);
     return { ...segment, text: lines.join("\n") };
   });
+}
+
+// Measure the same caption DOM used by the preview instead of guessing its layout in ASS.
+function captureExportLayouts(segments, style) {
+  if (!captionOverlayText?.cloneNode || !window.getComputedStyle || !style.layered || style.highlightMode === "pill" || Number(style.bgOpacity) > 0) return wrapExportToBox(segments, style);
+  const previewWidth = captionVideoWrap.clientWidth || captionVideo.clientWidth;
+  const previewHeight = captionVideoWrap.clientHeight || captionVideo.clientHeight;
+  const scaleX = captionVideo.videoWidth / previewWidth;
+  const scaleY = captionVideo.videoHeight / previewHeight;
+  if (!(scaleX > 0 && scaleY > 0)) return wrapExportToBox(segments, style);
+  const host = captionOverlayText.cloneNode(false);
+  host.removeAttribute("id");
+  applyTextBoxVisuals(host, {...style, rotateAngle:0});
+  Object.assign(host.style, {position:"fixed", left:"0", top:"0", width:`${previewWidth * (style.boxWidth || 88) / 100}px`, maxWidth:"none", height:"auto", visibility:"hidden", transform:"none", pointerEvents:"none"});
+  document.body.appendChild(host);
+  try {
+    return segments.map(segment => {
+      host.replaceChildren(); delete host.dataset.smoothKey;
+      const words = String(segment.text || "").trim().split(/\s+/);
+      renderSmoothCaption(host, segment.text, segment.id, words.length - 1, style);
+      host.querySelectorAll("*").forEach(el => { el.style.animation = "none"; el.style.transform = "none"; });
+      const box = host.getBoundingClientRect();
+      const layout = Array.from(host.children).map(el => {
+        const rect = el.getBoundingClientRect(), css = window.getComputedStyle(el);
+        const rgb = css.color.match(/[\d.]+/g);
+        const color = rgb ? "#" + rgb.slice(0,3).map(v => Math.round(Number(v)).toString(16).padStart(2,"0")).join("") : style.textColor;
+        return { text:el.textContent, x:(rect.left - box.left + rect.width/2 - box.width/2 + previewWidth * style.positionX/100)*scaleX,
+          y:(rect.top - box.top + rect.height/2 - box.height/2 + previewHeight * style.positionY/100)*scaleY,
+          fontFamily:captionFontName(css.fontFamily), fontSize:parseFloat(css.fontSize)*scaleX, fontWeight:Number(css.fontWeight),
+          fontStyle:css.fontStyle, letterSpacing:(parseFloat(css.letterSpacing)||0)*scaleX, color };
+      });
+      return {...segment, browserLayout:layout};
+    });
+  } finally { host.remove(); }
 }
 
 // ─── WORD-BY-WORD HELPERS ────────────────────────────────
@@ -2378,7 +2414,8 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
     span.classList.toggle("caption-word-active", isCurrentActive);
 
     span.style.padding = style.highlightMode === "pill" ? "2px 8px" : "0px";
-    if ((isCurrentActive || style.highlightMode === "phrase") && style.highlightMode !== "none") {
+    const targetColor = style.layered && i === Math.min(1, words.length - 1) ? style.bigWordColor : style.smallWordColor;
+    if ((isCurrentActive && ["word", "pill"].includes(style.highlightMode)) || style.highlightMode === "phrase") {
       if (style.highlightMode === "pill") {
         span.dataset.highlightMode = "pill";
         span.style.backgroundColor = style.highlightBg || "#FFE600";
@@ -2400,9 +2437,10 @@ function renderSmoothCaption(container, text, segId, activeWordIdx, style) {
       span.style.backgroundColor = "transparent";
       span.style.padding = style.highlightMode === "pill" ? "2px 8px" : "0px";
       span.style.display = "inline-block";
-      span.style.color = style.layered && style.highlightMode !== "none" && i === Math.min(1, words.length - 1) ? style.highlightColor : "inherit";
+      span.style.color = style.layered && ["word", "phrase", "pill"].includes(style.highlightMode) && i === Math.min(1, words.length - 1) ? style.highlightColor : "inherit";
       span.style.fontStyle = style.fontStyle === "italic" ? "normal" : "inherit";
     }
+    if (targetColor) span.style.color = hexToRgba(targetColor, style.textOpacity ?? 100);
   });
   container.dataset.activeMotionWord = String(activeWordIdx);
 }
@@ -2945,7 +2983,10 @@ function populateDetailControls() {
   }
   for (const [id, key] of Object.entries(captionDetailControls)) {
     const control = document.getElementById(id);
-    if (control) control.value = String(editorState.style[key] ?? DEFAULT_STYLE[key]);
+    const colorKey = editorState.style.highlightMode === "big" ? "bigWordColor" : editorState.style.highlightMode === "small" ? "smallWordColor" : "highlightColor";
+    if (control) control.value = String(id === "capHighlightColor"
+      ? editorState.style[colorKey] || editorState.style.highlightColor || DEFAULT_STYLE.highlightColor
+      : editorState.style[key] ?? DEFAULT_STYLE[key]);
   }
 }
 function populateStyleControls() {
@@ -3479,6 +3520,8 @@ function applyPresetFromGallery(id) {
     layered: Boolean(s.layered),
     heroFontFamily: s.heroFontFamily || s.fontFamily,
     highlightMode: s.highlightMode || "none",
+    bigWordColor: s.bigWordColor || null,
+    smallWordColor: s.smallWordColor || null,
     highlightBg: s.highlightBg || "transparent",
     presetDuration: Number(s.presetDuration) || 0.2,
     shadowOffsetX: Number(s.shadowOffsetX) || 0,
@@ -3719,7 +3762,7 @@ async function exportCaptionedVideo() {
       body: JSON.stringify({
         clip: editorState.clip,
         videoUrl: sourceUrl,
-        segments: wrapExportToBox(exportSegments, normalizedStyle),
+        segments: captureExportLayouts(exportSegments, normalizedStyle),
         style: scaledStyle,
         async: true,
       }),
@@ -3843,7 +3886,7 @@ async function buildCaptionedClipForPublish() {
     body: JSON.stringify({
       clip: editorState.clip,
       videoUrl: sourceUrl,
-      segments: wrapExportToBox(exportSegments, normalizedStyle),
+      segments: captureExportLayouts(exportSegments, normalizedStyle),
       style: scaledStyle,
       async: true,
     }),
@@ -4020,8 +4063,10 @@ function bindControls() {
   for (const [id, key] of Object.entries(captionDetailControls)) {
     const control = document.getElementById(id);
     const update = () => {
-      editorState.style[key] = ["fontWeight", "textOpacity", "shadowOpacity"].includes(key)
+      const colorKey = editorState.style.highlightMode === "big" ? "bigWordColor" : editorState.style.highlightMode === "small" ? "smallWordColor" : "highlightColor";
+      editorState.style[id === "capHighlightColor" ? colorKey : key] = ["fontWeight", "textOpacity", "shadowOpacity"].includes(key)
         ? Number(control.value) : control.value;
+      if (id === "capHighlightMode") populateDetailControls();
       applyStyleToOverlay();
       syncCaptionOverlay();
       updateLivePreview();

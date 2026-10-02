@@ -1683,8 +1683,15 @@ body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track
 body.caption-editor-page .ce-video-scrubber-track::-moz-range-track { height: 11px !important; background: #6b7280 !important; }
 body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-thumb { margin-top: -.5px !important; background: #fff !important; }
 body.caption-editor-page .ce-video-scrubber-track::-moz-range-thumb { background: #fff !important; }
-body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) { background: #6b7280 !important; border-radius: 15px !important; }
-body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt { border-radius: 15px !important; color: #fff !important; }
-body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #6b7280 !important; box-shadow: inset 0 -2px #fff !important; font-weight: 700 !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) { background: #4b5563 !important; border-radius: 15px !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt { background: #4b5563 !important; border-radius: 15px !important; color: #fff !important; }
+body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #374151 !important; box-shadow: none !important; border: 0 !important; font-weight: 700 !important; }
 
-body.caption-editor-page :is(#wordsPerRowGroup, #textTransformGroup) .ce-pill-opt.is-active { background: #4b5563 !important; }
+/* Neutral controls and full-size circular highlight pickers. */
+body.caption-editor-page .ce-range::-webkit-slider-runnable-track,
+body.caption-editor-page .ce-video-scrubber-track::-webkit-slider-runnable-track { background: #4b5563 !important; }
+body.caption-editor-page .ce-range::-moz-range-track,
+body.caption-editor-page .ce-video-scrubber-track::-moz-range-track { background: #4b5563 !important; }
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg) { width: 40px !important; height: 40px !important; min-width: 40px !important; padding: 0 !important; border: 0 !important; border-radius: 50% !important; overflow: hidden; }
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg)::-webkit-color-swatch { width: 40px !important; height: 40px !important; border: 0 !important; border-radius: 50% !important; }
+body.caption-editor-page :is(#capHighlightColor, #capHighlightBg)::-moz-color-swatch { width: 40px !important; height: 40px !important; border: 0 !important; border-radius: 50% !important; }

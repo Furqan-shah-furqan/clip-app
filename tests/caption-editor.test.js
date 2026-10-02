@@ -333,3 +333,39 @@ test('moving X/Y preserves box dimensions, rotation and the other axis', () => {
   const overlay=css.match(/\.caption-video-overlay\s*\{([^}]+)\}/)[1];
   assert.doesNotMatch(overlay,/width:\s*auto\s*!important/);
 });
+
+test('big and small word colors remain independent through mode changes and preview updates', () => {
+  const h = harness();
+  h.run('editorState.style.layered=true; bindControls();');
+  h.controls.capHighlightMode.value = 'big'; h.controls.capHighlightMode.emit('change');
+  h.controls.capHighlightColor.value = '#ff0000'; h.controls.capHighlightColor.emit('input');
+  h.controls.capHighlightMode.value = 'small'; h.controls.capHighlightMode.emit('change');
+  h.controls.capHighlightColor.value = '#00ff00'; h.controls.capHighlightColor.emit('input');
+  h.run('renderSmoothCaption(captionOverlayText,"one two three","colors",2,editorState.style)');
+  const words = h.controls.captionOverlayText.children;
+  assert.match(words[0].style.color, /0,\s*255,\s*0/);
+  assert.match(words[1].style.color, /255,\s*0,\s*0/);
+  assert.match(words[2].style.color, /0,\s*255,\s*0/);
+  h.controls.capHighlightMode.value = 'big'; h.controls.capHighlightMode.emit('change');
+  assert.equal(h.controls.capHighlightColor.value, '#ff0000');
+  assert.equal(h.run('editorState.style.smallWordColor'), '#00ff00');
+});
+
+test('export captures the preview word boxes and computed typography instead of estimating placement', () => {
+  const h=harness(), host=new Element();
+  host.removeAttribute=()=>{};host.remove=()=>{};
+  host.getBoundingClientRect=()=>({left:0,top:0,width:240,height:80});
+  h.controls.captionOverlayText.cloneNode=()=>host;
+  h.context.document.body={appendChild(){}};
+  h.context.document.createElement=()=>{
+    const el=new Element();
+    el.getBoundingClientRect=()=>({left:el.textContent==='hello'?20:100,top:20,width:40,height:30});
+    return el;
+  };
+  h.context.window.getComputedStyle=el=>({fontFamily:el.textContent==='hello'?'Satoshi':'Telma',fontSize:el.textContent==='hello'?'22px':'48px',fontWeight:'700',fontStyle:'normal',letterSpacing:'1px',color:'rgb(255, 0, 0)'});
+  const runs=h.run('captureExportLayouts([{id:"measured",start:1,end:2,text:"hello world"}],{...editorState.style,layered:true,boxWidth:80,positionX:50,positionY:50})[0].browserLayout');
+  assert.equal(runs[0].x,252); // (20 + 20 - 120 + 150) * 1080/300
+  assert.equal(runs[0].fontSize,79.2);
+  assert.equal(runs[1].fontFamily,'Telma');
+  assert.equal(runs[1].color,'#ff0000');
+});
