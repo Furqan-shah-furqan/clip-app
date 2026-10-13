@@ -20,6 +20,15 @@ const router = express.Router();
 
 const DEMO_USER_ID = "cmo9s5bws0000w01wv1qwpl2b";
 
+// ponytail: this deployment has one demo owner; use session ownership when adding user login.
+async function ensureDemoUser() {
+  return prisma.user.upsert({
+    where: { id: DEMO_USER_ID },
+    update: {},
+    create: { id: DEMO_USER_ID, name: "ClipFlow Demo Owner" },
+  });
+}
+
 function encodeOAuthState(payload = {}) {
   return Buffer.from(JSON.stringify(payload)).toString("base64url");
 }
@@ -134,6 +143,7 @@ router.get("/youtube/callback", async (req, res) => {
     const { tokens } = await exchangeCodeForTokens(code);
     const channel = await fetchYouTubeChannel(tokens);
 
+    await ensureDemoUser();
     const socialAccount = await saveConnectedYouTubeAccount({
       userId: DEMO_USER_ID,
       tokens,
@@ -205,6 +215,7 @@ router.get("/instagram/callback", async (req, res) => {
       accessToken: token.accessToken,
     });
 
+    await ensureDemoUser();
     const socialAccount = await saveConnectedInstagramAccount({
       userId: DEMO_USER_ID,
       token,

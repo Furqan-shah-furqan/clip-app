@@ -23,3 +23,46 @@ test('OAuth status pages escape provider text and return links',()=>{
   assert.equal(html.includes('<img src='),false);
   assert.equal(html.includes('x=" onload='),false);
 });
+test('both OAuth callbacks ensure the demo owner before saving accounts, without overwriting it', async () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const source = fs.readFileSync(path.join(__dirname, '../server/routes/auth.js'), 'utf8');
+  const callbacks = {};
+  const users = new Map();
+  const prisma = {user: {upsert: async ({where, update, create}) => {
+    assert.deepEqual(Object.keys(update), []);
+    if (!users.has(where.id)) users.set(where.id, {...create});
+    return users.get(where.id);
+  }}};
+  let saves = 0;
+  const save = async ({userId}) => {
+    assert.ok(users.has(userId), 'foreign key owner must exist before account save');
+    saves++;
+    return {id: 'account'};
+  };
+  const services = {
+    createOAuthClient: () => ({}),
+    exchangeCodeForTokens: async () => ({tokens: {}}),
+    fetchYouTubeChannel: async () => ({title: 'channel'}),
+    saveConnectedYouTubeAccount: save,
+    getInstagramAuthUrl: () => '', decodeInstagramState: () => ({}),
+    exchangeInstagramCodeForLongLivedToken: async () => ({}),
+    fetchInstagramBusinessProfile: async () => ({username: 'owner'}),
+    saveConnectedInstagramAccount: save,
+  };
+  vm.runInNewContext(source, {Buffer, console, module: {exports: {}}, require: name => {
+    if (name === 'express') return {Router: () => ({get: (route, handler) => {callbacks[route] = handler;}})};
+    if (name === '../lib/prisma') return prisma;
+    return services;
+  }});
+  const res = {send: () => {}, status: code => {throw new Error(`Unexpected HTTP ${code}`);}};
+  for (const route of ['/instagram/callback', '/youtube/callback']) {
+    await callbacks[route]({query: {code: 'test'}}, res);
+  }
+  const owner = users.values().next().value;
+  owner.name = 'Existing owner';
+  await callbacks['/instagram/callback']({query: {code: 'test'}}, res);
+  assert.equal(users.size, 1);
+  assert.equal(owner.name, 'Existing owner');
+  assert.equal(saves, 3);
+});
