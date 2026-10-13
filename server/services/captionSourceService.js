@@ -10,9 +10,9 @@ function allowedCaptionSource(value) {
   if (typeof value !== "string" || !process.env.CLOUDINARY_CLOUD_NAME) return null;
   try {
     const url = new URL(value);
-    const prefix = `/${process.env.CLOUDINARY_CLOUD_NAME}/video/upload/`;
+    const prefixes = ["upload", "authenticated"].map(type => `/${process.env.CLOUDINARY_CLOUD_NAME}/video/${type}/`);
     if (url.protocol !== "https:" || url.hostname !== "res.cloudinary.com" ||
-        url.port || url.username || url.password || !url.pathname.startsWith(prefix)) return null;
+        url.port || url.username || url.password || !prefixes.some(prefix => url.pathname.startsWith(prefix))) return null;
     url.hash = "";
     return url.href;
   } catch { return null; }

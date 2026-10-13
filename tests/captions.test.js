@@ -206,6 +206,8 @@ test('Cloudinary recovery validates the account, streams to disk, and removes pa
   const {allowedCaptionSource,restoreCaptionSource}=context.module.exports;
   const url='https://res.cloudinary.com/test-cloud/video/upload/v1/clip.mp4';
   assert.equal(allowedCaptionSource(url),url);
+  const protectedUrl=url.replace("/upload/", "/authenticated/s--signed--/");
+  assert.equal(allowedCaptionSource(protectedUrl),protectedUrl);
   for(const bad of ['http://res.cloudinary.com/test-cloud/video/upload/x','https://res.cloudinary.com/other/video/upload/x','https://127.0.0.1/test-cloud/video/upload/x','https://res.cloudinary.com.evil.test/test-cloud/video/upload/x','https://res.cloudinary.com/test-cloud/video/upload/../../other/x']) assert.equal(allowedCaptionSource(bad),null);
   try {
     const local=await restoreCaptionSource(url);

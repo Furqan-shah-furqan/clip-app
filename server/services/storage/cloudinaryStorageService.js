@@ -109,7 +109,7 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
     public_id: safePublicId,
     overwrite: true,
     unique_filename: false,
-    type: "upload",
+    type: process.env.CUSTOMER_AUTH_ENABLED === "true" ? "authenticated" : "upload",
     timeout: options.timeoutMs || 60000,
   };
 
@@ -129,7 +129,7 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
       "Cloudinary upload"
     );
 
-    console.log("CLOUDINARY RAW RESULT:", JSON.stringify(result, null, 2));
+
 
     if (!result || typeof result !== "object") {
       throw new Error("Cloudinary returned an empty upload response.");
@@ -143,9 +143,13 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
       );
     }
 
+    const secureUrl = uploadOptions.type === "authenticated"
+      ? cloudinary.url(result.public_id, {resource_type: "video", type: "authenticated", format: result.format, version: result.version, secure: true, sign_url: true})
+      : result.secure_url;
+
     console.log("CLOUDINARY UPLOAD DONE:", {
       publicId: result.public_id,
-      secureUrl: result.secure_url,
+      secureUrl,
       bytes: result.bytes,
       duration: result.duration,
       format: result.format,
@@ -153,7 +157,7 @@ async function uploadVideoToCloudinary(filePath, options = {}) {
 
     return {
       publicId: result.public_id,
-      secureUrl: result.secure_url,
+      secureUrl,
       duration: result.duration,
       bytes: result.bytes,
       format: result.format,

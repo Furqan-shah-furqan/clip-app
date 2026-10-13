@@ -15,7 +15,7 @@ The customer interface uses the current light/dark palette, Inter font, rounded 
 
 - Automated tests use an in-memory database double, not production PostgreSQL or live provider callbacks.
 - Provider public-access approval is still required (later project steps).
-- Existing Cloudinary assets use public URLs. App routes enforce ownership, but an already-known public Cloudinary URL remains accessible. Private Cloudinary delivery must be configured before promising private source/video storage to customers.
+- Customer-mode uploads use Cloudinary authenticated delivery with signed playback URLs. Previously uploaded demo assets remain public and are not assigned to customers. Signed URLs are bearer capabilities: a recipient can share them; app APIs still enforce ownership. Verify authenticated playback, downloads, captions and publishing against the real Cloudinary account before activation.
 - Email delivery and password recovery require a configured sender; they must be tested end to end.
 - Existing demo-owned accounts and projects are retained; customers must reconnect under their own sign-in. Do not automatically claim legacy accounts by email or query parameters.
 - Request rate limiting is per web process. Multi-instance deployment requires a shared limit.
