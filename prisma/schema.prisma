@@ -45,6 +45,11 @@ model User {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  passwordHash   String?
+  customerSessions CustomerSession[]
+  recoveryTokens RecoveryToken[]
+  resources CustomerResource[]
+
   socialAccounts SocialAccount[]
   clips          Clip[]
   scheduledPosts ScheduledPost[]
@@ -160,4 +165,25 @@ model GenerationJob {
   @@index([status])
   @@index([userId])
   @@index([createdAt])
+}
+model CustomerSession {
+  tokenHash String @id
+  userId String
+  expiresAt DateTime
+  oauthNonce String?
+  oauthExpiresAt DateTime?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+model RecoveryToken {
+  tokenHash String @id
+  userId String
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+model CustomerResource {
+  key String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
 }

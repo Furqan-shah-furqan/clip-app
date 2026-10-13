@@ -1,3 +1,4 @@
+const {enabled,requireCustomer,asyncHandler} = require("../middleware/customerAuth");
 const express = require("express");
 const prisma = require("../lib/prisma");
 const {
@@ -15,6 +16,14 @@ const {
 } = require("../services/publishing/runScheduledPost");
 
 const router = express.Router();
+router.use(requireCustomer);
+router.use(asyncHandler(async(req,res,next)=>{
+  if (!enabled()) return next();
+  if (req.body) req.body.userId=req.user.id;
+  const id=req.path.split("/").filter(Boolean)[0];
+  if (id && !await prisma.scheduledPost.findFirst({where:{id,userId:req.user.id}})) return res.status(404).json({error:"Scheduled post not found"});
+  next();
+}));
 
 function sendScheduleMutationError(res, error, schedule = null) {
   let statusCode = 409;
@@ -65,7 +74,7 @@ router.post("/", async (req, res) => {
       where: { id: socialAccountId }
     });
 
-    if (!socialAccount) {
+    if (!socialAccount || (enabled() && (socialAccount.userId !== req.user.id || socialAccount.platform !== platform))) {
       return res.status(404).json({ error: "Social account not found" });
     }
 
@@ -73,7 +82,7 @@ router.post("/", async (req, res) => {
       where: { id: clipId }
     });
 
-    if (!clip) {
+    if (!clip || (enabled() && clip.userId !== req.user.id)) {
       return res.status(404).json({ error: "Clip not found" });
     }
 
@@ -110,9 +119,9 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const posts = await listScheduledPosts();
+    const posts = await listScheduledPosts(enabled() ? req.user.id : undefined);
     return res.json({ schedules: posts });
   } catch (error) {
     console.error("List schedules error:", error);
@@ -214,7 +223,7 @@ router.post("/:id/run-now", async (req, res) => {
     const updatedSchedule = await prisma.scheduledPost.findUnique({
       where: { id: req.params.id },
       include: {
-        socialAccount: true,
+        socialAccount: {select:{id:true,userId:true,platform:true,platformUsername:true}},
         clip: true,
         publishAttempts: true
       }
@@ -231,7 +240,7 @@ router.post("/:id/run-now", async (req, res) => {
     const updatedSchedule = await prisma.scheduledPost.findUnique({
       where: { id: req.params.id },
       include: {
-        socialAccount: true,
+        socialAccount: {select:{id:true,userId:true,platform:true,platformUsername:true}},
         clip: true,
         publishAttempts: true
       }

@@ -42,11 +42,12 @@ function decodeInstagramState(value = "") {
   }
 }
 
-function getInstagramAuthUrl({ returnTo = "/publish.html?from=instagram" } = {}) {
+function getInstagramAuthUrl({ returnTo = "/publish.html?from=instagram", nonce } = {}) {
   assertInstagramEnvReady();
 
   const state = encodeInstagramState({
     returnTo,
+    nonce,
     source: "publish-center",
     platform: "instagram",
     createdAt: Date.now(),

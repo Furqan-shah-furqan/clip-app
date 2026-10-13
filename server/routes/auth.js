@@ -1,3 +1,5 @@
+const crypto = require("node:crypto");
+const {enabled, asyncHandler, requireCustomer} = require("../middleware/customerAuth");
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { createOAuthClient } = require("../services/auth/youtubeAuthService");
@@ -17,6 +19,7 @@ const {
 } = require("../services/auth/instagramAuthService");
 
 const router = express.Router();
+router.use(requireCustomer);
 
 const DEMO_USER_ID = "cmo9s5bws0000w01wv1qwpl2b";
 
@@ -27,6 +30,19 @@ async function ensureDemoUser() {
     update: {},
     create: { id: DEMO_USER_ID, name: "ClipFlow Demo Owner" },
   });
+}
+
+async function issueNonce(req) {
+  if (!enabled()) return undefined;
+  const nonce = crypto.randomBytes(32).toString("hex");
+  await prisma.customerSession.update({where:{tokenHash:req.customerSession.tokenHash},data:{oauthNonce:nonce,oauthExpiresAt:new Date(Date.now()+600000)}});
+  return nonce;
+}
+async function consumeNonce(req, nonce) {
+  if (!enabled()) return;
+  if (typeof nonce !== "string" || !nonce) throw new Error("Connection session expired. Try connecting again.");
+  const result = await prisma.customerSession.updateMany({where:{tokenHash:req.customerSession.tokenHash,userId:req.user.id,oauthNonce:nonce,oauthExpiresAt:{gt:new Date()}},data:{oauthNonce:null,oauthExpiresAt:null}});
+  if (result.count !== 1) throw new Error("Connection session expired. Try connecting again.");
 }
 
 function encodeOAuthState(payload = {}) {
@@ -87,7 +103,7 @@ function sendConnectedHtml({
   `;
 }
 
-function startYouTubeOAuth(req, res) {
+async function startYouTubeOAuth(req, res) {
   try {
     const oauth2Client = createOAuthClient();
 
@@ -95,6 +111,7 @@ function startYouTubeOAuth(req, res) {
 
     const state = encodeOAuthState({
       returnTo,
+      nonce: await issueNonce(req),
       source: "publish-center",
       platform: "youtube",
       createdAt: Date.now(),
@@ -140,12 +157,13 @@ router.get("/youtube/callback", async (req, res) => {
     const decodedState = decodeOAuthState(state);
     const returnTo = buildSafeReturnTo(decodedState.returnTo);
 
+    await consumeNonce(req, decodedState.nonce);
     const { tokens } = await exchangeCodeForTokens(code);
     const channel = await fetchYouTubeChannel(tokens);
 
-    await ensureDemoUser();
+    if (!enabled()) await ensureDemoUser();
     const socialAccount = await saveConnectedYouTubeAccount({
-      userId: DEMO_USER_ID,
+      userId: enabled() ? req.user.id : DEMO_USER_ID,
       tokens,
       channel,
     });
@@ -168,12 +186,13 @@ router.get("/youtube/callback", async (req, res) => {
   }
 });
 
-function startInstagramOAuth(req, res) {
+async function startInstagramOAuth(req, res) {
   try {
     const returnTo = buildSafeReturnTo(req.query.returnTo);
 
     const authUrl = getInstagramAuthUrl({
       returnTo,
+      nonce: await issueNonce(req),
     });
 
     return res.redirect(authUrl);
@@ -208,6 +227,7 @@ router.get("/instagram/callback", async (req, res) => {
       decodedState.returnTo || "/publish.html?from=instagram",
     );
 
+    await consumeNonce(req, decodedState.nonce);
     const token = await exchangeInstagramCodeForLongLivedToken(code);
 
     const profile = await fetchInstagramBusinessProfile({
@@ -215,9 +235,9 @@ router.get("/instagram/callback", async (req, res) => {
       accessToken: token.accessToken,
     });
 
-    await ensureDemoUser();
+    if (!enabled()) await ensureDemoUser();
     const socialAccount = await saveConnectedInstagramAccount({
-      userId: DEMO_USER_ID,
+      userId: enabled() ? req.user.id : DEMO_USER_ID,
       token,
       profile,
     });
@@ -240,14 +260,5 @@ router.get("/instagram/callback", async (req, res) => {
   }
 });
 
-router.get("/debug/accounts", async (_req, res) => {
-  const accounts = await prisma.socialAccount.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  res.json({ accounts });
-});
 
 module.exports = router;

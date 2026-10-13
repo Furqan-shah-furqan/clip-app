@@ -304,6 +304,7 @@ async function runScheduledPostById(
       accountId: scheduledPost.socialAccountId,
     });
 
+    if (process.env.CUSTOMER_AUTH_ENABLED === "true" && (scheduledPost.socialAccount?.userId !== scheduledPost.userId || scheduledPost.clip?.userId !== scheduledPost.userId)) throw new Error("Publishing account and clip ownership do not match");
     const result = await publishScheduledPost(scheduledPost);
     const normalizedPublishResult = normalizePublishResult(result);
 

@@ -16,7 +16,7 @@ test('OAuth callbacks use the live Render service and preserve explicit custom-d
 test('OAuth status pages escape provider text and return links',()=>{
   const fs=require('node:fs');
   const source=fs.readFileSync(path.join(__dirname,'../server/routes/auth.js'),'utf8');
-  const start=source.indexOf('function buildSafeReturnTo('),end=source.indexOf('function startYouTubeOAuth(',start);
+  const start=source.indexOf('function buildSafeReturnTo('),end=source.indexOf('async function startYouTubeOAuth(',start);
   const render=new Function(source.slice(start,end)+'; return sendConnectedHtml;')();
   const html=render({title:'<script>bad</script>',message:'<img src=x onerror=alert(1)>',returnTo:'/publish.html?x=" onload="alert(1)'});
   assert.equal(html.includes('<script>bad'),false);
@@ -51,7 +51,9 @@ test('both OAuth callbacks ensure the demo owner before saving accounts, without
     saveConnectedInstagramAccount: save,
   };
   vm.runInNewContext(source, {Buffer, console, module: {exports: {}}, require: name => {
-    if (name === 'express') return {Router: () => ({get: (route, handler) => {callbacks[route] = handler;}})};
+    if (name === 'node:crypto') return require('node:crypto');
+    if (name === '../middleware/customerAuth') return {enabled:()=>false,requireCustomer:(req,res,next)=>next(),asyncHandler:fn=>fn};
+    if (name === 'express') return {Router: () => ({use:()=>{},get: (route, handler) => {callbacks[route] = handler;}})};
     if (name === '../lib/prisma') return prisma;
     return services;
   }});
@@ -65,4 +67,21 @@ test('both OAuth callbacks ensure the demo owner before saving accounts, without
   assert.equal(users.size, 1);
   assert.equal(owner.name, 'Existing owner');
   assert.equal(saves, 3);
+});
+test('customer OAuth is session-bound, expires, consumes once and never saves to demo owner',async()=>{
+ const fs=require('node:fs'),vm=require('node:vm');
+ const routes={};let session={tokenHash:'session',oauthNonce:null,oauthExpiresAt:null},saved=0;
+ const prisma={customerSession:{update:async({data})=>Object.assign(session,data),updateMany:async({where,data})=>{if(where.tokenHash!==session.tokenHash||where.oauthNonce!==session.oauthNonce||session.oauthExpiresAt<=new Date())return {count:0};Object.assign(session,data);return {count:1};}}};
+ let state;
+ const services={createOAuthClient:()=>({generateAuthUrl:args=>{state=args.state;return 'https://accounts.google.com/auth';}}),exchangeCodeForTokens:async()=>({tokens:{}}),fetchYouTubeChannel:async()=>({title:'channel'}),saveConnectedYouTubeAccount:async({userId})=>{assert.equal(userId,'customer-a');saved++;return {id:'account'};}};
+ const source=fs.readFileSync(require('node:path').join(__dirname,'../server/routes/auth.js'),'utf8');
+ vm.runInNewContext(source,{Buffer,console,module:{exports:{}},require:name=>name==='node:crypto'?require(name):name==='express'?{Router:()=>({use:()=>{},get:(route,fn)=>{routes[route]=fn;}})}:name==='../lib/prisma'?prisma:name==='../middleware/customerAuth'?{enabled:()=>true,requireCustomer:()=>{},asyncHandler:fn=>fn}:services});
+ const req={query:{},user:{id:'customer-a'},customerSession:session};
+ await routes['/youtube'](req,{redirect:()=>{},status:()=>{throw new Error('start failed');}});
+ assert.ok(JSON.parse(Buffer.from(state,'base64url')).nonce);
+ const res={send:()=>{},status:()=>({send:()=>{}})};
+ req.query={code:'code',state};await routes['/youtube/callback'](req,res);assert.equal(saved,1);
+ await routes['/youtube/callback'](req,res);assert.equal(saved,1);
+ await routes['/youtube']({...req,query:{}},{redirect:()=>{}});session.oauthExpiresAt=new Date(0);
+ await routes['/youtube/callback']({...req,query:{code:'code',state}},res);assert.equal(saved,1);
 });

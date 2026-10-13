@@ -1,3 +1,6 @@
+const customerAuth = require("./middleware/customerAuth");
+const customerResources = require("./middleware/customerResources");
+const customerRoutes = require("./routes/customer").router;
 const path = require("path");
 const fs = require("fs");
 const { execSync } = require("child_process");
@@ -653,6 +656,24 @@ function buildDrawTextFilterFromSegments(segments = [], style = {}, workDir) {
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.set("trust proxy", 1);
+app.use(customerAuth.loadSession);
+app.use(customerAuth.sameOrigin);
+app.use("/api/customer", customerRoutes);
+app.get(["/index.html", "/captions.html", "/publish.html", "/"], (req,res,next)=>{
+  if (!customerAuth.enabled()) return next();
+  if (!req.user) return res.redirect("/account.html");
+  const page = req.path === "/" ? "index.html" : path.basename(req.path);
+  const owner = JSON.stringify(req.user.id).replace(/</g,"\\u003c");
+  const bootstrap = `<script>if(localStorage.getItem("clipflow-customer-id")!==${owner}){for(const k of Object.keys(localStorage)){if((k.startsWith("clipflow")&&k!=="clipflow-theme")||["currentClips","activeGenerationJobId"].includes(k))localStorage.removeItem(k);}sessionStorage.clear();localStorage.setItem("clipflow-customer-id",${owner});}</script>`;
+  return res.set("Cache-Control","no-store").send(fs.readFileSync(path.join(rootDir,"public",page),"utf8").replace("<head>","<head>"+bootstrap));
+});
+app.use("/api", (req,res,next)=>{
+  if (req.path.startsWith("/customer/") || req.path === "/health" || req.path === "/version") return next();
+  customerAuth.requireCustomer(req,res,next);
+});
+app.use("/api", customerResources.guard);
+
 
 // HTTP 206 Partial Content (Byte-Range Streaming) for clips, renders, exports, and uploads
 app.get(
@@ -663,7 +684,8 @@ app.get(
     "/exports/:filename",
     "/uploads/:filename",
   ],
-  (req, res, next) => {
+  customerResources.guardFile,
+  customerAuth.asyncHandler(async (req, res, next) => {
     const filename = req.params.filename;
     if (
       !filename ||
@@ -678,19 +700,21 @@ app.get(
       if (!filePath) {
         return res.status(404).send("Clip not found");
       }
+      if (customerAuth.enabled() && !await customerResources.ownMedia(req.user.id,filePath)) return res.status(404).end();
       return streamVideoFile(filePath, req, res);
     } catch (error) {
       console.error("CLIP STREAM ERROR:", error);
       return res.status(500).send("Error streaming clip");
     }
-  }
+  })
 );
 
 // Static file serving
+app.use(["/renders", "/public/renders"], customerResources.guardFile);
 app.use(express.static(path.join(rootDir, "public")));
-app.use("/captions", express.static(captionsDir));
-app.use("/exports", express.static(path.join(rootDir, "exports")));
-app.use("/uploads", express.static(uploadsDir));
+app.use("/captions", customerResources.guardFile, express.static(captionsDir));
+app.use("/exports", customerResources.guardFile, express.static(path.join(rootDir, "exports")));
+app.use("/uploads", customerResources.guardFile, express.static(uploadsDir));
 
 // API routes
 app.use("/api/clips", clipsRouter);
@@ -939,7 +963,8 @@ app.post("/api/publish/prepare-clip", async (req, res) => {
       });
     }
 
-    const { userId, clip } = req.body || {};
+    const { clip } = req.body || {};
+    const userId = customerAuth.enabled() ? req.user.id : req.body?.userId;
 
     if (!userId) {
       return res.status(400).json({
@@ -968,7 +993,7 @@ app.post("/api/publish/prepare-clip", async (req, res) => {
         },
       });
 
-      if (existingById) {
+      if (existingById && (!customerAuth.enabled() || existingById.userId === userId)) {
         return res.json({
           success: true,
           clip: existingById,
@@ -1197,7 +1222,7 @@ app.post("/api/captions/burn", async (req, res) => {
   }
 });
 
-app.get("/api/files/download/:fileName", (req, res) => {
+app.get("/api/files/download/:fileName", customerResources.guardFile, customerAuth.asyncHandler(async (req, res) => {
   try {
     const rawParam = req.params.fileName ? decodeURIComponent(req.params.fileName) : "";
     const safeName = path.basename(rawParam);
@@ -1207,6 +1232,7 @@ app.get("/api/files/download/:fileName", (req, res) => {
       return res.status(404).send("File not found");
     }
 
+    if (customerAuth.enabled() && !await customerResources.ownMedia(req.user.id,foundPath)) return res.status(404).end();
     if (
       foundPath.toLowerCase().endsWith(".mp4") ||
       foundPath.toLowerCase().endsWith(".webm") ||
@@ -1224,7 +1250,7 @@ app.get("/api/files/download/:fileName", (req, res) => {
     console.error("FILE DOWNLOAD ERROR:", error);
     return res.status(500).send("Could not open file");
   }
-});
+}));
 
 // Health check
 app.get(["/health", "/api/health"], (req, res) => {
@@ -1249,6 +1275,13 @@ app.get("/api/version", (req, res) => {
 });
 
 // Catch-all route for frontend app
+app.use((error,req,res,next)=>{
+  if (!customerAuth.enabled()) return next(error);
+  console.error("Customer request failed:", error.code || error.message);
+  if (res.headersSent) return next(error);
+  res.status(500).json({error:"Request failed. Please try again."});
+});
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(rootDir, "public", "index.html"));
 });
@@ -1266,8 +1299,15 @@ server.on("upgrade", (request, socket, head) => {
   const url = request.url || "";
 
   if (url.startsWith("/api/captions/stream")) {
-    wss.handleUpgrade(request, socket, head, (ws) => {
+    const accept = () => wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit("connection", ws, request);
+    });
+    if (!customerAuth.enabled()) return accept();
+    const expectedOrigin = new URL(process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || "http://localhost:3000").origin;
+    if (request.headers.origin !== expectedOrigin) return socket.destroy();
+    customerAuth.loadSession(request, {}, error => {
+      if (error || !request.user) return socket.destroy();
+      accept();
     });
     return;
   }

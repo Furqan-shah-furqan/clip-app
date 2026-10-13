@@ -1,3 +1,4 @@
+const {enabled} = require("../middleware/customerAuth");
 const { queueFailure } = require("../queue/redisBudget");
 const express = require("express");
 const axios = require("axios");
@@ -157,6 +158,7 @@ router.post("/upload", (req, res) => {
       }
 
       const project = {
+        userId: enabled() ? req.user.id : undefined,
         id: Date.now().toString(),
         source: "upload",
         sourceType: "upload",
@@ -382,6 +384,7 @@ router.post("/smart-generate", async (req, res) => {
     // 1. Create persistent GenerationJob record in PostgreSQL/Prisma
     const job = await prisma.generationJob.create({
       data: {
+        userId: enabled() ? req.user.id : null,
         sourceType: normalizedSourceType,
         sourceUrl: resolvedRemoteUrl,
         inputPath: normalizedSourceType !== "youtube" ? inputPath : null,
@@ -677,6 +680,7 @@ router.post("/generate", async (req, res) => {
 
 router.get("/projects", (req, res) => {
   const projects = readProjects()
+    .filter(p => !enabled() || p.userId === req.user.id)
     .map((project) => ({
       id: project.id,
       title: project.title || project.originalName || project.name || "Untitled Project",
@@ -694,7 +698,7 @@ router.get("/projects", (req, res) => {
 });
 
 router.get("/projects/:id", (req, res) => {
-  const project = readProjects().find((item) => String(item.id) === String(req.params.id));
+  const project = readProjects().find((item) => String(item.id) === String(req.params.id) && (!enabled() || item.userId === req.user.id));
   if (!project) return res.status(404).json({ error: "Project not found" });
   res.json({ success: true, project });
 });
@@ -722,7 +726,10 @@ router.post("/projects/save", (req, res) => {
       uploadedProject?.title ||
       `Clip Project ${new Date().toLocaleDateString()}`;
 
+    const existing = readProjects().find(p => String(p.id) === String(id));
+    if (enabled() && existing && existing.userId !== req.user.id) return res.status(404).json({error:"Project not found"});
     const saved = upsertProject({
+      userId: enabled() ? req.user.id : undefined,
       id,
       title: baseTitle,
       source: uploadedProject?.source || uploadedProject?.sourceType || "unknown",
@@ -746,7 +753,7 @@ router.post("/projects/save", (req, res) => {
 
 router.delete("/projects/:id", (req, res) => {
   const before = readProjects();
-  const after = before.filter((item) => String(item.id) !== String(req.params.id));
+  const after = before.filter((item) => String(item.id) !== String(req.params.id) || (enabled() && item.userId !== req.user.id));
   writeProjects(after);
   res.json({ success: true, deleted: before.length - after.length });
 });
@@ -818,7 +825,7 @@ router.get("/:idOrIndex", (req, res) => {
     const idx = isNum ? parseInt(idOrIndex, 10) : null;
 
     // Check saved projects
-    const projects = readProjects();
+    const projects = readProjects().filter(p => !enabled() || p.userId === req.user.id);
     for (const project of projects) {
       if (Array.isArray(project.clips)) {
         if (idx !== null && project.clips[idx]) {
@@ -843,6 +850,8 @@ router.get("/:idOrIndex", (req, res) => {
         }
       }
     }
+
+    if (enabled()) return res.status(404).json({error:"Clip not found in your projects"});
 
     // Check exports directory for indexed mp4 files
     if (fs.existsSync(exportsDir)) {

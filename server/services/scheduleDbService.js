@@ -16,7 +16,7 @@ class ScheduleMutationError extends Error {
 
 function buildScheduleInclude() {
   return {
-    socialAccount: true,
+    socialAccount: {select:{id:true,userId:true,platform:true,platformUsername:true}},
     clip: true,
     publishAttempts: true
   };
@@ -65,8 +65,9 @@ async function createScheduledPost(payload) {
   return getScheduledPostById(scheduledPost.id);
 }
 
-async function listScheduledPosts() {
+async function listScheduledPosts(userId) {
   return prisma.scheduledPost.findMany({
+    where: userId ? {userId} : {},
     include: buildScheduleInclude(),
     orderBy: {
       scheduledFor: "asc"

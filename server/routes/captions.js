@@ -1,3 +1,4 @@
+const {enabled: customerMode} = require("../middleware/customerAuth");
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -329,7 +330,7 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
       const idx = isNum ? parseInt(idOrIndex, 10) : null;
       try {
         const { readProjects } = require("./clips");
-        const projects = typeof readProjects === "function" ? readProjects() : [];
+        const projects = typeof readProjects === "function" ? readProjects().filter(p => !customerMode() || p.userId === req.user.id) : [];
         for (const p of projects) {
           if (Array.isArray(p.clips)) {
             if (idx !== null && p.clips[idx]) {
@@ -355,7 +356,7 @@ router.post(["/transcribe", "/api/transcribe"], async (req, res) => {
         console.warn("[Captions] Error reading projects for transcribe:", projErr.message);
       }
 
-      if (!resolvedVideoPath && fs.existsSync(exportsDir)) {
+      if (!customerMode() && !resolvedVideoPath && fs.existsSync(exportsDir)) {
         const files = fs
           .readdirSync(exportsDir)
           .filter((f) => f.endsWith(".mp4"))
@@ -607,7 +608,15 @@ function registerCaptionStream(wss) {
         if (payload.type !== "start") return;
 
         const requestedPath = payload.inputPath || payload.filePath || payload.localPath || payload.url || "";
+        if (customerMode() && (!request.user || !await require("../middleware/customerResources").ownMedia(request.user.id, requestedPath))) {
+          ws.send(JSON.stringify({error:"Video not found in your account"}));
+          return;
+        }
         const resolvedVideoPath = resolveInputVideo(requestedPath);
+        if (customerMode() && resolvedVideoPath && !await require("../middleware/customerResources").ownMedia(request.user.id, resolvedVideoPath)) {
+          ws.send(JSON.stringify({error:"Video not found in your account"}));
+          return;
+        }
 
         const remoteUrl = [requestedPath, payload.url].map(allowedCaptionSource).find(Boolean);
         if (!resolvedVideoPath && !remoteUrl) {
