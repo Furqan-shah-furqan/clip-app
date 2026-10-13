@@ -54,9 +54,15 @@ test('customer registration, session privacy, logout, CSRF and cross-customer re
   const encoded=await passwordHash('a secure password');assert.ok(await verify('a secure password',encoded));assert.equal(await verify('different',encoded),false);
   assert.equal(mediaKeys({videoUrl:'https://example.com/a/private.mp4'}).includes('private.mp4'),false);
   process.env.RESEND_API_KEY='test-only';process.env.AUTH_EMAIL_FROM='test@example.com';
-  const nativeFetch=global.fetch;let sent;
-  global.fetch=async(url,options)=>url==='https://api.resend.com/emails'?(sent=JSON.parse(options.body),{ok:true}):nativeFetch(url,options);
+  const nativeFetch=global.fetch;let sent, deliveryOk=true;
+  global.fetch=async(url,options)=>url==='https://api.resend.com/emails'?(sent=JSON.parse(options.body),{ok:deliveryOk,status:deliveryOk?200:403}):nativeFetch(url,options);
   try {
+    assert.equal((await request('/api/customer/forgot',{email:'a@example.com'})).status,200);
+    deliveryOk=false;
+    assert.equal((await request('/api/customer/forgot',{email:'a@example.com'})).status,200);
+    const failedToken=sent.text.match(/#reset=([^\s]+)/)[1];
+    assert.equal(recovery.has(auth.hash(failedToken)),false);
+    deliveryOk=true;
     assert.equal((await request('/api/customer/forgot',{email:'a@example.com'})).status,200);
     const token=sent.text.match(/#reset=([^\s]+)/)[1];
     const reset=await request('/api/customer/reset',{token,password:'new secure password'});assert.equal(reset.status,200);

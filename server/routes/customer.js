@@ -63,8 +63,13 @@ router.post('/forgot', asyncHandler(async (req,res) => {
     const token = randomBytes(32).toString('base64url');
     await prisma.recoveryToken.create({data:{tokenHash:hash(token),userId:user.id,expiresAt:new Date(Date.now()+1800000)}});
     const origin = new URL(process.env.RENDER_EXTERNAL_URL || process.env.APP_URL).origin;
+    try {
     const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.AUTH_EMAIL_FROM,to:[email],subject:'Reset your ClipFlow password',text:`Reset your password within 30 minutes: ${origin}/account.html#reset=${token}\nIgnore this email if you did not request it.`}),signal:AbortSignal.timeout(15000)});
-    if (!response.ok) console.error('Recovery email delivery failed:',response.status);
+    if (!response.ok) throw Object.assign(new Error('Email provider rejected recovery request'), {providerStatus:response.status});
+    } catch (error) {
+      await prisma.recoveryToken.deleteMany({where:{tokenHash:hash(token)}});
+      console.error('Recovery email delivery failed:', error.providerStatus || 'connection error');
+    }
   }
   res.json({message:'If this email has an account, a recovery link will be sent.'});
 }));
