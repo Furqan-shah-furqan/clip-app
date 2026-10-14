@@ -1,0 +1,21 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const vm=require('node:vm');
+const fs=require('node:fs');
+test('account tabs and theme remain usable when customer API rejects startup',async()=>{
+ const elements=new Map();
+ const element=id=>{if(!elements.has(id))elements.set(id,{value:'',dataset:{},setAttribute(){},classList:{contains:()=>true,toggle(){}}});return elements.get(id);};
+ const login=element('login'),register=element('register');login.dataset.mode='login';register.dataset.mode='register';
+ const store=new Map();
+ const context={document:{getElementById:element,querySelector:element,querySelectorAll:()=>[login,register],documentElement:element('root')},localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},sessionStorage:{clear(){}},location:{hash:'',replace(){throw Error('Unexpected redirect');}},fetch:async()=>({ok:false,json:async()=>({error:'Customer accounts are not enabled yet'})})};
+ await vm.runInNewContext(fs.readFileSync('public/customer.js','utf8'),context);
+ register.onclick();
+ assert.equal(element('formTitle').textContent,'Create your workspace');
+ assert.equal(element('submitButton').textContent,'Create account');
+ assert.match(element('formStatus').textContent,/not enabled/);
+ assert.equal(element('nameLabel').hidden,false);
+ assert.equal(typeof element('themeButton').onclick,'function');
+ await element('accountForm').onsubmit({preventDefault(){}});
+ assert.match(element('formStatus').textContent,/not enabled/);
+ assert.equal(element('submitButton').disabled,false);
+});
