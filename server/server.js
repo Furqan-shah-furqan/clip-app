@@ -657,12 +657,19 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.set("trust proxy", 1);
+// Public information stays available without an account or session/database lookup.
+app.get(["/welcome.html","/privacy.html","/terms.html","/support.html","/data-deletion.html"], (req,res)=>{
+  res.sendFile(path.join(rootDir,"public",path.basename(req.path)));
+});
 app.use(customerAuth.loadSession);
 app.use(customerAuth.sameOrigin);
 app.use("/api/customer", customerRoutes);
 app.get(["/index.html", "/captions.html", "/publish.html", "/"], (req,res,next)=>{
   if (!customerAuth.enabled()) return next();
-  if (!req.user) return res.redirect("/account.html");
+  if (!req.user) {
+    if (req.path === "/") return res.set("Cache-Control","no-store").sendFile(path.join(rootDir,"public","welcome.html"));
+    return res.redirect("/account.html");
+  }
   const page = req.path === "/" ? "index.html" : path.basename(req.path);
   const owner = JSON.stringify(req.user.id).replace(/</g,"\\u003c");
   const bootstrap = `<script>if(localStorage.getItem("clipflow-customer-id")!==${owner}){for(const k of Object.keys(localStorage)){if((k.startsWith("clipflow")&&k!=="clipflow-theme")||["currentClips","activeGenerationJobId"].includes(k))localStorage.removeItem(k);}sessionStorage.clear();localStorage.setItem("clipflow-customer-id",${owner});}</script>`;
