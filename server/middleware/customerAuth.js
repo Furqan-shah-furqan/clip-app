@@ -13,13 +13,14 @@ const loadSession = asyncHandler(async (req, res, next) => {
     const session = await prisma.customerSession.findUnique({where: {tokenHash: hash(token)}, include: {user: true}});
     if (session && session.expiresAt > new Date()) {
       req.customerSession = session;
-      req.user = {id: session.user.id, email: session.user.email, name: session.user.name};
+      req.user = {id: session.user.id, email: session.user.email, name: session.user.name, deleting: Boolean(session.user.deletionRequestedAt)};
     }
   }
   next();
 });
 function requireCustomer(req, res, next) {
   if (!enabled()) return next();
+  if (req.user?.deleting) return res.status(423).json({error:'Account deletion is in progress. Retry deletion from account settings.'});
   if (!req.user) return res.status(401).json({error: 'Sign in to continue', code: 'LOGIN_REQUIRED'});
   next();
 }
@@ -35,4 +36,17 @@ async function createSession(req, res, userId) {
   await prisma.customerSession.create({data: {tokenHash: hash(token), userId, expiresAt: new Date(Date.now() + 7 * 86400000)}});
   res.cookie('clipflow_session', token, {httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 7 * 86400000, path: '/'});
 }
-module.exports = {enabled, hash, asyncHandler, loadSession, requireCustomer, sameOrigin, createSession, tokenCookie};
+async function lockCustomer(tx,userId) {
+  const rows=await tx.$queryRaw`SELECT id, "deletionRequestedAt" FROM "User" WHERE id = ${userId} FOR UPDATE`;
+  if(!rows[0]) throw Error('Customer account not found');
+  return rows[0];
+}
+async function createOwnedGenerationJob(options) {
+  if(!enabled()) return prisma.generationJob.create(options);
+  return prisma.$transaction(async tx=>{
+    const user=await lockCustomer(tx,options.data.userId);
+    if(user.deletionRequestedAt) throw Error('Account deletion is in progress');
+    return tx.generationJob.create(options);
+  });
+}
+module.exports = {lockCustomer,createOwnedGenerationJob,enabled, hash, asyncHandler, loadSession, requireCustomer, sameOrigin, createSession, tokenCookie};

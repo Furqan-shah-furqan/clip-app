@@ -136,7 +136,7 @@ async function fetchInstagramBusinessProfile({ accessToken }) {
   const pagesData = await pagesResponse.json();
 
   console.log("INSTAGRAM DEBUG - /me/accounts:");
-  console.log(JSON.stringify(pagesData, null, 2));
+  console.log("Returned Facebook Pages:", Array.isArray(pagesData.data) ? pagesData.data.length : 0);
 
   if (!pagesResponse.ok) {
     throw new Error(

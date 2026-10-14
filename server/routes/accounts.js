@@ -27,6 +27,7 @@ router.delete("/:id", asyncHandler(async(req,res)=>{
   if (!enabled()) return res.status(403).json({error:"Customer sign-in required"});
   const account = await prisma.socialAccount.findFirst({where:{id:req.params.id,userId:req.user.id}});
   if (!account) return res.status(404).json({error:"Account not found"});
+  if (await prisma.scheduledPost.findFirst({where:{socialAccountId:account.id,status:"PROCESSING"}})) return res.status(409).json({error:"Wait for publishing to finish before disconnecting."});
   await prisma.scheduledPost.updateMany({where:{socialAccountId:account.id,status:{in:["QUEUED","DRAFT","RETRYING"]}},data:{status:"CANCELLED"}});
   await prisma.socialAccount.delete({where:{id:account.id}});
   res.json({success:true});

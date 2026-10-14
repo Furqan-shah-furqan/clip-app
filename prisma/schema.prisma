@@ -45,6 +45,7 @@ model User {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
+  deletionRequestedAt DateTime?
   passwordHash   String?
   customerSessions CustomerSession[]
   recoveryTokens RecoveryToken[]

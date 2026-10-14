@@ -76,6 +76,7 @@ function resolveLocalClipPath(clip = {}) {
 }
 
 function getInstagramAccessToken(account = {}) {
+  if (account.tokenExpiresAt && new Date(account.tokenExpiresAt).getTime() <= Date.now()) throw new Error("Instagram connection expired. Reconnect Instagram in account settings.");
   const encrypted = account.accessTokenEncrypted || "";
 
   if (!encrypted) {

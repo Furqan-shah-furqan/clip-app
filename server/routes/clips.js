@@ -1,4 +1,4 @@
-const {enabled} = require("../middleware/customerAuth");
+const {enabled,createOwnedGenerationJob} = require("../middleware/customerAuth");
 const { queueFailure } = require("../queue/redisBudget");
 const express = require("express");
 const axios = require("axios");
@@ -382,7 +382,7 @@ router.post("/smart-generate", async (req, res) => {
     const resolvedRemoteUrl = normalizedSourceType === "youtube" ? sourceUrl : (storageUrl || null);
 
     // 1. Create persistent GenerationJob record in PostgreSQL/Prisma
-    const job = await prisma.generationJob.create({
+    const job = await createOwnedGenerationJob({
       data: {
         userId: enabled() ? req.user.id : null,
         sourceType: normalizedSourceType,

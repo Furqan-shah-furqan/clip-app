@@ -37,6 +37,7 @@ async function verify(password, encoded) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 router.get('/me', (req,res) => res.json({user: req.user || null, recoveryAvailable: Boolean(process.env.RESEND_API_KEY && process.env.AUTH_EMAIL_FROM)}));
+router.use((req,res,next)=>{if(req.user?.deleting && !['/me','/logout','/delete-account'].includes(req.path))return res.status(423).json({error:'Account deletion is in progress.'});next();});
 router.post('/register', asyncHandler(async (req,res) => {
   const {email,password} = credentials(req.body);
   const user = await prisma.user.create({data: {email, passwordHash: await passwordHash(password), name: String(req.body.name || '').trim().slice(0,80)}});
@@ -88,6 +89,15 @@ router.post('/reset', asyncHandler(async (req,res) => {
     await tx.recoveryToken.deleteMany({where:{userId:token.userId}});
   });
   res.json({message:'Password updated. Sign in again.'});
+}));
+router.post('/delete-account', asyncHandler(async(req,res)=>{
+  if (!req.user) return res.status(401).json({error:'Sign in to delete your account'});
+  if (req.body.confirmation !== 'DELETE') return res.status(400).json({error:'Confirm account deletion'});
+  if (typeof req.body.password !== 'string' || req.body.password.length > 128) return res.status(400).json({error:'Enter your password'});
+  const user=await prisma.user.findUnique({where:{id:req.user.id}});
+  if (!user?.passwordHash || !await verify(String(req.body.password||''),user.passwordHash)) return res.status(401).json({error:'Password is incorrect'});
+  await require('../services/customerDeletionService').deleteCustomer(req.user.id);
+  res.clearCookie('clipflow_session',{path:'/'}).json({success:true});
 }));
 router.use((error,req,res,next)=>{console.error('Customer auth error:',error.code || error.message);res.status(error.status || (error.code === 'P2002' ? 409 : 500)).json({error:error.status ? error.message : error.code === 'P2002' ? 'Unable to create account. Try signing in or recovering your password.' : 'Account request failed. Please try again.'});});
 module.exports = {router,passwordHash,verify,credentials};

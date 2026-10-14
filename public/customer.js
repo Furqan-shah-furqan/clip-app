@@ -11,6 +11,7 @@
   if(previous!==id){for(const key of Object.keys(localStorage))if((key.startsWith('clipflow')&&key!=='clipflow-theme')||['currentClips','activeGenerationJobId'].includes(key))localStorage.removeItem(key);sessionStorage.clear();localStorage.setItem('clipflow-customer-id',id);}
   if(!form){
     if(!current.user){location.replace('/account.html');return;}
+    const settings=document.createElement('a');settings.href='/settings.html';settings.textContent='Account settings';settings.className='customer-account-control';settings.style.right='100px';document.body.append(settings);
     const button=document.createElement('button');button.className='customer-account-control';button.textContent='Sign out';button.type='button';button.addEventListener('click',async()=>{await api('logout',{});location.replace('/account.html');});document.body.append(button);return;
   }
   if(current.user && !location.hash.startsWith('#reset=')){location.replace('/');return;}

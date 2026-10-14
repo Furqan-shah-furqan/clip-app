@@ -19,6 +19,6 @@ The customer interface uses the current light/dark palette, Inter font, rounded 
 - Email delivery and password recovery require a configured sender; they must be tested end to end.
 - Existing demo-owned accounts and projects are retained; customers must reconnect under their own sign-in. Do not automatically claim legacy accounts by email or query parameters.
 - Request rate limiting is per web process. Multi-instance deployment requires a shared limit.
-- Customer account deletion and durable private storage retention need separate implementation before public release.
+- Account settings supports reconnect, disconnect and password-confirmed account deletion. Deletion blocks active generation/publishing, locks new work, removes owned local/cloud media and database records, and can be retried if cleanup fails. Published provider posts remain. Live cleanup across worker containers and provider expiry/revocation still require acceptance testing.
 
 No customer mode has been enabled in production by this change.

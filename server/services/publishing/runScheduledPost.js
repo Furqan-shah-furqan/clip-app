@@ -305,6 +305,10 @@ async function runScheduledPostById(
     });
 
     if (process.env.CUSTOMER_AUTH_ENABLED === "true" && (scheduledPost.socialAccount?.userId !== scheduledPost.userId || scheduledPost.clip?.userId !== scheduledPost.userId)) throw new Error("Publishing account and clip ownership do not match");
+    if (process.env.CUSTOMER_AUTH_ENABLED === "true") {
+      const owner=await prisma.user.findUnique({where:{id:scheduledPost.userId}});
+      if (!owner || owner.deletionRequestedAt) throw new Error("Customer account is being deleted");
+    }
     const result = await publishScheduledPost(scheduledPost);
     const normalizedPublishResult = normalizePublishResult(result);
 

@@ -7,14 +7,15 @@ const users=new Map(),sessions=new Map(),resources=new Map(),recovery=new Map();
 const accounts=[{id:'account-a',userId:'user-0',platform:'YOUTUBE'},{id:'account-b',userId:'user-1',platform:'INSTAGRAM'}];
 const posts=[{id:'post-a',userId:'user-0'},{id:'post-b',userId:'user-1'}];
 const prisma={
- socialAccount:{findMany:async({where})=>accounts.filter(x=>x.userId===where.userId),findFirst:async({where})=>accounts.find(x=>x.id===where.id&&x.userId===where.userId)},
- scheduledPost:{findFirst:async({where})=>posts.find(x=>x.id===where.id&&x.userId===where.userId)},
+ socialAccount:{findMany:async({where})=>accounts.filter(x=>x.userId===where.userId),findFirst:async({where})=>accounts.find(x=>x.id===where.id&&x.userId===where.userId),delete:async({where})=>{const index=accounts.findIndex(x=>x.id===where.id);accounts.splice(index,1);}},
+ scheduledPost:{updateMany:async()=>({count:0}),findFirst:async({where})=>posts.find(x=>x.id===where.id&&x.userId===where.userId)},
  user:{create:async({data})=>{if([...users.values()].some(u=>u.email===data.email))throw Object.assign(new Error('duplicate'),{code:'P2002'});const user={id:'user-'+users.size,...data};users.set(user.id,user);return user;},findUnique:async({where})=>[...users.values()].find(u=>where.id ? u.id===where.id : u.email===where.email),update:async({where,data})=>Object.assign(users.get(where.id),data)},
  customerSession:{create:async({data})=>{sessions.set(data.tokenHash,data);return data;},findUnique:async({where})=>{const s=sessions.get(where.tokenHash);return s?{...s,user:users.get(s.userId)}:null;},deleteMany:async({where})=>{let count=0;for(const [k,v] of sessions)if((where.tokenHash&&k===where.tokenHash)||(where.userId&&v.userId===where.userId)){sessions.delete(k);count++;}return {count};}},
  customerResource:{findFirst:async({where})=>[...resources.values()].find(r=>r.userId===where.userId&&(r.key===where.key||where.key?.in?.includes(r.key))),createMany:async({data})=>data.forEach(r=>{if(!resources.has(r.key))resources.set(r.key,r);})},
  recoveryToken:{create:async({data})=>{recovery.set(data.tokenHash,data);return data;},findUnique:async({where})=>recovery.get(where.tokenHash),deleteMany:async({where})=>{let count=0;for(const [k,v] of recovery)if((where.tokenHash&&k===where.tokenHash&&(!where.expiresAt||v.expiresAt>where.expiresAt.gt))||(where.userId&&v.userId===where.userId)){recovery.delete(k);count++;}return {count};}},
+ $queryRaw:async(strings,userId)=>[users.get(userId)].filter(Boolean),
  $transaction:async fn=>fn(prisma),
- generationJob:{findMany:async()=>[],findFirst:async()=>null},
+ generationJob:{create:async options=>options,findMany:async()=>[],findFirst:async()=>null},
 };
 require.cache[prismaPath]={id:prismaPath,filename:prismaPath,loaded:true,exports:prisma};
 const schedulePath=require.resolve('../server/services/scheduleDbService');
@@ -43,6 +44,10 @@ test('customer registration, session privacy, logout, CSRF and cross-customer re
   assert.equal((await request('/api/schedules/post-a',null,cb)).status,404);
   assert.equal((await request('/api/schedules/post-b',null,ca)).status,404);
   assert.equal((await request('/api/schedules/post-a',null,ca)).status,200);
+  const disconnect=(id,cookie)=>fetch(base+'/api/accounts/'+id,{method:'DELETE',headers:{Origin:'http://localhost:3000',Cookie:cookie}});
+  assert.equal((await disconnect('account-a',cb)).status,404);
+  assert.equal((await disconnect('account-a',ca)).status,200);
+  assert.deepEqual((await(await request('/api/accounts',null,cb)).json()).accounts.map(x=>x.id),['account-b']);
   resources.set('private.mp4',{key:'private.mp4',userId:'user-0'});
   assert.equal((await request('/api/private',{videoPath:'/another-owner/private.mp4'},ca)).status,404);
   assert.equal((await request('/api/private',{videoPath:'private.mp4'},ca)).status,200);
@@ -78,4 +83,10 @@ test('expired sessions do not authorize customer requests',async()=>{
  process.env.CUSTOMER_AUTH_ENABLED='true';
  const token='expired-token';sessions.set(auth.hash(token),{tokenHash:auth.hash(token),userId:'user-0',expiresAt:new Date(0)});
  const req={headers:{cookie:'clipflow_session='+token}};await new Promise((resolve,reject)=>auth.loadSession(req,{},e=>e?reject(e):resolve()));assert.equal(req.user,undefined);delete process.env.CUSTOMER_AUTH_ENABLED;
+});
+
+test('deletion lock rejects new generation without changing job options',async()=>{
+ process.env.CUSTOMER_AUTH_ENABLED='true';
+ const user=users.get('user-0');const options={data:{userId:user.id,requestJson:{maxClips:6}}};
+ try{assert.equal(await auth.createOwnedGenerationJob(options),options);user.deletionRequestedAt=new Date();await assert.rejects(auth.createOwnedGenerationJob(options),/deletion is in progress/);}finally{delete user.deletionRequestedAt;delete process.env.CUSTOMER_AUTH_ENABLED;}
 });
