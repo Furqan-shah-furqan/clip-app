@@ -36,7 +36,17 @@ async function verify(password, encoded) {
   const expected = Buffer.from(digest, 'hex');
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
-router.get('/me', (req,res) => res.json({user: req.user || null, recoveryAvailable: Boolean(process.env.RESEND_API_KEY && process.env.AUTH_EMAIL_FROM)}));
+function recoveryEmailConfig() {
+  // Prefer Brevo when configured; never silently resend a reset link through another provider.
+  if (process.env.BREVO_API_KEY) {
+    const email = (process.env.BREVO_SENDER_EMAIL || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
+    return {url:'https://api.brevo.com/v3/smtp/email',headers:{'api-key':process.env.BREVO_API_KEY},sender:{name:process.env.BREVO_SENDER_NAME || 'ClipFlow Studio',email}};
+  }
+  if (process.env.RESEND_API_KEY && process.env.AUTH_EMAIL_FROM) return {url:'https://api.resend.com/emails',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`},from:process.env.AUTH_EMAIL_FROM};
+  return null;
+}
+router.get('/me', (req,res) => res.json({user: req.user || null, recoveryAvailable: Boolean(recoveryEmailConfig())}));
 router.use((req,res,next)=>{if(req.user?.deleting && !['/me','/logout','/delete-account'].includes(req.path))return res.status(423).json({error:'Account deletion is in progress.'});next();});
 router.post('/register', asyncHandler(async (req,res) => {
   const {email,password} = credentials(req.body);
@@ -57,7 +67,8 @@ router.post('/logout', asyncHandler(async (req,res) => {
   res.clearCookie('clipflow_session',{path:'/'}).json({success:true});
 }));
 router.post('/forgot', asyncHandler(async (req,res) => {
-  if (!process.env.RESEND_API_KEY || !process.env.AUTH_EMAIL_FROM) return res.status(503).json({error:'Password recovery email is not configured. Contact support.'});
+  const config = recoveryEmailConfig();
+  if (!config) return res.status(503).json({error:'Password recovery email is not configured. Contact support.'});
   const email = String(req.body.email || '').trim().toLowerCase();
   const user = await prisma.user.findUnique({where:{email}});
   if (user?.passwordHash) {
@@ -65,7 +76,13 @@ router.post('/forgot', asyncHandler(async (req,res) => {
     await prisma.recoveryToken.create({data:{tokenHash:hash(token),userId:user.id,expiresAt:new Date(Date.now()+1800000)}});
     const origin = new URL(process.env.RENDER_EXTERNAL_URL || process.env.APP_URL).origin;
     try {
-    const response = await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({from:process.env.AUTH_EMAIL_FROM,to:[email],subject:'Reset your ClipFlow password',text:`Reset your password within 30 minutes: ${origin}/account.html#reset=${token}\nIgnore this email if you did not request it.`}),signal:AbortSignal.timeout(15000)});
+    const resetUrl = `${origin}/account.html#reset=${token}`;
+    const text = `Reset your password within 30 minutes: ${resetUrl}\nIgnore this email if you did not request it.`;
+    const safeUrl = resetUrl.replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
+    const message = config.sender
+      ? {sender:config.sender,to:[{email}],subject:'Reset your ClipFlow password',textContent:text,htmlContent:`<p>Reset your ClipFlow password within 30 minutes.</p><p><a href="${safeUrl}">Reset password</a></p><p>Ignore this email if you did not request it.</p>`}
+      : {from:config.from,to:[email],subject:'Reset your ClipFlow password',text};
+    const response = await fetch(config.url,{method:'POST',headers:{...config.headers,'Content-Type':'application/json'},body:JSON.stringify(message),signal:AbortSignal.timeout(15000)});
     if (!response.ok) throw Object.assign(new Error('Email provider rejected recovery request'), {providerStatus:response.status});
     } catch (error) {
       await prisma.recoveryToken.deleteMany({where:{tokenHash:hash(token)}});
