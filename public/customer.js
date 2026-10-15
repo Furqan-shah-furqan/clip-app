@@ -6,17 +6,19 @@
   };
   let current={user:null,recoveryAvailable:false}, startupError='';
   try{current=await api('me');}catch(error){if(!form)return;startupError=error.message;}
+  if(current.user)document.querySelectorAll('[data-customer-guest]').forEach(link=>link.hidden=true);
   const previous=localStorage.getItem('clipflow-customer-id');
   const id=current.user?.id||'';
   if(previous!==id){for(const key of Object.keys(localStorage))if((key.startsWith('clipflow')&&key!=='clipflow-theme')||['currentClips','activeGenerationJobId'].includes(key))localStorage.removeItem(key);sessionStorage.clear();localStorage.setItem('clipflow-customer-id',id);}
   if(!form){
     if(!current.user){location.replace('/account.html');return;}
-    const settings=document.createElement('a');settings.href='/settings.html';settings.textContent='Account settings';settings.className='customer-account-control';settings.style.right='100px';document.body.append(settings);
-    const button=document.createElement('button');button.className='customer-account-control';button.textContent='Sign out';button.type='button';button.addEventListener('click',async()=>{await api('logout',{});location.replace('/account.html');});document.body.append(button);return;
+    const button=document.getElementById('customerSignOut');
+    if(button)button.addEventListener('click',async()=>{button.disabled=true;try{await api('logout',{});location.replace('/account.html');}catch(error){button.disabled=false;document.getElementById('settingsStatus').textContent=error.message;}});
+    return;
   }
   if(current.user && !location.hash.startsWith('#reset=')){location.replace('/');return;}
   const status=document.getElementById('formStatus');
-  let mode=location.hash.startsWith('#reset=')?'reset':'login';
+  let mode=location.hash.startsWith('#reset=')?'reset':location.hash==='#register'?'register':'login';
   const token=mode==='reset'?location.hash.slice(7):'';
   if(token)history.replaceState(null,'',location.pathname);
   const theme=()=>document.documentElement.classList.toggle('theme-dark',localStorage.getItem('clipflow-theme')!=='light');theme();
