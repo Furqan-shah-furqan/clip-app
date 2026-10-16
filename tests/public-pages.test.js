@@ -10,7 +10,7 @@ test('guest homepage is public while studio, editor and publishing still require
 });
 test('public pages have complete accessible navigation and real operator details',()=>{
  for(const name of ['welcome','privacy','terms','support','data-deletion']){
-  const html=fs.readFileSync('public/'+name+'.html','utf8');assert.equal((html.match(/<h1>/g)||[]).length,1);assert.match(html,/Furqan Shah/);assert.match(html,/furqanfff6@gmail.com/);assert.match(html,/id="main"/);
+  const html=fs.readFileSync('public/'+name+'.html','utf8');assert.equal((html.match(/<h1>/g)||[]).length,1);assert.match(html,/Furqan Shah/);assert.match(html,/furqanffff6@gmail.com/);assert.match(html,/id="main"/);
   for(const link of html.matchAll(/(?:href|src)="(\/[^"?#]+)(?:[?#][^"]*)?"/g)){if(link[1].startsWith('/api/'))continue;assert.ok(fs.existsSync(path.join(root,'public',link[1])),name+': missing '+link[1]);}
   for(const page of ['privacy','terms','support','data-deletion'])assert.ok(html.includes('/'+page+'.html'));
  }
