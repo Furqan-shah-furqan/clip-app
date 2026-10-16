@@ -13,16 +13,18 @@ const {hash}=require('../server/middleware/customerAuth');
 test('Brevo recovery uses verified sender, private single-recipient payload and cleans up rejected/failed sends',async()=>{
  const keys=['CUSTOMER_AUTH_ENABLED','APP_URL','RENDER_EXTERNAL_URL','BREVO_API_KEY','BREVO_SENDER_EMAIL','BREVO_SENDER_NAME','RESEND_API_KEY','AUTH_EMAIL_FROM'];
  const saved=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
- Object.assign(process.env,{CUSTOMER_AUTH_ENABLED:'true',APP_URL:'https://clipflow.example',BREVO_API_KEY:'test-brevo-key',BREVO_SENDER_EMAIL:'sender@example.com',BREVO_SENDER_NAME:'ClipFlow Studio',RESEND_API_KEY:'test-resend-key',AUTH_EMAIL_FROM:'old@example.com'});
+ Object.assign(process.env,{CUSTOMER_AUTH_ENABLED:'true',APP_URL:'https://clipflow.example',BREVO_API_KEY:'  test-brevo-key\n',BREVO_SENDER_EMAIL:'sender@example.com',BREVO_SENDER_NAME:'ClipFlow Studio',RESEND_API_KEY:'test-resend-key',AUTH_EMAIL_FROM:'old@example.com'});
  delete process.env.RENDER_EXTERNAL_URL;
  const nativeFetch=global.fetch;
  let sent,headers,signal,delivery='accepted',sendCount=0;
+ const log=[],nativeError=console.error,nativeInfo=console.info;
+ console.error=(...args)=>log.push(args.join(' '));console.info=(...args)=>log.push(args.join(' '));
  global.fetch=async(url,options)=>{
   if(url==='https://api.resend.com/emails')throw Error('Unexpected provider fallback');
   if(url!=='https://api.brevo.com/v3/smtp/email')return nativeFetch(url,options);
   sendCount++;sent=JSON.parse(options.body);headers=options.headers;signal=options.signal;
   if(delivery==='network')throw Error('Connection interrupted');
-  return {ok:delivery==='accepted',status:delivery==='accepted'?201:403};
+  return {ok:delivery==='accepted',status:delivery==='accepted'?201:401,json:async()=>({message:delivery==='ip'?'Unrecognised IP address private-ip':delivery==='key'?'Key not found test-private-secret':'Sender not verified private@example.com'})};
  };
  const app=express();app.use(express.json());app.use('/api/customer',router);
  const server=http.createServer(app);await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -37,16 +39,22 @@ test('Brevo recovery uses verified sender, private single-recipient payload and 
   const token=link.split('#reset=')[1];assert.equal(token.length,43);assert.equal(tokens.has(token),false);assert.equal(tokens.has(hash(token)),true);
   assert.ok(tokens.get(hash(token)).expiresAt>Date.now());
   const before=sendCount;assert.deepEqual(await(await forgot('unknown@example.com')).json(),generic);assert.equal(sendCount,before);
-  for(const failure of ['rejected','network']){
+  for(const failure of ['rejected','key','ip','network']){
    delivery=failure;assert.deepEqual(await(await forgot('customer@example.com')).json(),generic);
    const failed=sent.textContent.split('#reset=')[1].split('\n')[0];assert.equal(tokens.has(hash(failed)),false);
   }
+  assert.ok(log.some(line=>line.includes('provider=Brevo status=401 reason=api_key_invalid_or_disabled')));
+  assert.ok(log.some(line=>line.includes('reason=server_ip_not_authorized')));
+  assert.ok(log.some(line=>line.includes('reason=account_or_sender_not_approved')));
+  assert.ok(log.some(line=>line.includes('reason=connection_failed')));
+  assert.ok(log.some(line=>line.includes('accepted by provider: Brevo')));
+  assert.doesNotMatch(log.join(' '),/test-brevo-key|test-private-secret|private@example.com|private-ip|#reset=/);
   // A partial Brevo setup disables recovery instead of leaking reset links to the old provider.
   delete process.env.BREVO_SENDER_EMAIL;
   assert.equal((await(await nativeFetch(base+'/api/customer/me')).json()).recoveryAvailable,false);
   assert.equal((await forgot('customer@example.com')).status,503);
  }finally{
-  global.fetch=nativeFetch;await new Promise(resolve=>server.close(resolve));
+  console.error=nativeError;console.info=nativeInfo;global.fetch=nativeFetch;await new Promise(resolve=>server.close(resolve));
   for(const key of keys)if(saved[key]===undefined)delete process.env[key];else process.env[key]=saved[key];
  }
 });

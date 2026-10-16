@@ -38,12 +38,14 @@ async function verify(password, encoded) {
 }
 function recoveryEmailConfig() {
   // Prefer Brevo when configured; never silently resend a reset link through another provider.
-  if (process.env.BREVO_API_KEY) {
+  const brevoKey = (process.env.BREVO_API_KEY || '').trim();
+  const resendKey = (process.env.RESEND_API_KEY || '').trim();
+  if (brevoKey) {
     const email = (process.env.BREVO_SENDER_EMAIL || '').trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return null;
-    return {url:'https://api.brevo.com/v3/smtp/email',headers:{'api-key':process.env.BREVO_API_KEY},sender:{name:process.env.BREVO_SENDER_NAME || 'ClipFlow Studio',email}};
+    return {provider:'Brevo',url:'https://api.brevo.com/v3/smtp/email',headers:{'api-key':brevoKey},sender:{name:process.env.BREVO_SENDER_NAME || 'ClipFlow Studio',email}};
   }
-  if (process.env.RESEND_API_KEY && process.env.AUTH_EMAIL_FROM) return {url:'https://api.resend.com/emails',headers:{Authorization:`Bearer ${process.env.RESEND_API_KEY}`},from:process.env.AUTH_EMAIL_FROM};
+  if (resendKey && process.env.AUTH_EMAIL_FROM) return {provider:'Resend',url:'https://api.resend.com/emails',headers:{Authorization:`Bearer ${resendKey}`},from:process.env.AUTH_EMAIL_FROM};
   return null;
 }
 router.get('/me', (req,res) => res.json({user: req.user || null, recoveryAvailable: Boolean(recoveryEmailConfig())}));
@@ -83,10 +85,23 @@ router.post('/forgot', asyncHandler(async (req,res) => {
       ? {sender:config.sender,to:[{email}],subject:'Reset your ClipFlow password',textContent:text,htmlContent:`<p>Reset your ClipFlow password within 30 minutes.</p><p><a href="${safeUrl}">Reset password</a></p><p>Ignore this email if you did not request it.</p>`}
       : {from:config.from,to:[email],subject:'Reset your ClipFlow password',text};
     const response = await fetch(config.url,{method:'POST',headers:{...config.headers,'Content-Type':'application/json'},body:JSON.stringify(message),signal:AbortSignal.timeout(15000)});
-    if (!response.ok) throw Object.assign(new Error('Email provider rejected recovery request'), {providerStatus:response.status});
+    if (!response.ok) {
+      let reason = response.status === 401 ? 'authentication_rejected' : 'provider_rejected';
+      // Log fixed diagnostic labels only; provider messages can contain private data.
+      try {
+        const detail = await response.json();
+        const message = String(detail.message || '').toLowerCase();
+        if (/\bip\b/.test(message) && /unauthori|unrecogni|not allowed|block/.test(message)) reason = 'server_ip_not_authorized';
+        else if (/key/.test(message) && /not found|invalid|expired|disabled|not enabled/.test(message)) reason = 'api_key_invalid_or_disabled';
+        else if (/not verified|not activated|not enabled|activation/.test(message)) reason = 'account_or_sender_not_approved';
+        else if (/sender/.test(message)) reason = 'sender_rejected';
+      } catch {}
+      throw Object.assign(new Error('Email provider rejected recovery request'), {providerStatus:response.status,providerReason:reason});
+    }
+    console.info('Recovery email accepted by provider:', config.provider);
     } catch (error) {
       await prisma.recoveryToken.deleteMany({where:{tokenHash:hash(token)}});
-      console.error('Recovery email delivery failed:', error.providerStatus || 'connection error');
+      console.error('Recovery email delivery failed:', `provider=${config.provider}`, `status=${error.providerStatus || 'connection_error'}`, `reason=${error.providerReason || (error.name === 'TimeoutError' ? 'request_timed_out' : 'connection_failed')}`);
     }
   }
   res.json({message:'If this email has an account, a recovery link will be sent.'});
