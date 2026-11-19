@@ -1,5 +1,5 @@
 const express = require('express');
-const {randomBytes, scrypt: scryptCallback, timingSafeEqual} = require('node:crypto');
+const {randomBytes, randomUUID, scrypt: scryptCallback, timingSafeEqual} = require('node:crypto');
 const {promisify} = require('node:util');
 const prisma = require('../lib/prisma');
 const {enabled, hash, asyncHandler, createSession, tokenCookie} = require('../middleware/customerAuth');
@@ -131,5 +131,37 @@ router.post('/delete-account', asyncHandler(async(req,res)=>{
   await require('../services/customerDeletionService').deleteCustomer(req.user.id);
   res.clearCookie('clipflow_session',{path:'/'}).json({success:true});
 }));
-router.use((error,req,res,next)=>{console.error('Customer auth error:',error.code || error.message);res.status(error.status || (error.code === 'P2002' ? 409 : 500)).json({error:error.status ? error.message : error.code === 'P2002' ? 'Unable to create account. Try signing in or recovering your password.' : 'Account request failed. Please try again.'});});
+router.use((error,req,res,next)=>{
+  const requestId = randomUUID();
+  const code = String(error.code || '');
+  const meta = error.meta || {};
+  const model = String(meta.modelName || '');
+  const field = String(meta.column || meta.field_name || '');
+  const schemaMissing = code === 'P2021' || code === 'P2022' || ['42P01','42703'].includes(code);
+  const databaseUnavailable = ['P1001','P1002','P1017','ECONNREFUSED','ETIMEDOUT'].includes(code);
+  const status = error.status || (code === 'P2002' ? 409 : schemaMissing || databaseUnavailable ? 503 : 500);
+
+  // Keep diagnostic logs useful while excluding emails, passwords, reset tokens, and SQL parameters.
+  console.error('Customer auth request failed', JSON.stringify({
+    requestId,
+    method: req.method,
+    route: req.path,
+    status,
+    code: code || 'UNKNOWN',
+    model: model || undefined,
+    field: field || undefined
+  }));
+
+  let message;
+  if (error.status) message = error.message;
+  else if (code === 'P2002') message = 'An account with this email already exists. Try signing in or recovering your password.';
+  else if (schemaMissing) message = 'The account database schema is incomplete. Please contact support and include this reference.';
+  else if (databaseUnavailable) message = 'The account database is temporarily unavailable. Please try again shortly.';
+  else message = 'We could not complete this account request. Please try again. If it continues, contact support with the reference below.';
+
+  const payload = {error: message};
+  if (status >= 500) payload.requestId = requestId;
+  if (process.env.NODE_ENV !== 'production' && status >= 500) payload.code = code || 'UNKNOWN';
+  return res.status(status).json(payload);
+});
 module.exports = {router,passwordHash,verify,credentials};
