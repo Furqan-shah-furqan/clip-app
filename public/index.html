@@ -175,6 +175,15 @@
                 </button>
               </div>
 
+              <section class="dual-view-controls" id="dualViewControls" hidden aria-label="Dual view crop settings">
+                <label class="dual-view-toggle"><input type="checkbox" id="dualViewEnabled" /> Add floating gameplay view</label>
+                <div class="dual-view-help" id="dualViewHelp">Drag on the video to select the large gameplay area, then select Floating view and drag the inset area.</div>
+                <div class="dual-view-actions" role="group" aria-label="Choose crop region">
+                  <button type="button" class="dual-view-select is-active" data-crop-select="main">1 · Main gameplay</button>
+                  <button type="button" class="dual-view-select" data-crop-select="inset">2 · Floating view</button>
+                </div>
+              </section>
+
                 <span class="hero-toolbar-note">Long videos. Standout moments.</span>
               </div>
               <div class="hero-showcase">
@@ -191,7 +200,13 @@
                 <div class="hero-media-card">
                   <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a link or upload a video below.</span></div>
                   <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
-                  <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
+                  <div class="dual-crop-stage" id="dualCropStage">
+                    <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
+                    <div class="dual-crop-overlay" id="dualCropOverlay" hidden>
+                      <div class="dual-crop-box is-main" data-crop="main"><span>Main gameplay</span></div>
+                      <div class="dual-crop-box is-inset" data-crop="inset"><span>Floating view</span></div>
+                    </div>
+                  </div>
                   <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
                 </div>
               </div>

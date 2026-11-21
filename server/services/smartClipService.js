@@ -370,6 +370,7 @@ async function smartGenerateClip({
   startTime,
   endTime,
   aspectRatio,
+  dualView,
   outputDir,
   jobId,
 }) {
@@ -418,8 +419,8 @@ async function smartGenerateClip({
   }
 
   try {
-    // 1. Try AI face-tracking reframe first (if enabled and non-cloud)
-    try {
+    // Dual view uses the user's two selected source regions, so skip auto face tracking.
+    if (!dualView) try {
       const faceTracked = await runFaceTrackingReframe({
         inputPath: effectiveInputPath,
         startTime: reframeStartTime,
@@ -455,8 +456,25 @@ async function smartGenerateClip({
         effectiveInputPath,
         "-t",
         String(duration),
-        "-vf",
-        `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`,
+      ];
+      if (dualView) {
+        const cropExpr = (crop) => {
+          const values = [crop?.x, crop?.y, crop?.width, crop?.height].map(Number);
+          if (values.some((value) => !Number.isFinite(value)) || values[0] < 0 || values[1] < 0 || values[2] < 0.04 || values[3] < 0.04 || values[0] + values[2] > 1 || values[1] + values[3] > 1) {
+            throw new Error("Invalid dual view crop region.");
+          }
+          const [x, y, width, height] = values.map((value) => value.toFixed(5));
+          return `crop=trunc(iw*${width}/2)*2:trunc(ih*${height}/2)*2:trunc(iw*${x}/2)*2:trunc(ih*${y}/2)*2`;
+        };
+        const insetWidth = Math.max(120, Math.round(targetW * 0.32));
+        const mainW = cropExpr(dualView.main);
+        const insetW = cropExpr(dualView.inset);
+        const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}[base];[insetIn]${insetW},scale=${insetWidth}:-2,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
+        args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
+      } else {
+        args.push("-vf", `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`);
+      }
+      args.push(
         "-c:v",
         "libx264",
         "-preset",
@@ -472,7 +490,7 @@ async function smartGenerateClip({
         "-threads",
         "0",
         outputPath,
-      ];
+      );
 
       const child = spawn(ffmpegPath, args, { windowsHide: true });
       if (jobId) registerJobProcess(jobId, child);

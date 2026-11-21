@@ -368,6 +368,7 @@ router.post("/smart-generate", async (req, res) => {
       sourceType, inputPath, sourceUrl, storageUrl, segments,
       maxClips, minScore, clipLengthSec, minDurationSec,
       maxDurationSec, aspectRatio, videoDurationSec,
+      dualView,
     } = req.body || {};
 
     const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
@@ -377,6 +378,17 @@ router.post("/smart-generate", async (req, res) => {
     }
     if (normalizedSourceType !== "youtube" && !inputPath) {
       return res.status(400).json({ error: "Input video file is required." });
+    }
+    if (dualView && normalizedSourceType !== "upload") {
+      return res.status(400).json({ error: "Dual view cropping is available for uploaded videos." });
+    }
+    if (dualView) {
+      const validCrop = (crop) => crop && [crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) &&
+        crop.x >= 0 && crop.y >= 0 && crop.width >= 0.04 && crop.height >= 0.04 &&
+        crop.x + crop.width <= 1 && crop.y + crop.height <= 1;
+      if (!validCrop(dualView.main) || !validCrop(dualView.inset)) {
+        return res.status(400).json({ error: "Both crop regions must be inside the video frame and at least 4% of its size." });
+      }
     }
 
     const resolvedRemoteUrl = normalizedSourceType === "youtube" ? sourceUrl : (storageUrl || null);
@@ -402,6 +414,7 @@ router.post("/smart-generate", async (req, res) => {
           minDurationSec: Number(minDurationSec) || 25,
           maxDurationSec: Number(maxDurationSec) || 90,
           aspectRatio: aspectRatio || "9:16",
+          dualView: dualView || null,
           videoDurationSec: Number(videoDurationSec) || 0,
           metadata: req.body?.metadata || (videoDurationSec ? { duration: Number(videoDurationSec) } : null),
         },

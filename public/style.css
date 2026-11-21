@@ -7628,3 +7628,21 @@ body.home-page.theme-light .opus-project-card > em { color: #6b7280 !important; 
 body.home-page.theme-light .dnt-thumb { transform: translateX(114px) !important; }
 .home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll) { scrollbar-width: none !important; -ms-overflow-style: none; }
 .home-page :is(.home-content-scroll, .clips-story-row, .clips-view-scroll)::-webkit-scrollbar { display: none !important; }
+/* Upload-time dual crop selection for streamer style clips. */
+.dual-crop-stage { position: relative; max-width: 100%; margin: 0 auto; }
+.dual-crop-stage > video { display: block; width: 100%; height: 100%; object-fit: fill; }
+.dual-crop-stage > video[hidden] { display: none !important; }
+.dual-crop-overlay { position: absolute; inset: 0; pointer-events: none; }
+.dual-crop-overlay[hidden], .dual-view-controls[hidden] { display: none !important; }
+.dual-crop-box { position: absolute; border: 2px solid #36d9ff; background: rgba(20, 190, 255, .12); box-shadow: 0 0 0 9999px rgba(0,0,0,.34); pointer-events: auto; touch-action: none; cursor: move; }
+.dual-crop-box.is-inset { border-color: #ffc84a; background: rgba(255, 200, 74, .12); }
+.dual-crop-box.is-selected { border-width: 3px; }
+.dual-crop-box span { position: absolute; top: 4px; left: 4px; padding: 3px 7px; border-radius: 6px; color: #111; background: #36d9ff; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.dual-crop-box.is-inset span { background: #ffc84a; }
+.dual-view-controls { width: min(100%, 760px); margin: 14px auto; padding: 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--text); }
+.dual-view-toggle { display: flex; align-items: center; gap: 9px; font-weight: 700; cursor: pointer; }
+.dual-view-toggle input { accent-color: #d9a535; width: 18px; height: 18px; }
+.dual-view-help { margin: 8px 0 12px; color: var(--muted); font-size: 13px; }
+.dual-view-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dual-view-select { border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel-2); color: var(--text); padding: 8px 13px; cursor: pointer; }
+.dual-view-select.is-active { border-color: var(--primary); background: var(--primary); color: #17120a; }

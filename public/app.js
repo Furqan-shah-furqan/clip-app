@@ -410,6 +410,13 @@ topTabProjects?.addEventListener("click", () => switchHomeView("projects"));
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const videoInput = document.getElementById("videoInput");
 const videoPreview = document.getElementById("videoPreview");
+const heroMediaVideo = document.getElementById("heroMediaVideo");
+const dualCropStage = document.getElementById("dualCropStage");
+const dualCropOverlay = document.getElementById("dualCropOverlay");
+const dualViewControls = document.getElementById("dualViewControls");
+const dualViewEnabled = document.getElementById("dualViewEnabled");
+const dualCropRegions = { main: null, inset: null };
+let activeCropRegion = "main";
 const youtubeEmbedPreview = document.getElementById("youtubeEmbedPreview");
 const fetchedSourceCard = document.getElementById("fetchedSourceCard");
 const fetchedSourceThumb = document.getElementById("fetchedSourceThumb");
@@ -1116,6 +1123,12 @@ function setProjectInfo(name, meta) {
 }
 
 function clearLocalVideoPreview() {
+  if (heroMediaVideo) {
+    heroMediaVideo.pause();
+    heroMediaVideo.removeAttribute("src");
+    heroMediaVideo.hidden = true;
+    heroMediaVideo.load();
+  }
   if (!videoPreview) {
     return;
   }
@@ -1149,6 +1162,13 @@ function clearYoutubePreview() {
 }
 
 function setPreviewVideo(src) {
+  if (heroMediaVideo) {
+    heroMediaVideo.src = src;
+    heroMediaVideo.hidden = false;
+    heroMediaVideo.load();
+    const empty = document.getElementById("heroMediaEmpty");
+    if (empty) empty.hidden = true;
+  }
   if (!videoPreview) {
     return;
   }
@@ -2170,6 +2190,73 @@ function uploadWithXHR(url, formData) {
   });
 }
 
+function renderDualCropRegions() {
+  if (!dualCropOverlay) return;
+  for (const name of ["main", "inset"]) {
+    const box = dualCropOverlay.querySelector(`[data-crop="${name}"]`);
+    const crop = dualCropRegions[name];
+    if (!box) continue;
+    box.hidden = !crop || !dualViewEnabled?.checked;
+    if (crop) {
+      box.style.left = `${crop.x * 100}%`;
+      box.style.top = `${crop.y * 100}%`;
+      box.style.width = `${crop.width * 100}%`;
+      box.style.height = `${crop.height * 100}%`;
+    }
+    box.classList.toggle("is-selected", name === activeCropRegion);
+  }
+}
+
+dualViewEnabled?.addEventListener("change", () => {
+  if (dualCropOverlay) dualCropOverlay.hidden = !dualViewEnabled.checked;
+  renderDualCropRegions();
+});
+
+document.querySelectorAll("[data-crop-select]").forEach((button) => {
+  button.addEventListener("click", () => {
+    activeCropRegion = button.dataset.cropSelect;
+    document.querySelectorAll("[data-crop-select]").forEach((item) => item.classList.toggle("is-active", item === button));
+    renderDualCropRegions();
+  });
+});
+
+heroMediaVideo?.addEventListener("loadedmetadata", () => {
+  if (dualCropStage && heroMediaVideo.videoWidth && heroMediaVideo.videoHeight) {
+    const maxWidth = dualCropStage.parentElement?.clientWidth || heroMediaVideo.videoWidth;
+    const scale = Math.min(maxWidth / heroMediaVideo.videoWidth, 420 / heroMediaVideo.videoHeight);
+    dualCropStage.style.width = `${Math.round(heroMediaVideo.videoWidth * scale)}px`;
+    dualCropStage.style.height = `${Math.round(heroMediaVideo.videoHeight * scale)}px`;
+  }
+  state.videoDurationSeconds = Math.floor(heroMediaVideo.duration || 0);
+  if (videoLengthText) videoLengthText.textContent = formatTime(heroMediaVideo.duration);
+  if (endTimeInput) endTimeInput.value = secondsToTime(state.selectedDuration);
+  showClipControls();
+  updateClipPlanner();
+});
+
+dualCropStage?.addEventListener("pointerdown", (event) => {
+  if (!dualViewEnabled?.checked) return;
+  const bounds = dualCropStage.getBoundingClientRect();
+  if (!bounds.width || !bounds.height || (event.target === heroMediaVideo && event.clientY > bounds.bottom - 42)) return;
+  event.preventDefault();
+  const startX = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+  const startY = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+  const region = activeCropRegion;
+  const draw = (moveEvent) => {
+    const x = Math.max(0, Math.min(1, (moveEvent.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(1, (moveEvent.clientY - bounds.top) / bounds.height));
+    const left = Math.min(startX, x), top = Math.min(startY, y);
+    dualCropRegions[region] = { x: left, y: top, width: Math.abs(x - startX), height: Math.abs(y - startY) };
+    renderDualCropRegions();
+  };
+  const finish = () => {
+    window.removeEventListener("pointermove", draw);
+    window.removeEventListener("pointerup", finish);
+  };
+  window.addEventListener("pointermove", draw);
+  window.addEventListener("pointerup", finish);
+});
+
 videoInput?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -2184,6 +2271,11 @@ videoInput?.addEventListener("change", async (e) => {
     state.generatedClips = [];
     state.smartSuggestions = [];
     state.clipCaptions = {};
+    dualCropRegions.main = null;
+    dualCropRegions.inset = null;
+    if (dualViewEnabled) dualViewEnabled.checked = false;
+    if (dualViewControls) dualViewControls.hidden = true;
+    if (dualCropOverlay) dualCropOverlay.hidden = true;
 
     clearYoutubePreview();
     setProjectInfo(file.name, formatBytes(file.size));
@@ -2202,6 +2294,7 @@ videoInput?.addEventListener("change", async (e) => {
     const result = await uploadWithXHR(`${API_BASE}/clips/upload`, formData);
 
     state.uploadedProject = result.project;
+    if (dualViewControls) dualViewControls.hidden = false;
     state.savedProjectId = null;
     setProjectInfo(file.name, formatBytes(file.size));
     renderGeneratedClips();
@@ -3333,6 +3426,13 @@ function buildSmartSuggestBody() {
     body.storageUrl =
       state.uploadedProject.storageUrl ||
       "";
+    if (dualViewEnabled?.checked) {
+      const isValidRegion = (region) => region && region.width >= 0.04 && region.height >= 0.04;
+      if (!isValidRegion(dualCropRegions.main) || !isValidRegion(dualCropRegions.inset)) {
+        throw new Error("Select both crop areas: draw the main gameplay region, then draw the floating view region.");
+      }
+      body.dualView = { main: dualCropRegions.main, inset: dualCropRegions.inset };
+    }
   }
 
   return body;
