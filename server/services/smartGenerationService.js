@@ -693,6 +693,7 @@ async function runSmartGeneration({
           startTime: secondsToTime(startSec),
           endTime: secondsToTime(endSec),
           aspectRatio: aspectRatio || "9:16",
+          dualView: dualView || null,
           outputDir: workspace.clipsDir,
           jobId: generationJobId,
         });

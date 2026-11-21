@@ -24,6 +24,8 @@ const state = {
   },
   isGenerating: false,
   activeGenerationJobId: null,
+  dualViewCrop: null,
+  clipEditorConfirmed: false,
 };
 try { window.state = state; } catch {}
 
@@ -411,12 +413,37 @@ topTabProjects?.addEventListener("click", () => switchHomeView("projects"));
 const videoInput = document.getElementById("videoInput");
 const videoPreview = document.getElementById("videoPreview");
 const heroMediaVideo = document.getElementById("heroMediaVideo");
+const heroMediaPoster = document.getElementById("heroMediaPoster");
+const heroMediaEmpty = document.getElementById("heroMediaEmpty");
 const dualCropStage = document.getElementById("dualCropStage");
 const dualCropOverlay = document.getElementById("dualCropOverlay");
-const dualViewControls = document.getElementById("dualViewControls");
+const clipEditorDialog = document.getElementById("clipEditorDialog");
+const editorSourceSlot = document.getElementById("editorSourceSlot");
+const editorPreviewCanvas = document.getElementById("editorPreviewCanvas");
+const editorYoutubeComposition = document.getElementById("editorYoutubeComposition");
+const editorYoutubeMain = document.getElementById("editorYoutubeMain");
+const editorYoutubeInset = document.getElementById("editorYoutubeInset");
+const clipEditorError = document.getElementById("clipEditorError");
+const clipEditorSelectHint = document.getElementById("clipEditorSelectHint");
+const clipEditorSourceName = document.getElementById("clipEditorSourceName");
+const clipEditorSourceNote = document.getElementById("clipEditorSourceNote");
+const clipEditorPreviewNote = document.getElementById("clipEditorPreviewNote");
+const clipEditorPlay = document.getElementById("clipEditorPlay");
 const dualViewEnabled = document.getElementById("dualViewEnabled");
 const dualCropRegions = { main: null, inset: null };
 let activeCropRegion = "main";
+let cropSelectionMode = false;
+let activeCropPointerId = null;
+let editorYouTubeFrame = null;
+let editorYouTubePlayers = [];
+let editorYouTubeSourcePlayer = null;
+let editorYouTubePreviewReady = 0;
+let editorYouTubeSyncTimer = null;
+let editorPreviewTimer = null;
+let editorPreviewImage = null;
+let editorSourceType = "upload";
+const editorStageHome = dualCropStage?.parentElement || null;
+const editorStageBadge = document.getElementById("heroMediaBadge");
 const youtubeEmbedPreview = document.getElementById("youtubeEmbedPreview");
 const fetchedSourceCard = document.getElementById("fetchedSourceCard");
 const fetchedSourceThumb = document.getElementById("fetchedSourceThumb");
@@ -1166,8 +1193,8 @@ function setPreviewVideo(src) {
     heroMediaVideo.src = src;
     heroMediaVideo.hidden = false;
     heroMediaVideo.load();
-    const empty = document.getElementById("heroMediaEmpty");
-    if (empty) empty.hidden = true;
+    if (heroMediaEmpty) heroMediaEmpty.hidden = true;
+    if (heroMediaPoster) heroMediaPoster.hidden = true;
   }
   if (!videoPreview) {
     return;
@@ -1187,6 +1214,12 @@ function setPreviewVideo(src) {
 
 function setFetchedSourceCard({ title, thumb, meta }) {
   clearLocalVideoPreview();
+
+  if (heroMediaPoster && thumb) {
+    heroMediaPoster.src = thumb;
+    heroMediaPoster.hidden = false;
+  }
+  if (heroMediaEmpty) heroMediaEmpty.hidden = Boolean(thumb);
 
   if (fetchedSourceCard) {
     fetchedSourceCard.style.display = "none";
@@ -2020,6 +2053,14 @@ async function fetchYoutubeSource(url, options = {}) {
       throw new Error("Invalid fetch response");
     }
 
+    const incomingVideoId = project.videoId || getVideoIdFromUrl(cleanUrl);
+    const currentVideoId = state.uploadedProject?.videoId || getVideoIdFromUrl(state.uploadedProject?.sourceUrl || state.uploadedProject?.youtubeUrl || "");
+    if (currentVideoId !== incomingVideoId) {
+      dualCropRegions.main = null;
+      dualCropRegions.inset = null;
+      state.dualViewCrop = null;
+    }
+
     // Force YouTube metadata so clip generation never falls into the upload branch.
     project.source = "youtube";
     project.sourceType = "youtube";
@@ -2190,76 +2231,443 @@ function uploadWithXHR(url, formData) {
   });
 }
 
+function validEditorCrop(crop) {
+  return crop && Number.isFinite(crop.x) && Number.isFinite(crop.y) &&
+    Number.isFinite(crop.width) && Number.isFinite(crop.height) &&
+    crop.width >= 0.04 && crop.height >= 0.04 && crop.x >= 0 && crop.y >= 0 &&
+    crop.x + crop.width <= 1 && crop.y + crop.height <= 1;
+}
+
 function renderDualCropRegions() {
   if (!dualCropOverlay) return;
   for (const name of ["main", "inset"]) {
     const box = dualCropOverlay.querySelector(`[data-crop="${name}"]`);
     const crop = dualCropRegions[name];
     if (!box) continue;
-    box.hidden = !crop || !dualViewEnabled?.checked;
+    box.hidden = !crop || (name === "inset" && !dualViewEnabled?.checked);
     if (crop) {
       box.style.left = `${crop.x * 100}%`;
       box.style.top = `${crop.y * 100}%`;
       box.style.width = `${crop.width * 100}%`;
       box.style.height = `${crop.height * 100}%`;
     }
-    box.classList.toggle("is-selected", name === activeCropRegion);
+    box.classList.toggle("is-active", name === activeCropRegion);
   }
+  document.querySelectorAll("[data-crop-select]").forEach((button) => button.classList.toggle("is-active", button.dataset.cropSelect === activeCropRegion));
+  const insetButton = document.getElementById("insetCropButton");
+  if (insetButton) insetButton.disabled = !dualViewEnabled?.checked;
+  if (editorYoutubeComposition) {
+    editorYoutubeComposition.hidden = !editorYoutubeFrame || !editorYouTubePreviewReady;
+    if (editorPreviewCanvas) editorPreviewCanvas.hidden = !editorYoutubeComposition.hidden;
+    if (editorYoutubeInset) editorYoutubeInset.hidden = !dualViewEnabled?.checked;
+    positionYouTubePreviewCrops();
+  }
+  drawEditorPreview();
 }
 
+function setActiveCropRegion(name) {
+  if (name === "inset" && !dualViewEnabled?.checked) return;
+  activeCropRegion = name;
+  cropSelectionMode = true;
+  if (clipEditorSelectHint) clipEditorSelectHint.textContent = `Drag on the video to set the ${name === "main" ? "gameplay" : "facecam"} crop`;
+  if (dualCropOverlay) dualCropOverlay.dataset.drawing = "true";
+  document.querySelectorAll("[data-crop-select]").forEach((button) => button.classList.toggle("is-active", button.dataset.cropSelect === name));
+  renderDualCropRegions();
+}
+
+document.querySelectorAll("[data-crop-select]").forEach((button) => {
+  button.addEventListener("click", () => setActiveCropRegion(button.dataset.cropSelect));
+});
+
 dualViewEnabled?.addEventListener("change", () => {
-  if (dualCropOverlay) dualCropOverlay.hidden = !dualViewEnabled.checked;
+  if (!dualViewEnabled.checked && activeCropRegion === "inset") setActiveCropRegion("main");
   renderDualCropRegions();
 });
 
-document.querySelectorAll("[data-crop-select]").forEach((button) => {
-  button.addEventListener("click", () => {
-    activeCropRegion = button.dataset.cropSelect;
-    document.querySelectorAll("[data-crop-select]").forEach((item) => item.classList.toggle("is-active", item === button));
-    renderDualCropRegions();
+function drawCropToCanvas(context, source, crop, dx, dy, dw, dh) {
+  const sourceWidth = source.videoWidth || source.naturalWidth || source.width || 0;
+  const sourceHeight = source.videoHeight || source.naturalHeight || source.height || 0;
+  if (!sourceWidth || !sourceHeight) return;
+  const rect = validEditorCrop(crop) ? crop : { x: 0, y: 0, width: 1, height: 1 };
+  const sx = rect.x * sourceWidth, sy = rect.y * sourceHeight;
+  const sw = rect.width * sourceWidth, sh = rect.height * sourceHeight;
+  const scale = Math.max(dw / sw, dh / sh);
+  const drawW = sw * scale, drawH = sh * scale;
+  context.save();
+  context.beginPath();
+  context.rect(dx, dy, dw, dh);
+  context.clip();
+  context.drawImage(source, sx, sy, sw, sh, dx + (dw - drawW) / 2, dy + (dh - drawH) / 2, drawW, drawH);
+  context.restore();
+}
+
+function drawEditorPreview() {
+  if (!editorPreviewCanvas || editorYoutubeComposition?.hidden === false) return;
+  const context = editorPreviewCanvas.getContext("2d");
+  if (!context) return;
+  const width = editorPreviewCanvas.width, height = editorPreviewCanvas.height;
+  context.fillStyle = "#121313";
+  context.fillRect(0, 0, width, height);
+  const videoReady = heroMediaVideo && heroMediaVideo.readyState >= 2 && heroMediaVideo.videoWidth;
+  const imageReady = editorPreviewImage && editorPreviewImage.complete && editorPreviewImage.naturalWidth;
+  const source = videoReady ? heroMediaVideo : imageReady ? editorPreviewImage : null;
+  if (!source) {
+    context.fillStyle = "#a5a49f";
+    context.font = "500 14px system-ui";
+    context.textAlign = "center";
+    context.fillText("Select crop areas", width / 2, height / 2);
+    return;
+  }
+  const mainCrop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
+  drawCropToCanvas(context, source, mainCrop, 0, 0, width, height);
+  if (dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset)) {
+    const sourceW = source.videoWidth || source.naturalWidth;
+    const sourceH = source.videoHeight || source.naturalHeight;
+    const cropW = sourceW * dualCropRegions.inset.width;
+    const cropH = sourceH * dualCropRegions.inset.height;
+    const scale = Math.min((width * 0.32) / cropW, (height * 0.28) / cropH);
+    const insetW = cropW * scale, insetH = cropH * scale;
+    const x = width - insetW - 18, y = 18;
+    context.fillStyle = "#f0ede6";
+    context.fillRect(x - 3, y - 3, insetW + 6, insetH + 6);
+    drawCropToCanvas(context, source, dualCropRegions.inset, x, y, insetW, insetH);
+  }
+}
+
+function updateEditorSourceSize(width, height) {
+  if (!dualCropStage || !editorSourceSlot || !width || !height) return;
+  const availableWidth = Math.max(180, editorSourceSlot.clientWidth - 2);
+  const maxHeightRatio = window.innerWidth <= 720 ? 0.35 : 0.46;
+  const availableHeight = Math.max(140, Math.min(window.innerHeight * maxHeightRatio, 520));
+  const scale = Math.min(availableWidth / width, availableHeight / height);
+  dualCropStage.style.width = `${Math.round(width * scale)}px`;
+  dualCropStage.style.height = `${Math.round(height * scale)}px`;
+}
+
+function createYouTubeIframe(id, playerId, controls) {
+  const frame = document.createElement("iframe");
+  frame.id = playerId;
+  frame.title = controls ? "YouTube video source" : "Vertical clip preview layer";
+  frame.allow = "autoplay; encrypted-media; picture-in-picture; web-share";
+  frame.referrerPolicy = "strict-origin-when-cross-origin";
+  frame.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?enablejsapi=1&controls=${controls ? 1 : 0}&playsinline=1&rel=0&modestbranding=1&origin=${encodeURIComponent(window.location.origin)}`;
+  return frame;
+}
+
+function loadYouTubeIframeApi() {
+  if (window.YT?.Player) return Promise.resolve(window.YT);
+  if (window.clipFlowYouTubeApiPromise) return window.clipFlowYouTubeApiPromise;
+  window.clipFlowYouTubeApiPromise = new Promise((resolve, reject) => {
+    const previousReady = window.onYouTubeIframeAPIReady;
+    const timeout = setTimeout(() => reject(new Error("YouTube preview player timed out")), 12000);
+    window.onYouTubeIframeAPIReady = () => {
+      if (typeof previousReady === "function") previousReady();
+      clearTimeout(timeout);
+      resolve(window.YT);
+    };
+    let script = document.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = "https://www.youtube.com/iframe_api";
+      script.async = true;
+      script.onerror = () => { clearTimeout(timeout); reject(new Error("YouTube preview player could not load")); };
+      document.head.appendChild(script);
+    }
   });
+  return window.clipFlowYouTubeApiPromise;
+}
+
+function youtubeCropFrameStyle(frame, crop, outputWidth, outputHeight, sourceWidth = 1280, sourceHeight = 720, fit = "cover") {
+  if (!frame || !validEditorCrop(crop) || !outputWidth || !outputHeight) return;
+  const cropWidth = sourceWidth * crop.width, cropHeight = sourceHeight * crop.height;
+  const scale = fit === "contain" ? Math.min(outputWidth / cropWidth, outputHeight / cropHeight) : Math.max(outputWidth / cropWidth, outputHeight / cropHeight);
+  const drawWidth = cropWidth * scale, drawHeight = cropHeight * scale;
+  frame.style.width = `${sourceWidth}px`;
+  frame.style.height = `${sourceHeight}px`;
+  frame.style.left = `${(outputWidth - drawWidth) / 2 - crop.x * sourceWidth * scale}px`;
+  frame.style.top = `${(outputHeight - drawHeight) / 2 - crop.y * sourceHeight * scale}px`;
+  frame.style.transform = `scale(${scale})`;
+}
+
+function positionYouTubePreviewCrops() {
+  if (!editorYoutubeComposition || editorYoutubeComposition.hidden) return;
+  const mainWindow = editorYoutubeMain;
+  const insetWindow = editorYoutubeInset;
+  const mainFrame = mainWindow?.querySelector("iframe");
+  const insetFrame = insetWindow?.querySelector("iframe");
+  if (mainWindow && mainFrame) {
+    const crop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
+    youtubeCropFrameStyle(mainFrame, crop, mainWindow.clientWidth, mainWindow.clientHeight);
+  }
+  if (insetWindow && insetFrame && dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset)) {
+    const crop = dualCropRegions.inset;
+    const sourceW = 1280 * crop.width, sourceH = 720 * crop.height;
+    const scale = Math.min((editorPreviewCanvas.width * 0.32) / sourceW, (editorPreviewCanvas.height * 0.28) / sourceH);
+    const insetW = sourceW * scale, insetH = sourceH * scale;
+    insetWindow.style.width = `${insetW / editorPreviewCanvas.width * 100}%`;
+    insetWindow.style.height = `${insetH / editorPreviewCanvas.height * 100}%`;
+    insetWindow.style.right = `${18 / editorPreviewCanvas.width * 100}%`;
+    insetWindow.style.left = "auto";
+    insetWindow.style.top = `${18 / editorPreviewCanvas.height * 100}%`;
+    youtubeCropFrameStyle(insetFrame, crop, insetWindow.clientWidth, insetWindow.clientHeight, 1280, 720, "contain");
+  }
+}
+
+function syncYouTubePreviewPlayers() {
+  if (!editorYouTubeSourcePlayer || editorYouTubePlayers.length !== 2) return;
+  const YT = window.YT;
+  const sourceState = editorYouTubeSourcePlayer.getPlayerState?.();
+  const time = editorYouTubeSourcePlayer.getCurrentTime?.() || 0;
+  if (sourceState === YT?.PlayerState?.PLAYING) {
+    editorYouTubePlayers.forEach((player) => {
+      if (!player?.playVideo) return;
+      const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
+      if (drift > 0.65) player.seekTo(time, true);
+      player.mute();
+      player.playVideo();
+    });
+  } else {
+    editorYouTubePlayers.forEach((player) => {
+      if (!player?.pauseVideo) return;
+      const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
+      if (drift > 0.65 && player.seekTo) player.seekTo(time, true);
+      player.pauseVideo();
+    });
+  }
+}
+
+function updateEditorPlayButton() {
+  if (!clipEditorPlay) return;
+  const playing = editorSourceType === "youtube"
+    ? editorYouTubeSourcePlayer?.getPlayerState?.() === window.YT?.PlayerState?.PLAYING
+    : Boolean(heroMediaVideo && !heroMediaVideo.paused && !heroMediaVideo.ended);
+  clipEditorPlay.textContent = playing ? "Pause source" : "Play source";
+}
+
+function destroyYouTubeEditorPlayers() {
+  if (editorYouTubeSyncTimer) clearInterval(editorYouTubeSyncTimer);
+  editorYouTubeSyncTimer = null;
+  for (const player of editorYouTubePlayers) { try { player.destroy(); } catch {} }
+  if (editorYouTubeSourcePlayer) { try { editorYouTubeSourcePlayer.destroy(); } catch {} }
+  editorYouTubePlayers = [];
+  editorYouTubeSourcePlayer = null;
+  editorYouTubePreviewReady = 0;
+}
+
+async function mountYouTubeEditor(videoId) {
+  destroyYouTubeEditorPlayers();
+  editorYouTubeFrame = createYouTubeIframe(videoId, "clipEditorSourcePlayer", true);
+  dualCropStage.insertBefore(editorYouTubeFrame, dualCropOverlay);
+  dualCropStage.style.aspectRatio = "16 / 9";
+  updateEditorSourceSize(16, 9);
+  const thumbUrl = state.uploadedProject?.thumbnail || `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}/hqdefault.jpg`;
+  editorPreviewImage = new Image();
+  editorPreviewImage.onload = drawEditorPreview;
+  editorPreviewImage.src = thumbUrl;
+  if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "Phone preview follows the YouTube player as it plays.";
+  try {
+    const YT = await loadYouTubeIframeApi();
+    if (!clipEditorDialog.open) return;
+    editorYouTubeSourcePlayer = new YT.Player(editorYouTubeFrame, {
+      events: { onStateChange: () => { syncYouTubePreviewPlayers(); updateEditorPlayButton(); } },
+    });
+    const mainFrame = document.createElement("div");
+    const insetFrame = document.createElement("div");
+    mainFrame.id = "clipEditorPreviewMainPlayer";
+    insetFrame.id = "clipEditorPreviewInsetPlayer";
+    editorYoutubeMain.replaceChildren(mainFrame);
+    editorYoutubeInset.replaceChildren(insetFrame);
+    const playerOptions = { width: "1280", height: "720", videoId, playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, modestbranding: 1 }, events: {
+      onReady: (event) => {
+        event.target.mute();
+        editorYouTubePreviewReady += 1;
+        if (editorYouTubePreviewReady === 2) {
+          editorYoutubeComposition.hidden = false;
+          editorPreviewCanvas.hidden = true;
+          positionYouTubePreviewCrops();
+          syncYouTubePreviewPlayers();
+        }
+      },
+    } };
+    editorYouTubePlayers = [
+      new YT.Player(mainFrame, playerOptions),
+      new YT.Player(insetFrame, playerOptions),
+    ];
+    editorYouTubeSyncTimer = setInterval(syncYouTubePreviewPlayers, 800);
+  } catch (error) {
+    console.warn("YouTube live crop preview unavailable; showing its thumbnail instead:", error.message);
+    if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "The crop layout is previewed from the thumbnail; generated clips use the selected video frames.";
+    drawEditorPreview();
+  }
+}
+
+function openClipEditor() {
+  const project = state.uploadedProject || {};
+  const isYoutube = project.source === "youtube" || project.sourceType === "youtube" || Boolean(project.videoId);
+  editorSourceType = isYoutube ? "youtube" : "upload";
+  if (state.dualViewCrop?.main) dualCropRegions.main = { ...state.dualViewCrop.main };
+  if (state.dualViewCrop?.inset) dualCropRegions.inset = { ...state.dualViewCrop.inset };
+  if (dualViewEnabled) dualViewEnabled.checked = state.dualViewCrop?.inset !== null;
+  activeCropRegion = validEditorCrop(dualCropRegions.main) ? (dualViewEnabled?.checked ? "inset" : "main") : "main";
+  cropSelectionMode = false;
+  if (clipEditorError) { clipEditorError.hidden = true; clipEditorError.textContent = ""; }
+  if (clipEditorSourceName) clipEditorSourceName.textContent = project.originalName || project.title || "Uploaded video";
+  if (editorStageHome && editorSourceSlot) editorSourceSlot.appendChild(dualCropStage);
+  if (dualCropOverlay) { dualCropOverlay.hidden = false; dualCropOverlay.dataset.drawing = "false"; }
+  if (isYoutube) {
+    const videoId = project.videoId || getVideoIdFromUrl(project.sourceUrl || project.youtubeUrl || "");
+    if (!videoId) throw new Error("I couldn't identify the YouTube video. Paste its full watch or youtu.be link again.");
+    mountYouTubeEditor(videoId);
+  } else {
+    destroyYouTubeEditorPlayers();
+    editorYouTubeFrame?.remove();
+    editorYouTubeFrame = null;
+    heroMediaVideo.hidden = false;
+    updateEditorSourceSize(heroMediaVideo.videoWidth || 16, heroMediaVideo.videoHeight || 9);
+    editorPreviewImage = null;
+    if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "The phone preview follows the current frame of your uploaded video.";
+  }
+  renderDualCropRegions();
+  clipEditorDialog.showModal();
+  if (heroMediaVideo && !isYoutube) heroMediaVideo.play().catch(() => {});
+  if (editorPreviewTimer) clearInterval(editorPreviewTimer);
+  editorPreviewTimer = setInterval(() => {
+    if (!clipEditorDialog.open) return;
+    drawEditorPreview();
+    positionYouTubePreviewCrops();
+  }, 50);
+  requestAnimationFrame(() => { updateEditorSourceSize(heroMediaVideo.videoWidth || 16, heroMediaVideo.videoHeight || 9); renderDualCropRegions(); });
+}
+
+function closeClipEditor() {
+  cropSelectionMode = false;
+  if (editorPreviewTimer) clearInterval(editorPreviewTimer);
+  editorPreviewTimer = null;
+  destroyYouTubeEditorPlayers();
+  editorYouTubeFrame?.remove();
+  editorYouTubeFrame = null;
+  if (editorSourceType === "youtube") {
+    const thumb = state.uploadedProject?.thumbnail || (state.uploadedProject?.videoId ? `https://i.ytimg.com/vi/${state.uploadedProject.videoId}/hqdefault.jpg` : "");
+    if (thumb && heroMediaPoster) { heroMediaPoster.src = thumb; heroMediaPoster.hidden = false; }
+    if (heroMediaEmpty) heroMediaEmpty.hidden = Boolean(thumb);
+  }
+  if (dualCropOverlay) { dualCropOverlay.hidden = true; dualCropOverlay.dataset.drawing = "false"; }
+  if (heroMediaVideo) heroMediaVideo.pause();
+  if (editorStageHome && dualCropStage) {
+    if (editorStageBadge?.parentElement === editorStageHome) editorStageHome.insertBefore(dualCropStage, editorStageBadge);
+    else editorStageHome.appendChild(dualCropStage);
+  }
+}
+
+function showClipEditorError(message) {
+  if (!clipEditorError) return;
+  clipEditorError.textContent = message;
+  clipEditorError.hidden = false;
+}
+
+dualCropOverlay?.addEventListener("pointerdown", (event) => {
+  if (activeCropPointerId !== null) return;
+  if (!dualViewEnabled?.checked && activeCropRegion === "inset") return;
+  const bounds = dualCropStage.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return;
+  const box = event.target.closest(".dual-crop-box");
+  const name = box?.dataset.crop;
+  if (box && name !== activeCropRegion) return;
+  const isDrawing = cropSelectionMode && event.target === dualCropOverlay;
+  if (!box && !isDrawing) return;
+  event.preventDefault();
+  const startX = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+  const startY = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
+  const cropName = isDrawing ? activeCropRegion : name;
+  activeCropPointerId = event.pointerId;
+  try { dualCropOverlay.setPointerCapture(event.pointerId); } catch {}
+  const initial = dualCropRegions[cropName] ? { ...dualCropRegions[cropName] } : null;
+  const resizing = Boolean(box && event.target.closest(".crop-resize-handle") && initial);
+  const moving = Boolean(box && !resizing && initial);
+  const draw = (moveEvent) => {
+    if (moveEvent.pointerId !== event.pointerId) return;
+    const x = Math.max(0, Math.min(1, (moveEvent.clientX - bounds.left) / bounds.width));
+    const y = Math.max(0, Math.min(1, (moveEvent.clientY - bounds.top) / bounds.height));
+    if (moving) {
+      dualCropRegions[cropName] = { ...initial, x: Math.max(0, Math.min(1 - initial.width, initial.x + x - startX)), y: Math.max(0, Math.min(1 - initial.height, initial.y + y - startY)) };
+    } else if (resizing) {
+      dualCropRegions[cropName] = { ...initial, width: Math.max(0.04, Math.min(1 - initial.x, initial.width + x - startX)), height: Math.max(0.04, Math.min(1 - initial.y, initial.height + y - startY)) };
+    } else {
+      const left = Math.min(startX, x), top = Math.min(startY, y);
+      dualCropRegions[cropName] = { x: left, y: top, width: Math.abs(x - startX), height: Math.abs(y - startY) };
+    }
+    renderDualCropRegions();
+  };
+  const finish = (upEvent) => {
+    if (upEvent.pointerId !== event.pointerId) return;
+    window.removeEventListener("pointermove", draw);
+    window.removeEventListener("pointerup", finish);
+    window.removeEventListener("pointercancel", finish);
+    try { dualCropOverlay.releasePointerCapture(event.pointerId); } catch {}
+    activeCropPointerId = null;
+    cropSelectionMode = false;
+    if (dualCropOverlay) dualCropOverlay.dataset.drawing = "false";
+    if (clipEditorSelectHint) clipEditorSelectHint.textContent = "Drag a crop to move it, or choose it again to redraw";
+  };
+  window.addEventListener("pointermove", draw);
+  window.addEventListener("pointerup", finish);
+  window.addEventListener("pointercancel", finish);
 });
 
 heroMediaVideo?.addEventListener("loadedmetadata", () => {
-  if (dualCropStage && heroMediaVideo.videoWidth && heroMediaVideo.videoHeight) {
-    const maxWidth = dualCropStage.parentElement?.clientWidth || heroMediaVideo.videoWidth;
-    const scale = Math.min(maxWidth / heroMediaVideo.videoWidth, 420 / heroMediaVideo.videoHeight);
-    dualCropStage.style.width = `${Math.round(heroMediaVideo.videoWidth * scale)}px`;
-    dualCropStage.style.height = `${Math.round(heroMediaVideo.videoHeight * scale)}px`;
-  }
+  if (clipEditorDialog?.open) updateEditorSourceSize(heroMediaVideo.videoWidth, heroMediaVideo.videoHeight);
   state.videoDurationSeconds = Math.floor(heroMediaVideo.duration || 0);
   if (videoLengthText) videoLengthText.textContent = formatTime(heroMediaVideo.duration);
   if (endTimeInput) endTimeInput.value = secondsToTime(state.selectedDuration);
   showClipControls();
   updateClipPlanner();
 });
+heroMediaVideo?.addEventListener("play", updateEditorPlayButton);
+heroMediaVideo?.addEventListener("pause", updateEditorPlayButton);
 
-dualCropStage?.addEventListener("pointerdown", (event) => {
-  if (!dualViewEnabled?.checked) return;
-  const bounds = dualCropStage.getBoundingClientRect();
-  if (!bounds.width || !bounds.height || (event.target === heroMediaVideo && event.clientY > bounds.bottom - 42)) return;
-  event.preventDefault();
-  const startX = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-  const startY = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
-  const region = activeCropRegion;
-  const draw = (moveEvent) => {
-    const x = Math.max(0, Math.min(1, (moveEvent.clientX - bounds.left) / bounds.width));
-    const y = Math.max(0, Math.min(1, (moveEvent.clientY - bounds.top) / bounds.height));
-    const left = Math.min(startX, x), top = Math.min(startY, y);
-    dualCropRegions[region] = { x: left, y: top, width: Math.abs(x - startX), height: Math.abs(y - startY) };
-    renderDualCropRegions();
-  };
-  const finish = () => {
-    window.removeEventListener("pointermove", draw);
-    window.removeEventListener("pointerup", finish);
-  };
-  window.addEventListener("pointermove", draw);
-  window.addEventListener("pointerup", finish);
+clipEditorPlay?.addEventListener("click", () => {
+  if (editorSourceType === "youtube") {
+    const playing = editorYouTubeSourcePlayer?.getPlayerState?.() === window.YT?.PlayerState?.PLAYING;
+    const command = playing ? "pauseVideo" : "playVideo";
+    if (editorYouTubeSourcePlayer?.[command]) editorYouTubeSourcePlayer[command]();
+    else editorYouTubeFrame?.contentWindow?.postMessage(JSON.stringify({ event: "command", func: command, args: [] }), "*");
+  } else if (heroMediaVideo) {
+    if (heroMediaVideo.paused || heroMediaVideo.ended) heroMediaVideo.play().catch(() => {});
+    else heroMediaVideo.pause();
+  }
+  setTimeout(updateEditorPlayButton, 100);
+});
+
+window.addEventListener("resize", () => {
+  if (!clipEditorDialog?.open) return;
+  if (editorSourceType === "youtube") updateEditorSourceSize(16, 9);
+  else updateEditorSourceSize(heroMediaVideo.videoWidth || 16, heroMediaVideo.videoHeight || 9);
+  renderDualCropRegions();
+});
+
+document.getElementById("clipEditorClose")?.addEventListener("click", () => clipEditorDialog?.close());
+document.getElementById("clipEditorCancel")?.addEventListener("click", () => clipEditorDialog?.close());
+clipEditorDialog?.addEventListener("close", closeClipEditor);
+document.getElementById("clipEditorGenerate")?.addEventListener("click", () => {
+  if (!validEditorCrop(dualCropRegions.main)) {
+    showClipEditorError("Draw the large gameplay crop first. Drag over the gameplay area in the source video.");
+    return;
+  }
+  if (dualViewEnabled?.checked && !validEditorCrop(dualCropRegions.inset)) {
+    showClipEditorError("Draw the floating facecam crop, or turn off “Include floating facecam” to make a single-view clip.");
+    return;
+  }
+  state.dualViewCrop = { main: { ...dualCropRegions.main }, inset: dualViewEnabled?.checked ? { ...dualCropRegions.inset } : null };
+  state.clipEditorConfirmed = true;
+  clipEditorDialog?.close();
+  smartClipBtn?.click();
 });
 
 videoInput?.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
+  if (ytUrlInput) ytUrlInput.value = "";
+  if (clearUrlBtn) clearUrlBtn.style.display = "none";
 
   try {
     upsertCurrentProjectToAllProjects();
@@ -2273,8 +2681,7 @@ videoInput?.addEventListener("change", async (e) => {
     state.clipCaptions = {};
     dualCropRegions.main = null;
     dualCropRegions.inset = null;
-    if (dualViewEnabled) dualViewEnabled.checked = false;
-    if (dualViewControls) dualViewControls.hidden = true;
+    state.dualViewCrop = null;
     if (dualCropOverlay) dualCropOverlay.hidden = true;
 
     clearYoutubePreview();
@@ -2294,7 +2701,6 @@ videoInput?.addEventListener("change", async (e) => {
     const result = await uploadWithXHR(`${API_BASE}/clips/upload`, formData);
 
     state.uploadedProject = result.project;
-    if (dualViewControls) dualViewControls.hidden = false;
     state.savedProjectId = null;
     setProjectInfo(file.name, formatBytes(file.size));
     renderGeneratedClips();
@@ -3426,14 +3832,8 @@ function buildSmartSuggestBody() {
     body.storageUrl =
       state.uploadedProject.storageUrl ||
       "";
-    if (dualViewEnabled?.checked) {
-      const isValidRegion = (region) => region && region.width >= 0.04 && region.height >= 0.04;
-      if (!isValidRegion(dualCropRegions.main) || !isValidRegion(dualCropRegions.inset)) {
-        throw new Error("Select both crop areas: draw the main gameplay region, then draw the floating view region.");
-      }
-      body.dualView = { main: dualCropRegions.main, inset: dualCropRegions.inset };
-    }
   }
+  if (state.dualViewCrop?.main) body.dualView = state.dualViewCrop;
 
   return body;
 }
@@ -3894,6 +4294,39 @@ function showUploadRequiredForSmartClips(data) {
 
 smartClipBtn?.addEventListener("click", async () => {
   try {
+    if (!state.clipEditorConfirmed) {
+      const requestedUrl = ytUrlInput?.value?.trim() || "";
+      if (requestedUrl && !isValidYouTubeUrl(requestedUrl)) {
+        alert("Please enter a valid YouTube video link, or clear the link to use the uploaded video.");
+        return;
+      }
+      if (requestedUrl && isValidYouTubeUrl(requestedUrl)) {
+        const videoId = getVideoIdFromUrl(requestedUrl);
+        if (state.uploadedProject?.source !== "youtube" || state.uploadedProject?.videoId !== videoId) {
+          state.uploadedProject = {
+            source: "youtube", sourceType: "youtube", sourceUrl: requestedUrl,
+            youtubeUrl: requestedUrl, videoId, title: "YouTube video",
+            thumbnail: videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : "",
+          };
+          state.dualViewCrop = null;
+          dualCropRegions.main = null;
+          dualCropRegions.inset = null;
+        }
+      }
+      const isUploadSource = state.uploadedProject?.source === "upload" || state.uploadedProject?.sourceType === "upload";
+      const hasYoutubeSource = state.uploadedProject?.source === "youtube" && (state.uploadedProject.videoId || state.uploadedProject.sourceUrl);
+      if (!isUploadSource && !hasYoutubeSource) {
+        alert(requestedUrl ? "Please enter a valid YouTube video link." : "Please paste a YouTube link or upload a video first.");
+        return;
+      }
+      if (isUploadSource && !state.uploadedProject.filePath && !state.uploadedProject.inputPath && !state.uploadedProject.localPath && !state.uploadedProject.fileName) {
+        alert("Please wait for the video upload to finish, then open the editor.");
+        return;
+      }
+      openClipEditor();
+      return;
+    }
+    state.clipEditorConfirmed = false;
     const url = ytUrlInput?.value?.trim() || "";
     const isUploadMode = Boolean(
       state.uploadedProject &&

@@ -379,15 +379,12 @@ router.post("/smart-generate", async (req, res) => {
     if (normalizedSourceType !== "youtube" && !inputPath) {
       return res.status(400).json({ error: "Input video file is required." });
     }
-    if (dualView && normalizedSourceType !== "upload") {
-      return res.status(400).json({ error: "Dual view cropping is available for uploaded videos." });
-    }
     if (dualView) {
       const validCrop = (crop) => crop && [crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) &&
         crop.x >= 0 && crop.y >= 0 && crop.width >= 0.04 && crop.height >= 0.04 &&
         crop.x + crop.width <= 1 && crop.y + crop.height <= 1;
-      if (!validCrop(dualView.main) || !validCrop(dualView.inset)) {
-        return res.status(400).json({ error: "Both crop regions must be inside the video frame and at least 4% of its size." });
+      if (!validCrop(dualView.main) || (dualView.inset && !validCrop(dualView.inset))) {
+        return res.status(400).json({ error: "Each crop region must be inside the video frame and at least 4% of its size." });
       }
     }
 

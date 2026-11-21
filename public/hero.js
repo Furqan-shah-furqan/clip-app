@@ -15,7 +15,18 @@
     arc.style.strokeDasharray = `${231 * value / 100} 308`;
   }
   function sync() {
-    const value = Math.max(0, Math.min(100, parseFloat(byId('progressPercent').textContent) || 0));
+    const isGenerating = Boolean(window.state?.isGenerating);
+    const value = isGenerating ? Math.max(0, Math.min(100, parseFloat(byId('progressPercent').textContent) || 0)) : 0;
+    hero.dataset.loading = String(isGenerating);
+    if (!isGenerating) {
+      cancelAnimationFrame(frame);
+      target = 0;
+      paint(0);
+      percent.textContent = 'Ready';
+      gauge.setAttribute('aria-valuenow', '0');
+      status.textContent = window.state?.uploadedProject ? 'Open the editor to frame your clip' : 'Add a video to get started';
+      return;
+    }
     if (value !== target) {
       target = value;
       cancelAnimationFrame(frame);
@@ -28,8 +39,7 @@
       }
       frame = requestAnimationFrame(tick);
     }
-    hero.dataset.loading = String(value > 0 && value < 100);
-    status.textContent = byId('progressLabel').textContent.trim().replace(/^•\s*/, '') || 'Add a video to get started';
+    status.textContent = byId('progressLabel').textContent.trim().replace(/^•\s*/, '') || 'Finding strong moments';
     const image = thumb.getAttribute('src');
     if (!objectUrl && image && thumb.style.display !== 'none') {
       if (poster.getAttribute('src') !== image) poster.src = image;

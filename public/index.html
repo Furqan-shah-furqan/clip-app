@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClipFlow Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="style.css?v=compact-1" />
+    <link rel="stylesheet" href="style.css?v=clip-editor-2" />
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
     <link rel="stylesheet" href="hero.css?v=usability-1" />
   <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script></head>
@@ -89,10 +89,10 @@
             <!-- Typography & Hero Headlines -->
             <div class="hero-headings">
               <h1 class="hero-title">
-                Long Videos. Shorter <span class="hero-gradient-text">Fame.</span>
+                Turn long streams into <span class="hero-gradient-text">vertical clips.</span>
               </h1>
               <p class="hero-subtitle">
-                Paste a YouTube link, upload a file, or import from Google Drive — let AI find, cut, and polish your best moments.
+                Find strong moments, frame gameplay and facecam, and preview the 9:16 result before generation.
               </p>
             </div>
 
@@ -100,7 +100,7 @@
               <div class="hero-entry-row">
               <!-- Primary Input: Pill Container -->
               <div class="hero-pill-input-box">
-                <span class="hero-link-icon">🔗</span>
+                <span class="hero-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13.5 8.5 15a4 4 0 0 1-5.7-5.7l4-4a4 4 0 0 1 5.7 0M14 10.5l1.5-1.5a4 4 0 0 1 5.7 5.7l-4 4a4 4 0 0 1-5.7 0M8.5 15l7-7"/></svg></span>
                 <input
                   type="url"
                   id="ytUrlInput"
@@ -148,7 +148,7 @@
                   id="smartClipBtn"
                   type="button"
                 >
-                  <span>✨ Generate Clips</span>
+                  <span>Generate clips</span>
                   <span class="cta-arrow">→</span>
                 </button>
               </div>
@@ -175,25 +175,16 @@
                 </button>
               </div>
 
-              <section class="dual-view-controls" id="dualViewControls" hidden aria-label="Dual view crop settings">
-                <label class="dual-view-toggle"><input type="checkbox" id="dualViewEnabled" /> Add floating gameplay view</label>
-                <div class="dual-view-help" id="dualViewHelp">Drag on the video to select the large gameplay area, then select Floating view and drag the inset area.</div>
-                <div class="dual-view-actions" role="group" aria-label="Choose crop region">
-                  <button type="button" class="dual-view-select is-active" data-crop-select="main">1 · Main gameplay</button>
-                  <button type="button" class="dual-view-select" data-crop-select="inset">2 · Floating view</button>
-                </div>
-              </section>
-
-                <span class="hero-toolbar-note">Long videos. Standout moments.</span>
+                <span class="hero-toolbar-note">Gameplay and facecam, framed for mobile.</span>
               </div>
               <div class="hero-showcase">
                 <section class="hero-loading-card" aria-label="Clip generation progress">
                   <div class="hero-loading-main">
                     <div class="hero-loading-gauge" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="heroLoadingGauge">
-                      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="heroLoadingGradient"><stop stop-color="#00d9ff"/><stop offset=".5" stop-color="#7679ff"/><stop offset="1" stop-color="#e22bdc"/></linearGradient></defs><circle class="hero-gauge-track" cx="60" cy="60" r="49"/><circle class="hero-gauge-fill" id="heroLoadingArc" cx="60" cy="60" r="49"/></svg>
-                      <div class="hero-loading-value"><strong id="heroLoadingPercent">0%</strong><span>Loading</span></div>
+                      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="heroLoadingGradient"><stop stop-color="#d3a74c"/><stop offset=".5" stop-color="#d3a74c"/><stop offset="1" stop-color="#d3a74c"/></linearGradient></defs><circle class="hero-gauge-track" cx="60" cy="60" r="49"/><circle class="hero-gauge-fill" id="heroLoadingArc" cx="60" cy="60" r="49"/></svg>
+                      <div class="hero-loading-value"><strong id="heroLoadingPercent">Ready</strong><span>Clips</span></div>
                     </div>
-                    <div class="hero-loading-copy"><h2>Your next great clips</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+                    <div class="hero-loading-copy"><h2>Clip generation</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
                   </div>
                   <p class="hero-loading-status" id="heroLoadingStatus" role="status">Add a video to get started</p>
                 </section>
@@ -203,8 +194,8 @@
                   <div class="dual-crop-stage" id="dualCropStage">
                     <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
                     <div class="dual-crop-overlay" id="dualCropOverlay" hidden>
-                      <div class="dual-crop-box is-main" data-crop="main"><span>Main gameplay</span></div>
-                      <div class="dual-crop-box is-inset" data-crop="inset"><span>Floating view</span></div>
+                      <div class="dual-crop-box is-main" data-crop="main"><span>Gameplay</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
+                      <div class="dual-crop-box is-inset" data-crop="inset"><span>Facecam</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
                     </div>
                   </div>
                   <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
@@ -635,6 +626,58 @@
     </main>
     </div>
 
+    <dialog class="clip-editor-dialog" id="clipEditorDialog" aria-labelledby="clipEditorTitle">
+      <div class="clip-editor-shell">
+        <header class="clip-editor-header">
+          <div>
+            <p class="clip-editor-kicker">Clip setup</p>
+            <h2 id="clipEditorTitle">Frame your vertical clip</h2>
+            <p>Choose the gameplay crop and place the facecam. Your preview updates as you adjust them.</p>
+          </div>
+          <button class="clip-editor-close" id="clipEditorClose" type="button" aria-label="Close editor">×</button>
+        </header>
+        <div class="clip-editor-option-row">
+          <label class="clip-editor-toggle"><input type="checkbox" id="dualViewEnabled" checked /> Include floating facecam</label>
+          <span id="clipEditorSourceName">Uploaded video</span>
+        </div>
+        <div class="clip-editor-layout">
+          <section class="clip-editor-source-column" aria-label="Select source crop areas">
+            <div class="clip-editor-section-head">
+              <div><span class="clip-editor-step">01</span><h3>Select crop areas</h3></div>
+              <span id="clipEditorSelectHint">Play the source, choose a crop, then drag a rectangle</span>
+                <button class="clip-editor-source-play" id="clipEditorPlay" type="button">Play source</button>
+            </div>
+            <div class="clip-editor-crop-tools" role="group" aria-label="Crop selection">
+              <button class="clip-editor-crop-button is-active" type="button" data-crop-select="main"><span class="crop-number">1</span><span><strong>Gameplay</strong><small>Main vertical view</small></span></button>
+              <button class="clip-editor-crop-button" id="insetCropButton" type="button" data-crop-select="inset"><span class="crop-number">2</span><span><strong>Facecam</strong><small>Floating inset</small></span></button>
+            </div>
+            <div class="clip-editor-source-frame" id="editorSourceSlot"></div>
+            <p class="clip-editor-source-note" id="clipEditorSourceNote">Drag a rectangle over the video. Drag inside a crop to move it; use its corner to resize.</p>
+          </section>
+          <aside class="clip-editor-preview-column" aria-label="Mobile clip preview">
+            <div class="clip-editor-section-head">
+              <div><span class="clip-editor-step">02</span><h3>Phone preview</h3></div>
+              <span>9:16 · vertical</span>
+            </div>
+            <div class="phone-preview-frame">
+              <canvas id="editorPreviewCanvas" width="360" height="640" aria-label="Preview of the vertical clip"></canvas>
+              <div class="editor-youtube-composition" id="editorYoutubeComposition" hidden>
+                <div class="editor-youtube-main yt-crop-window" id="editorYoutubeMain"></div>
+                <div class="editor-youtube-inset yt-crop-window" id="editorYoutubeInset"></div>
+              </div>
+              <span class="phone-preview-live" aria-hidden="true"></span>
+            </div>
+            <p class="clip-editor-preview-note" id="clipEditorPreviewNote">This is the crop and facecam placement used in every generated clip.</p>
+          </aside>
+        </div>
+        <p class="clip-editor-error" id="clipEditorError" role="alert" hidden></p>
+        <footer class="clip-editor-footer">
+          <button class="clip-editor-cancel" id="clipEditorCancel" type="button">Cancel</button>
+          <button class="clip-editor-generate" id="clipEditorGenerate" type="button">Find moments and generate clips <span aria-hidden="true">→</span></button>
+        </footer>
+      </div>
+    </dialog>
+
     <!-- Clip preview modal (with caption overlay) -->
     <div class="clip-modal" id="clipModal" aria-hidden="true">
       <div class="clip-modal-backdrop" id="clipModalBackdrop"></div>
@@ -696,8 +739,8 @@
     </div>
 
     <script src="captionClient.js?v=20260922"></script>
-    <script src="app.js?v=playback-1"></script>
+    <script src="app.js?v=clip-editor-2"></script>
     <script src="dropdowns.js?v=20260922"></script>
-    <script src="hero.js?v=1"></script>
+    <script src="hero.js?v=clip-editor-2"></script>
   </body>
 </html>

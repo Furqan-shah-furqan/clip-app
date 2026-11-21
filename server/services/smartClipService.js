@@ -467,10 +467,16 @@ async function smartGenerateClip({
           return `crop=trunc(iw*${width}/2)*2:trunc(ih*${height}/2)*2:trunc(iw*${x}/2)*2:trunc(ih*${y}/2)*2`;
         };
         const insetWidth = Math.max(120, Math.round(targetW * 0.32));
+        const insetHeight = Math.max(120, Math.round(targetH * 0.28));
         const mainW = cropExpr(dualView.main);
-        const insetW = cropExpr(dualView.inset);
-        const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}[base];[insetIn]${insetW},scale=${insetWidth}:-2,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
-        args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
+        const baseFilter = `${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`;
+        if (dualView.inset) {
+          const insetW = cropExpr(dualView.inset);
+          const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
+          args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
+        } else {
+          args.push("-vf", baseFilter);
+        }
       } else {
         args.push("-vf", `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`);
       }
