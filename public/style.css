@@ -7702,18 +7702,26 @@ body.home-page .hero-title { font-weight: 600; }
 .hero-reference button.hero-loading-status { width: 100%; border: 0; font-family: inherit; cursor: pointer; }
 .hero-reference button.hero-loading-status:disabled { cursor: default; }
 /* Compact crop workspace: preview/frames rail on the left, full source on the right. */
-.hero-reference .hero-loading-value strong { font-size: clamp(10px, 1.05vw, 15px); }
+.hero-reference .hero-loading-value strong { font-size: clamp(10px, 1.05vw, 15px) !important; }
 .hero-reference .hero-loading-value span { font-size: 9px; }
 .hero-reference .hero-title { font-size: clamp(14px, 1.7vw, 22px) !important; margin-bottom: 3px !important; }
 .hero-reference .hero-subtitle { font-size: 7px !important; }
 .clip-editor-header,.clip-editor-footer { display: none !important; }
 .clip-editor-option-row { min-height: 38px; margin: 0; padding: 4px 12px; border: 0; }
+.clip-editor-option-row { flex-wrap: wrap; }
+.clip-editor-top-crops { display: flex; gap: 4px; }
+.clip-editor-top-crops .clip-editor-crop-button { flex: 0 1 auto; gap: 5px; padding: 4px 7px; border-radius: 7px; }
+.clip-editor-top-crops .clip-editor-crop-button strong { font-size: 10px; }
+.clip-editor-top-crops .clip-editor-crop-button small { font-size: 9px; }
+.clip-editor-option-row .clip-editor-actions { display: flex; gap: 5px; padding: 0; }
+.clip-editor-option-row .clip-editor-cancel,.clip-editor-option-row .clip-editor-generate { min-height: 30px; padding: 0 9px; font-size: 11px; }
 .clip-editor-layout { grid-template-columns: minmax(220px, 28%) minmax(0,1fr); gap: 14px; padding: 10px 14px; }
 .clip-editor-left-rail { display: flex; min-width: 0; flex-direction: column; align-items: stretch; gap: 12px; }
 .clip-editor-preview-column,.clip-editor-source-column { min-width: 0; }
 .clip-editor-preview-column .clip-editor-section-head,.clip-editor-source-column .clip-editor-section-head { margin-bottom: 7px; }
-.phone-preview-frame { width: min(100%, 34vh); max-height: calc(90vh - 110px); }
-.phone-preview-frame canvas { width: auto; height: min(58vh, calc(90vh - 130px)); max-width: 100%; margin: 0 auto; aspect-ratio: 9 / 16; }
+.phone-preview-frame { width: min(100%, 34vh); height: min(60vh, calc(90vh - 130px)); aspect-ratio: 9 / 16; max-height: none; }
+.phone-preview-frame canvas,.editor-youtube-composition { position: absolute; inset: 7px; width: calc(100% - 14px); height: calc(100% - 14px); max-width: none; margin: 0; aspect-ratio: auto; }
+.phone-preview-frame canvas { object-fit: contain; }
 .editor-youtube-composition { inset: 7px; }
 .clip-editor-source-frame { height: calc(90vh - 145px); min-height: 0; max-height: none; }
 .clip-editor-source-frame .dual-crop-stage { max-width: 100%; max-height: 100%; }
@@ -7727,10 +7735,10 @@ body.home-page .hero-title { font-weight: 600; }
   .clip-editor-dialog { inset: 5dvh auto auto 5vw; width: 90vw; height: 90dvh; }
   .clip-editor-layout { grid-template-columns: minmax(116px, 34%) minmax(0,1fr); gap: 8px; padding: 6px 8px; }
   .clip-editor-source-frame { height: calc(90dvh - 135px); }
-  .phone-preview-frame { width: 100%; padding: 3px; border-radius: 12px; }
-  .phone-preview-frame canvas { width: 100%; height: auto; }
-  .clip-editor-option-row { gap: 6px; font-size: 10px; }
-  .clip-editor-actions { padding-bottom: 6px; }
+  .phone-preview-frame { width: min(26vw, 28dvh); height: min(46dvh, 66vw); padding: 3px; border-radius: 12px; }
+  .phone-preview-frame canvas,.editor-youtube-composition { inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); }
+  .clip-editor-option-row { gap: 5px; font-size: 9px; }
+  .clip-editor-option-row .clip-editor-actions { margin-left: auto; }
 }
 .hero-link-icon svg { display: block; width: 18px; height: 18px; }
 @media (max-width: 720px) {
