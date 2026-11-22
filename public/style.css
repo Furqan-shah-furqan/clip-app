@@ -7777,6 +7777,10 @@ body.home-page .hero-title { font-weight: 600; }
 .clip-editor-source-frame { padding: 15px; border-radius: 35px; background: transparent; }
 .clip-editor-source-frame .dual-crop-stage { border-radius: 20px; overflow: hidden; }
 .clip-editor-source-frame .dual-crop-stage > iframe { object-fit: cover; }
+.phone-preview-frame { padding: 0 !important; }
+.phone-preview-frame canvas,.editor-youtube-composition { inset: 0 !important; width: 100% !important; height: 100% !important; border-radius: 35px !important; }
+.phone-preview-frame canvas { border-radius: 35px !important; }
+.editor-youtube-main,.editor-youtube-inset { background: transparent; }
 @media(max-width:720px) {
   .phone-preview-frame { padding: 15px !important; border-radius: 35px !important; }
   .editor-youtube-composition { inset: 15px !important; }

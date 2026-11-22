@@ -2421,6 +2421,7 @@ function syncYouTubePreviewPlayers() {
   if (sourceState === YT?.PlayerState?.PLAYING) {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.playVideo) return;
+      try { player.unloadModule("captions"); player.setOption("captions", "track", {}); } catch {}
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
       if (drift > 0.2) player.seekTo(time, true);
       player.mute();
