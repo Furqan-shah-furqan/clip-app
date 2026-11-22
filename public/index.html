@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClipFlow Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="stylesheet" href="style.css?v=clip-editor-8" />
+    <link rel="stylesheet" href="style.css?v=clip-editor-9" />
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
     <link rel="stylesheet" href="hero.css?v=usability-1" />
   <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script></head>
@@ -642,7 +642,6 @@
         <div class="clip-editor-layout">
           <aside class="clip-editor-left-rail">
             <section class="clip-editor-preview-column" aria-label="Mobile clip preview">
-              <div class="clip-editor-section-head"><h3>Phone preview</h3><span>9:16</span></div>
               <div class="phone-preview-frame">
                 <canvas id="editorPreviewCanvas" width="360" height="640" aria-label="Preview of the vertical clip"></canvas>
                 <div class="editor-youtube-composition" id="editorYoutubeComposition" hidden>
@@ -651,17 +650,14 @@
                 </div>
                 <span class="phone-preview-live" aria-hidden="true"></span>
               </div>
-              <p class="clip-editor-preview-note" id="clipEditorPreviewNote">Live preview of your current crop and facecam placement.</p>
             </section>
             <section class="clip-editor-frames" aria-label="Generated clip frames">
-              <h3>Generated clips</h3>
-              <div id="clipEditorFrames"><span class="clip-editor-frame-placeholder">Frames appear here after generation.</span></div>
+              <div id="clipEditorFrames"></div>
             </section>
           </aside>
           <section class="clip-editor-source-column" aria-label="Select source crop areas">
-            <div class="clip-editor-section-head"><h3>Source video</h3><span id="clipEditorSelectHint">Drag to select a crop</span></div>
+            <div class="clip-editor-section-head"><span id="clipEditorSelectHint" aria-live="polite"></span></div>
             <div class="clip-editor-source-frame" id="editorSourceSlot"></div>
-            <p class="clip-editor-source-note" id="clipEditorSourceNote">Drag a rectangle over the video. Drag inside a crop to move it; use its corner to resize.</p>
           </section>
         </div>
         <p class="clip-editor-error" id="clipEditorError" role="alert" hidden></p>

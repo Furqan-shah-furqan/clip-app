@@ -7760,3 +7760,19 @@ body.home-page .hero-title { font-weight: 600; }
   .clip-editor-dialog[open] { animation: none; }
   .clip-editor-crop-button,.clip-editor-cancel,.clip-editor-generate,.clip-editor-close { transition: none; }
 }
+/* Keep the editor clean and fully visible; give both preview surfaces more room. */
+.clip-editor-dialog { padding: 5px; overflow: hidden; }
+.clip-editor-shell,.clip-editor-layout { min-height: 0; overflow: hidden; }
+.clip-editor-layout { padding: 5px; gap: 10px; }
+.phone-preview-frame { width: min(100%, calc(65vh * 9 / 16 + 28px)); height: min(calc(65vh + 50px), calc(90vh - 80px)); max-height: none; }
+.clip-editor-source-frame { height: min(calc(90vh - 95px), 75vh); }
+.clip-editor-source-note,.clip-editor-preview-note,.clip-editor-frames h3,.clip-editor-section-head h3,.clip-editor-section-head > span { display: none !important; }
+.clip-editor-source-column .clip-editor-section-head { min-height: 0; height: 0; margin: 0; }
+.clip-editor-left-rail { overflow: hidden; }
+.clip-editor-frames #clipEditorFrames:empty { display: none; }
+.editor-youtube-main iframe { object-fit: contain; }
+@media(max-width:720px) {
+  .clip-editor-layout { padding: 5px; gap: 6px; }
+  .phone-preview-frame { width: min(100%, calc(65dvh * 9 / 16 + 28px)); height: min(calc(65dvh + 50px), calc(90dvh - 80px)); }
+  .clip-editor-source-frame { height: min(calc(90dvh - 95px), 75dvh); }
+}

@@ -2397,7 +2397,7 @@ function positionYouTubePreviewCrops() {
   const insetFrame = insetWindow?.querySelector("iframe");
   if (mainWindow && mainFrame) {
     const crop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
-    youtubeCropFrameStyle(mainFrame, crop, mainWindow.clientWidth, mainWindow.clientHeight);
+    youtubeCropFrameStyle(mainFrame, crop, mainWindow.clientWidth, mainWindow.clientHeight, 1280, 720, "contain");
   }
   if (insetWindow && insetFrame && dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset)) {
     const crop = dualCropRegions.inset;
