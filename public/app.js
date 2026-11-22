@@ -2257,7 +2257,7 @@ function renderDualCropRegions() {
   const insetButton = document.getElementById("insetCropButton");
   if (insetButton) insetButton.disabled = !dualViewEnabled?.checked;
   if (editorYoutubeComposition) {
-    editorYoutubeComposition.hidden = !editorYoutubeFrame || !editorYouTubePreviewReady;
+    editorYoutubeComposition.hidden = !editorYouTubeFrame || !editorYouTubePreviewReady;
     if (editorPreviewCanvas) editorPreviewCanvas.hidden = !editorYoutubeComposition.hidden;
     if (editorYoutubeInset) editorYoutubeInset.hidden = !dualViewEnabled?.checked;
     positionYouTubePreviewCrops();
