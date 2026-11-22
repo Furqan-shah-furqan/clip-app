@@ -7702,7 +7702,10 @@ body.home-page .hero-title { font-weight: 600; }
 .hero-reference button.hero-loading-status { width: 100%; border: 0; font-family: inherit; cursor: pointer; }
 .hero-reference button.hero-loading-status:disabled { cursor: default; }
 /* Compact crop workspace: preview/frames rail on the left, full source on the right. */
-.hero-reference .hero-loading-value strong { font-size: clamp(14px, 1.5vw, 21px); }
+.hero-reference .hero-loading-value strong { font-size: clamp(10px, 1.05vw, 15px); }
+.hero-reference .hero-loading-value span { font-size: 9px; }
+.hero-reference .hero-title { font-size: clamp(14px, 1.7vw, 22px) !important; margin-bottom: 3px !important; }
+.hero-reference .hero-subtitle { font-size: 7px !important; }
 .clip-editor-header,.clip-editor-footer { display: none !important; }
 .clip-editor-option-row { min-height: 38px; margin: 0; padding: 4px 12px; border: 0; }
 .clip-editor-layout { grid-template-columns: minmax(220px, 28%) minmax(0,1fr); gap: 14px; padding: 10px 14px; }
