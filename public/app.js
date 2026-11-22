@@ -4150,47 +4150,17 @@ async function consumeCompletedClips(rawClips = []) {
 async function handleUploadForSmartClips(input, suggestions) {
   const file = input.files?.[0];
   if (!file) return;
-
-  try {
-    updateProgress(0, "Uploading source video...");
-
-    const formData = new FormData();
-    formData.append("video", file);
-    const result = await uploadWithXHR(`${API_BASE}/clips/upload`, formData);
-
-    state.uploadedProject = result.project;
-
-    updateProgress(5, "Queuing clip generation from uploaded video...");
-
-    const body = {
-      sourceType: "upload",
-      inputPath: result.project.filePath,
-      segments: suggestions,
-      isContinuation: true,
-      maxClips: Array.isArray(suggestions) && suggestions.length ? suggestions.length : 3,
-      minScore: 0,
-      clipLengthSec: state.selectedDuration || 30,
-    };
-
-    const createRes = await createSmartGenerationJob(body);
-    const jobId = createRes?.jobId;
-    if (!jobId) throw new Error("No job ID returned from generation creation");
-
-    showActiveGenerationUI({
-      id: jobId,
-      status: "QUEUED",
-      stage: "Queuing clip generation from uploaded video...",
-      progress: 5,
-    });
-
-    startGenerationPolling(jobId);
-  } catch (error) {
-    resetGenerationUI();
-    updateProgress(0, error.message || "Upload failed");
-    alert(error.message || "Upload failed");
-  } finally {
-    checkGenerationStateInvariant();
+  // This legacy recovery path used to queue generation immediately, skipping
+  // the framing editor. Keep it as an upload-only path so the main Generate
+  // button opens the editor after the normal upload has finished.
+  if (!videoInput) {
+    alert("The video upload control is unavailable. Refresh the page and try again.");
+    return;
   }
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  videoInput.files = transfer.files;
+  videoInput.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
 function formatSmartReason(suggestion = {}) {
