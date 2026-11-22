@@ -7781,6 +7781,11 @@ body.home-page .hero-title { font-weight: 600; }
 .phone-preview-frame canvas,.editor-youtube-composition { inset: 0 !important; width: 100% !important; height: 100% !important; border-radius: 35px !important; }
 .phone-preview-frame canvas { border-radius: 35px !important; }
 .editor-youtube-main,.editor-youtube-inset { background: transparent; }
+.editor-youtube-composition { inset: 0 !important; border-radius: 35px !important; }
+.editor-youtube-main iframe { object-fit: cover; }
+.clip-editor-source-frame { background-size: cover; background-position: center; }
+body.home-page #expectedOutputCard.is-generating :is(#expectedOutputKickerText,#expectedOutputDuration,#expectedOutputCount,#expectedOutputProgressBar,#expectedOutputEtaText) { display: none !important; }
+body.home-page #expectedOutputCard.is-generating .expected-output-summary { min-height: 0; padding-block: 0; }
 @media(max-width:720px) {
   .phone-preview-frame { padding: 15px !important; border-radius: 35px !important; }
   .editor-youtube-composition { inset: 15px !important; }

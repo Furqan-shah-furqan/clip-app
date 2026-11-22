@@ -1021,6 +1021,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   const expFill = document.getElementById("expectedOutputProgressFill");
   const expEta = document.getElementById("expectedOutputEtaText");
   const expClipsGrid = document.getElementById("expectedOutputClipsGrid");
+  expectedOutputCard?.classList.add("is-generating");
   const expCount = getAutoSmartClipCount();
 
   if (expKicker) expKicker.textContent = "Generating clips…";
@@ -1730,6 +1731,7 @@ const SVG_EDIT = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" st
 
 function renderGeneratedClips() {
   if (!generatedClipsGrid) return;
+  expectedOutputCard?.classList.remove("is-generating");
   applyClipsView();
   persistStudioSession();
   renderProjectHistory(lastProjectsCache);
@@ -2421,11 +2423,10 @@ function syncYouTubePreviewPlayers() {
   if (sourceState === YT?.PlayerState?.PLAYING) {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.playVideo) return;
-      try { player.unloadModule("captions"); player.setOption("captions", "track", {}); } catch {}
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
       if (drift > 0.2) player.seekTo(time, true);
       player.mute();
-      player.playVideo();
+      if (player.getPlayerState?.() !== YT?.PlayerState?.PLAYING) player.playVideo();
     });
   } else {
     editorYouTubePlayers.forEach((player) => {
@@ -2465,6 +2466,11 @@ async function mountYouTubeEditor(videoId) {
   editorPreviewImage = new Image();
   editorPreviewImage.onload = drawEditorPreview;
   editorPreviewImage.src = thumbUrl;
+  if (editorSourceSlot) {
+    editorSourceSlot.style.backgroundImage = `url("${thumbUrl.replace(/["\\]/g, "\\$&")}")`;
+    editorSourceSlot.style.backgroundSize = "cover";
+    editorSourceSlot.style.backgroundPosition = "center";
+  }
   if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "Phone preview follows the YouTube player as it plays.";
   try {
     const YT = await loadYouTubeIframeApi();
@@ -2551,6 +2557,7 @@ function closeClipEditor() {
   if (editorSourceType === "youtube") {
     const thumb = state.uploadedProject?.thumbnail || (state.uploadedProject?.videoId ? `https://i.ytimg.com/vi/${state.uploadedProject.videoId}/hqdefault.jpg` : "");
     if (thumb && heroMediaPoster) { heroMediaPoster.src = thumb; heroMediaPoster.hidden = false; }
+    if (editorSourceSlot) editorSourceSlot.style.backgroundImage = "";
     if (heroMediaEmpty) heroMediaEmpty.hidden = Boolean(thumb);
   }
   if (dualCropOverlay) { dualCropOverlay.hidden = true; dualCropOverlay.dataset.drawing = "false"; }
