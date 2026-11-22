@@ -25,6 +25,7 @@
       percent.textContent = 'Ready';
       gauge.setAttribute('aria-valuenow', '0');
       status.textContent = window.state?.uploadedProject ? 'Open the editor to frame your clip' : 'Add a video to get started';
+      status.disabled = !window.state?.uploadedProject;
       return;
     }
     if (value !== target) {
@@ -50,6 +51,10 @@
   for (const id of ['progressPercent','progressLabel','ytThumb']) {
     observer.observe(byId(id), {childList:true,subtree:true,characterData:true,attributes:true});
   }
+  status.addEventListener('click', () => {
+    if (status.disabled || window.state?.isGenerating) return;
+    byId('smartClipBtn')?.click();
+  });
   function clearMedia() {
     video.pause(); video.removeAttribute('src'); video.load(); video.hidden = true;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
