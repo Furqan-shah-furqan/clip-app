@@ -2337,7 +2337,7 @@ function drawEditorPreview() {
 function updateEditorSourceSize(width, height) {
   if (!dualCropStage || !editorSourceSlot || !width || !height) return;
   const availableWidth = Math.max(180, editorSourceSlot.clientWidth - 2);
-  const maxHeightRatio = window.innerWidth <= 720 ? 0.35 : 0.46;
+  const maxHeightRatio = window.innerWidth <= 720 ? 0.64 : 0.62;
   const availableHeight = Math.max(140, Math.min(window.innerHeight * maxHeightRatio, 520));
   const scale = Math.min(availableWidth / width, availableHeight / height);
   dualCropStage.style.width = `${Math.round(width * scale)}px`;
