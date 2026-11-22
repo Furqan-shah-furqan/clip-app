@@ -7784,12 +7784,16 @@ body.home-page .hero-title { font-weight: 600; }
 .editor-youtube-composition { inset: 0 !important; border-radius: 35px !important; }
 .editor-youtube-main iframe { object-fit: cover; }
 .clip-editor-source-frame { background-size: cover; background-position: center; }
+.clip-editor-source-frame { padding: 0 !important; border: 0; aspect-ratio: 16 / 9; height: auto; max-height: 75vh; background: #080909; }
+.clip-editor-source-frame .dual-crop-stage { width: 100% !important; height: 100% !important; max-width: none; max-height: none; aspect-ratio: auto !important; margin: 0; }
+.clip-editor-source-frame .dual-crop-stage > iframe { width: 100% !important; height: 100% !important; object-fit: fill; }
+.editor-youtube-composition { background: transparent !important; }
 body.home-page #expectedOutputCard.is-generating :is(#expectedOutputKickerText,#expectedOutputDuration,#expectedOutputCount,#expectedOutputProgressBar,#expectedOutputEtaText) { display: none !important; }
 body.home-page #expectedOutputCard.is-generating .expected-output-summary { min-height: 0; padding-block: 0; }
 @media(max-width:720px) {
   .phone-preview-frame { padding: 15px !important; border-radius: 35px !important; }
   .editor-youtube-composition { inset: 15px !important; }
-  .clip-editor-source-frame { padding: 15px; border-radius: 35px; }
+  .clip-editor-source-frame { padding: 0 !important; height: auto; max-height: 75dvh; }
 }
 @media(max-width:720px) {
   .clip-editor-layout { padding: 5px; gap: 6px; }

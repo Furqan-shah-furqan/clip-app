@@ -2466,11 +2466,7 @@ async function mountYouTubeEditor(videoId) {
   editorPreviewImage = new Image();
   editorPreviewImage.onload = drawEditorPreview;
   editorPreviewImage.src = thumbUrl;
-  if (editorSourceSlot) {
-    editorSourceSlot.style.backgroundImage = `url("${thumbUrl.replace(/["\\]/g, "\\$&")}")`;
-    editorSourceSlot.style.backgroundSize = "cover";
-    editorSourceSlot.style.backgroundPosition = "center";
-  }
+  if (editorSourceSlot) editorSourceSlot.style.backgroundImage = "";
   if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "Phone preview follows the YouTube player as it plays.";
   try {
     const YT = await loadYouTubeIframeApi();
