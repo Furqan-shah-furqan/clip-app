@@ -2397,7 +2397,7 @@ function positionYouTubePreviewCrops() {
   const insetFrame = insetWindow?.querySelector("iframe");
   if (mainWindow && mainFrame) {
     const crop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
-    youtubeCropFrameStyle(mainFrame, crop, mainWindow.clientWidth, mainWindow.clientHeight, 1280, 720, "contain");
+    youtubeCropFrameStyle(mainFrame, crop, mainWindow.clientWidth, mainWindow.clientHeight, 1280, 720, "cover");
   }
   if (insetWindow && insetFrame && dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset)) {
     const crop = dualCropRegions.inset;
@@ -2422,7 +2422,7 @@ function syncYouTubePreviewPlayers() {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.playVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
-      if (drift > 0.65) player.seekTo(time, true);
+      if (drift > 0.2) player.seekTo(time, true);
       player.mute();
       player.playVideo();
     });
@@ -2430,7 +2430,7 @@ function syncYouTubePreviewPlayers() {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.pauseVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
-      if (drift > 0.65 && player.seekTo) player.seekTo(time, true);
+      if (drift > 0.2 && player.seekTo) player.seekTo(time, true);
       player.pauseVideo();
     });
   }
@@ -2477,9 +2477,10 @@ async function mountYouTubeEditor(videoId) {
     insetFrame.id = "clipEditorPreviewInsetPlayer";
     editorYoutubeMain.replaceChildren(mainFrame);
     editorYoutubeInset.replaceChildren(insetFrame);
-    const playerOptions = { width: "1280", height: "720", videoId, playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, modestbranding: 1 }, events: {
+    const playerOptions = { width: "1280", height: "720", videoId, playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, modestbranding: 1, cc_load_policy: 0, iv_load_policy: 3 }, events: {
       onReady: (event) => {
         event.target.mute();
+        try { event.target.unloadModule("captions"); event.target.setOption("captions", "track", {}); } catch {}
         editorYouTubePreviewReady += 1;
         if (editorYouTubePreviewReady === 2) {
           editorYoutubeComposition.hidden = false;
@@ -2493,7 +2494,7 @@ async function mountYouTubeEditor(videoId) {
       new YT.Player(mainFrame, playerOptions),
       new YT.Player(insetFrame, playerOptions),
     ];
-    editorYouTubeSyncTimer = setInterval(syncYouTubePreviewPlayers, 800);
+    editorYouTubeSyncTimer = setInterval(syncYouTubePreviewPlayers, 200);
   } catch (error) {
     console.warn("YouTube live crop preview unavailable; showing its thumbnail instead:", error.message);
     if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "The crop layout is previewed from the thumbnail; generated clips use the selected video frames.";

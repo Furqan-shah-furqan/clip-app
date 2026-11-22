@@ -7771,6 +7771,17 @@ body.home-page .hero-title { font-weight: 600; }
 .clip-editor-left-rail { overflow: hidden; }
 .clip-editor-frames #clipEditorFrames:empty { display: none; }
 .editor-youtube-main iframe { object-fit: contain; }
+.phone-preview-frame { padding: 15px !important; border-radius: 35px !important; }
+.phone-preview-frame canvas { border-radius: 20px !important; }
+.editor-youtube-composition { inset: 15px !important; border-radius: 20px !important; }
+.clip-editor-source-frame { padding: 15px; border-radius: 35px; background: transparent; }
+.clip-editor-source-frame .dual-crop-stage { border-radius: 20px; overflow: hidden; }
+.clip-editor-source-frame .dual-crop-stage > iframe { object-fit: cover; }
+@media(max-width:720px) {
+  .phone-preview-frame { padding: 15px !important; border-radius: 35px !important; }
+  .editor-youtube-composition { inset: 15px !important; }
+  .clip-editor-source-frame { padding: 15px; border-radius: 35px; }
+}
 @media(max-width:720px) {
   .clip-editor-layout { padding: 5px; gap: 6px; }
   .phone-preview-frame { width: min(100%, calc(65dvh * 9 / 16 + 28px)); height: min(calc(65dvh + 50px), calc(90dvh - 80px)); }
