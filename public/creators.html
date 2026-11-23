@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" class="theme-dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Monitor YouTube creators and automatically queue clips from new uploads in ClipFlow Studio." />
+    <title>Creator Monitor · ClipFlow Studio</title>
+    <link rel="stylesheet" href="/customer.css" />
+    <link rel="stylesheet" href="/creator-monitor.css?v=1" />
+    <link rel="stylesheet" href="/workspace-sidebar.css?v=1" />
+    <script src="/customer.js" defer></script>
+    <script src="/public-site.js" defer></script>
+    <script src="/workspace-sidebar.js?v=1" defer></script>
+    <script src="/creator-monitor.js?v=1" defer></script>
+  </head>
+  <body class="customer-page creator-monitor-page">
+    <header class="creator-topbar">
+      <div class="creator-topbar-left">
+        <a class="creator-brand" href="/" aria-label="ClipFlow home">
+          <span class="creator-brand-mark">CF</span>
+          <span>ClipFlow <small>STUDIO</small></span>
+        </a>
+      </div>
+      <div class="creator-topbar-actions">
+        <a class="creator-home-link" href="/">Studio</a>
+        <button id="publicThemeButton" type="button" role="switch" aria-checked="true" aria-label="Dark mode">Night mode</button>
+      </div>
+    </header>
+
+    <main id="main" class="creator-main">
+      <section class="creator-intro" aria-labelledby="creatorTitle">
+        <p class="creator-kicker">Part 1 · New uploads</p>
+        <div class="creator-intro-copy">
+          <h1 id="creatorTitle">Creator Monitor</h1>
+          <p>Track a YouTube channel. When it publishes a new video, ClipFlow queues three vertical clips automatically.</p>
+        </div>
+        <span class="creator-live-note"><i aria-hidden="true"></i> Upload notifications</span>
+      </section>
+
+      <section class="creator-add-card" aria-labelledby="addCreatorTitle">
+        <div class="creator-section-heading">
+          <div>
+            <p class="creator-kicker">Monitor a channel</p>
+            <h2 id="addCreatorTitle">Add a creator</h2>
+          </div>
+          <span class="creator-count" id="creatorCount">0 / 20</span>
+        </div>
+        <form id="creatorForm" class="creator-form">
+          <label class="sr-only" for="creatorUrl">YouTube channel or public video URL</label>
+          <input id="creatorUrl" name="url" type="url" placeholder="Paste a YouTube channel or video link" autocomplete="url" required />
+          <button class="creator-primary" id="addCreatorButton" type="submit">Start monitoring</button>
+        </form>
+        <p class="creator-form-note">Channel links, @handles, and public video links work. Existing videos are skipped; only new uploads start clipping.</p>
+        <p class="creator-setup" id="creatorSetup" role="status" hidden></p>
+        <p class="creator-status" id="creatorStatus" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="creator-list-section" aria-labelledby="monitoredTitle">
+        <div class="creator-section-heading">
+          <div>
+            <p class="creator-kicker">Your workspace</p>
+            <h2 id="monitoredTitle">Monitored creators</h2>
+          </div>
+          <button class="creator-refresh" type="button" id="refreshCreators">Refresh list</button>
+        </div>
+        <div class="creator-list" id="creatorList" aria-live="polite">
+          <div class="creator-empty"><strong>Loading your creators…</strong><span>Your monitoring list will appear here.</span></div>
+        </div>
+      </section>
+
+      <p class="creator-scope-note">Part 1 monitors published uploads. Live-stream detection and social posting are planned for later parts.</p>
+    </main>
+  </body>
+</html>

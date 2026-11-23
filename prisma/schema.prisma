@@ -55,6 +55,7 @@ model User {
   clips          Clip[]
   scheduledPosts ScheduledPost[]
   generationJobs GenerationJob[]
+  creatorChannels CreatorChannel[]
 }
 
 model SocialAccount {
@@ -166,6 +167,52 @@ model GenerationJob {
   @@index([status])
   @@index([userId])
   @@index([createdAt])
+}
+
+model CreatorChannel {
+  id                       String   @id @default(cuid())
+  userId                   String
+  channelId                String
+  channelTitle             String
+  channelUrl               String
+  thumbnailUrl             String?
+  uploadsPlaylistId        String?
+  active                   Boolean  @default(true)
+  subscriptionStatus       String   @default("PENDING")
+  subscriptionExpiresAt    DateTime?
+  lastSubscriptionRequestAt DateTime?
+  lastNotificationAt       DateTime?
+  lastError                String?
+  hubSecret                String
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  deletedAt                DateTime?
+
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos                   CreatorVideo[]
+
+  @@unique([userId, channelId])
+  @@index([channelId, active, deletedAt])
+  @@index([active, subscriptionExpiresAt])
+}
+
+model CreatorVideo {
+  id                String   @id @default(cuid())
+  creatorChannelId  String
+  videoId           String
+  title             String
+  videoUrl          String
+  publishedAt       DateTime?
+  status            String   @default("QUEUED")
+  generationJobId   String?  @unique
+  errorMessage      String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  creatorChannel    CreatorChannel @relation(fields: [creatorChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([creatorChannelId, videoId])
+  @@index([creatorChannelId, createdAt])
 }
 model CustomerSession {
   tokenHash String @id

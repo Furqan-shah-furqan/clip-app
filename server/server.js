@@ -1,6 +1,7 @@
 const customerAuth = require("./middleware/customerAuth");
 const customerResources = require("./middleware/customerResources");
 const customerRoutes = require("./routes/customer").router;
+const creatorMonitor = require("./routes/creatorMonitor");
 const path = require("path");
 const fs = require("fs");
 const { execSync } = require("child_process");
@@ -657,6 +658,9 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.set("trust proxy", 1);
+app.use("/webhooks/youtube", express.raw({type: ["application/atom+xml", "application/xml", "text/xml"], limit: "1mb"}));
+app.get("/webhooks/youtube/:channelId", creatorMonitor.verifyWebhook);
+app.post("/webhooks/youtube/:channelId", creatorMonitor.receiveWebhook);
 // Public information stays available without an account or session/database lookup.
 app.get(["/welcome.html","/privacy.html","/terms.html","/support.html","/data-deletion.html"], (req,res)=>{
   res.sendFile(path.join(rootDir,"public",path.basename(req.path)));
@@ -664,7 +668,7 @@ app.get(["/welcome.html","/privacy.html","/terms.html","/support.html","/data-de
 app.use(customerAuth.loadSession);
 app.use(customerAuth.sameOrigin);
 app.use("/api/customer", customerRoutes);
-app.get(["/index.html", "/captions.html", "/publish.html", "/"], (req,res,next)=>{
+app.get(["/index.html", "/captions.html", "/publish.html", "/creators.html", "/"], (req,res,next)=>{
   if (!customerAuth.enabled()) return next();
   if (!req.user) {
     if (req.path === "/") return res.set("Cache-Control","no-store").sendFile(path.join(rootDir,"public","welcome.html"));
@@ -680,6 +684,7 @@ app.use("/api", (req,res,next)=>{
   customerAuth.requireCustomer(req,res,next);
 });
 app.use("/api", customerResources.guard);
+app.use("/api/creators", creatorMonitor.router);
 
 
 // HTTP 206 Partial Content (Byte-Range Streaming) for clips, renders, exports, and uploads
@@ -1327,4 +1332,5 @@ server.listen(PORT, () => {
   console.log(`[ClipFlow] Database configured: ${Boolean(process.env.DATABASE_URL) ? "yes" : "no"}`);
   console.log(`[ClipFlow] Redis configured: ${Boolean(process.env.REDIS_URL) ? "yes" : "no"}`);
   console.log(`Server running on http://localhost:${PORT}`);
+  creatorMonitor.startRenewalLoop();
 });
