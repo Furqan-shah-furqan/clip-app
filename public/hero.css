@@ -172,3 +172,23 @@
   .hero-reference .btn-wrapper .text-overlay,
   .hero-reference #smartClipBtn.gradient-btn { transition: none !important; }
 }
+/* From Uiverse.io by dexter-st - https://uiverse.io/dexter-st/bright-lizard-8
+MIT License, Copyright (c) dexter-st */
+.cf-ai-loader { position:relative; display:none; align-items:center; justify-content:center; width:180px; height:180px; flex-shrink:0; margin:auto; font:300 1.2em Inter,sans-serif; color:white; border-radius:50%; user-select:none; }
+.hero-reference[data-loading="true"] .cf-ai-loader { display:flex; }
+.cf-ai-orbit { position:absolute; inset:0; aspect-ratio:1; border-radius:50%; animation:cf-ai-rotate 2s linear infinite; }
+.cf-ai-letter { display:inline-block; opacity:.4; z-index:1; animation:cf-ai-letter 2s infinite; }
+@keyframes cf-ai-rotate { 0%,100% { transform:rotate(90deg); box-shadow:0 10px 20px #fff inset,0 20px 30px #ad5fff inset,0 60px 60px #471eec inset; } 50% { transform:rotate(270deg); box-shadow:0 10px 20px #fff inset,0 20px 10px #d60a47 inset,0 40px 60px #311e80 inset; } 100% { transform:rotate(450deg); } }
+@keyframes cf-ai-letter { 0%,100% { opacity:.4; transform:translateY(0); } 20% { opacity:1; transform:scale(1.15); } 40% { opacity:.7; transform:translateY(0); } }
+.scene,.scene-grid { display:none !important; }
+.hero-reference .btn-wrapper .gradient-layer,.hero-reference .btn-wrapper .light,.hero-reference .text-overlay { animation:none !important; }
+.hero-reference .hero-wave { display:none; }
+.hero-reference .hero-loading-card { align-items:center; gap:12px; }
+.hero-reference .hero-loading-main { width:100%; gap:14px; }
+.hero-reference .hero-loading-gauge { width:auto; aspect-ratio:auto; }
+.hero-reference .hero-loading-value { position:static; }
+.hero-reference .hero-loading-copy { flex:0 1 auto; }
+.hero-reference .hero-loading-copy h2 { margin:0; }
+.hero-reference .hero-media-card #heroMediaPoster { object-fit:cover !important; }
+body :where(div,section,article,header,footer,nav,aside,button,a,video) { border:0 !important; }
+@media(prefers-reduced-motion:reduce) { .cf-ai-orbit,.cf-ai-letter { animation:none; } }

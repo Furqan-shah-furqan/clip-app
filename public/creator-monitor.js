@@ -8,6 +8,9 @@
   const list = document.getElementById("creatorList");
   const count = document.getElementById("creatorCount");
   let channels = [];
+  let page = 0;
+  document.getElementById("creatorPrev").onclick = () => { page = Math.max(0, page - 1); draw(); };
+  document.getElementById("creatorNext").onclick = () => { page = Math.min(channels.length - 1, page + 1); draw(); };
   let setupReady = true;
 
   const request = async (url, options = {}) => {
@@ -163,7 +166,11 @@
       list.append(empty);
       return;
     }
-    channels.forEach(channel => list.append(renderChannel(channel)));
+    page = Math.min(page, Math.max(0, channels.length - 1));
+    document.getElementById("creatorPrev").disabled = page === 0;
+    document.getElementById("creatorNext").disabled = page >= channels.length - 1;
+    document.getElementById("creatorPage").textContent = `${page + 1} / ${channels.length}`;
+    list.append(renderChannel(channels[page]));
   };
   const load = async () => {
     list.setAttribute("aria-busy", "true");

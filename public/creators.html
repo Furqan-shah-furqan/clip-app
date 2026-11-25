@@ -6,13 +6,13 @@
     <meta name="description" content="Monitor YouTube creators and automatically queue clips from new uploads in ClipFlow Studio." />
     <title>Creator Monitor · ClipFlow Studio</title>
     <link rel="stylesheet" href="/customer.css" />
-    <link rel="stylesheet" href="/creator-monitor.css?v=3" />
-    <link rel="stylesheet" href="/clipflow-input.css?v=2" />
-    <link rel="stylesheet" href="/workspace-sidebar.css?v=3" />
+    <link rel="stylesheet" href="/creator-monitor.css?v=20261125" />
+    <link rel="stylesheet" href="/clipflow-input.css?v=20261125" />
+    <link rel="stylesheet" href="/workspace-sidebar.css?v=20261125" />
     <script src="/customer.js" defer></script>
     <script src="/public-site.js" defer></script>
     <script src="/workspace-sidebar.js?v=2" defer></script>
-    <script src="/creator-monitor.js?v=2" defer></script>
+    <script src="/creator-monitor.js?v=20261125" defer></script>
   </head>
   <body class="customer-page creator-monitor-page">
     <header class="creator-topbar">
@@ -22,21 +22,14 @@
           <span>ClipFlow <small>STUDIO</small></span>
         </a>
       </div>
-      <div class="creator-topbar-actions">
+      <div class="creator-topbar-actions"><a class="creator-home-link" href="#recentUploads">Recent new uploads</a>
         <a class="creator-home-link" href="/">Studio</a>
         <button id="publicThemeButton" type="button" role="switch" aria-checked="true" aria-label="Dark mode">Night mode</button>
       </div>
     </header>
 
     <main id="main" class="creator-main">
-      <section class="creator-intro" aria-labelledby="creatorTitle">
-        <p class="creator-kicker">Part 1 · New uploads</p>
-        <div class="creator-intro-copy">
-          <h1 id="creatorTitle">Creator Monitor</h1>
-          <p>Track a YouTube channel. When it publishes a new video, ClipFlow queues three vertical clips automatically.</p>
-        </div>
-        <a class="creator-activity-jump" href="#recentUploads">Recent new uploads <span aria-hidden="true">↓</span></a>
-      </section>
+
 
       <section class="creator-add-card" aria-labelledby="addCreatorTitle">
         <div class="creator-section-heading">
@@ -80,9 +73,10 @@
         <div class="creator-list" id="creatorList" aria-live="polite">
           <div class="creator-empty"><strong>Loading your creators…</strong><span>Your monitoring list will appear here.</span></div>
         </div>
+        <nav class="creator-pagination" aria-label="Creator pages"><button id="creatorPrev" type="button">Previous</button><span id="creatorPage"></span><button id="creatorNext" type="button">Next</button></nav>
       </section>
 
-      <p class="creator-scope-note">Part 1 monitors published uploads. Live-stream detection and social posting are planned for later parts.</p>
+      <p hidden class="creator-scope-note">Part 1 monitors published uploads. Live-stream detection and social posting are planned for later parts.</p>
     </main>
   </body>
 </html>

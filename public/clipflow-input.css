@@ -1,89 +1,334 @@
-/* Compact, namespaced adaptation of the requested Uiverse field treatment. */
-.clipflow-search {
-  --cf-search-bg: #111318;
-  --cf-search-ink: #f3f2ed;
-  --cf-search-muted: #a6a8b0;
-  --cf-search-edge: #77728b;
-  position: relative;
-  display: flex;
-  min-width: 0;
-  height: 56px;
-  padding: 1px;
-  overflow: visible;
-  isolation: isolate;
-  border-radius: 22px;
-  background: transparent;
-}
-.clipflow-search > .cf-search-glow,
-.clipflow-search > .cf-search-dark-border,
-.clipflow-search > .cf-search-white,
-.clipflow-search > .cf-search-border {
+/* From Uiverse.io by Lakshay-art - https://uiverse.io/Lakshay-art/curvy-earwig-22
+MIT License, Copyright (c) Lakshay-art (Lakshay Gupta) */
+
+
+.cf-search-white,
+.cf-search-border,
+.cf-search-dark-border,
+.cf-search-glow {
+  max-height: 70px;
+  max-width: 314px;
+  height: 100%;
+  width: 100%;
   position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-}
-.clipflow-search > .cf-search-glow {
-  z-index: -1;
-  inset: -3px;
-  background: conic-gradient(from 25deg, #e4c777, #756393, #d5b468, #494156, #e4c777);
-  filter: blur(7px);
-  opacity: .42;
-  animation: cf-search-rotate 18s linear infinite;
-}
-.clipflow-search > .cf-search-dark-border { z-index: 0; inset: 0; background: #191a20; }
-.clipflow-search > .cf-search-dark-border:nth-of-type(3) { inset: 1px; background: #29252f; }
-.clipflow-search > .cf-search-dark-border:nth-of-type(4) { inset: 2px; background: #40354d; }
-.clipflow-search > .cf-search-white { z-index: 0; inset: 3px; background: linear-gradient(145deg, #ddd8c7, #615a72 50%, #c9af6a); }
-.clipflow-search > .cf-search-border { z-index: 0; inset: 4px; background: #171820; }
-.cf-search-main {
-  position: relative;
-  z-index: 1;
-  margin: 5px;
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: center;
   overflow: hidden;
-  border-radius: 20px;
-  background: var(--cf-search-bg);
+  z-index: -1;
+
+  border-radius: 12px;
+  filter: blur(3px);
 }
 .cf-search-input {
-  display: block;
-  flex: 1;
-  width: 100%;
-  min-width: 0;
+  background-color: #010201;
+  border: none;
+
+  width: 301px;
+  height: 56px;
+  border-radius: 10px;
+  color: white;
+  padding-inline: 59px;
+  font-size: 18px;
+}
+.clipflow-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cf-search-input::placeholder {
+  color: #c0b9c0;
+}
+
+.cf-search-input:focus {
+  outline: none;
+}
+
+.cf-search-main:focus-within > .cf-search-mask {
+  display: none;
+}
+
+.cf-search-mask {
+  pointer-events: none;
+  width: 100px;
+  height: 20px;
+  position: absolute;
+  background: linear-gradient(90deg, transparent, black);
+  top: 18px;
+  left: 70px;
+}
+.cf-search-pink-mask {
+  pointer-events: none;
+  width: 30px;
+  height: 20px;
+  position: absolute;
+  background: #cf30aa;
+  top: 10px;
+  left: 5px;
+  filter: blur(20px);
+  opacity: 0.8;
+
+  transition: all 2s;
+}
+.cf-search-main:hover > .cf-search-pink-mask {
+
+  opacity: 0;
+}
+
+.cf-search-white {
+  max-height: 63px;
+  max-width: 307px;
+  border-radius: 10px;
+  filter: blur(2px);
+}
+
+.cf-search-white::before {
+  content: "";
+  z-index: -2;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(83deg);
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  filter: brightness(1.4);
+  background-image: conic-gradient(
+    rgba(0, 0, 0, 0) 0%,
+    #a099d8,
+    rgba(0, 0, 0, 0) 8%,
+    rgba(0, 0, 0, 0) 50%,
+    #dfa2da,
+    rgba(0, 0, 0, 0) 58%
+  );
+
+  transition: all 2s;
+}
+.cf-search-border {
+  max-height: 59px;
+  max-width: 303px;
+  border-radius: 11px;
+  filter: blur(0.5px);
+}
+.cf-search-border::before {
+  content: "";
+  z-index: -2;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(70deg);
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  filter: brightness(1.3);
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-image: conic-gradient(
+    #1c191c,
+    #402fb5 5%,
+    #1c191c 14%,
+    #1c191c 50%,
+    #cf30aa 60%,
+    #1c191c 64%
+  );
+
+  transition: all 2s;
+}
+.cf-search-dark-border {
+  max-height: 65px;
+  max-width: 312px;
+}
+.cf-search-dark-border::before {
+  content: "";
+  z-index: -2;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(82deg);
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-image: conic-gradient(
+    rgba(0, 0, 0, 0),
+    #18116a,
+    rgba(0, 0, 0, 0) 10%,
+    rgba(0, 0, 0, 0) 50%,
+    #6e1b60,
+    rgba(0, 0, 0, 0) 60%
+  );
+  transition: all 2s;
+}
+.clipflow-search:hover > .cf-search-dark-border::before {
+  transform: translate(-50%, -50%) rotate(262deg);
+}
+.clipflow-search:hover > .cf-search-glow::before {
+  transform: translate(-50%, -50%) rotate(240deg);
+}
+.clipflow-search:hover > .cf-search-white::before {
+  transform: translate(-50%, -50%) rotate(263deg);
+}
+.clipflow-search:hover > .cf-search-border::before {
+  transform: translate(-50%, -50%) rotate(250deg);
+}
+
+.clipflow-search:hover > .cf-search-dark-border::before {
+  transform: translate(-50%, -50%) rotate(-98deg);
+}
+.clipflow-search:hover > .cf-search-glow::before {
+  transform: translate(-50%, -50%) rotate(-120deg);
+}
+.clipflow-search:hover > .cf-search-white::before {
+  transform: translate(-50%, -50%) rotate(-97deg);
+}
+.clipflow-search:hover > .cf-search-border::before {
+  transform: translate(-50%, -50%) rotate(-110deg);
+}
+
+.clipflow-search:focus-within > .cf-search-dark-border::before {
+  transform: translate(-50%, -50%) rotate(442deg);
+  transition: all 4s;
+}
+.clipflow-search:focus-within > .cf-search-glow::before {
+  transform: translate(-50%, -50%) rotate(420deg);
+  transition: all 4s;
+}
+.clipflow-search:focus-within > .cf-search-white::before {
+  transform: translate(-50%, -50%) rotate(443deg);
+  transition: all 4s;
+}
+.clipflow-search:focus-within > .cf-search-border::before {
+  transform: translate(-50%, -50%) rotate(430deg);
+  transition: all 4s;
+}
+
+.cf-search-glow {
+  overflow: hidden;
+  filter: blur(30px);
+  opacity: 0.4;
+  max-height: 130px;
+  max-width: 354px;
+}
+.cf-search-glow:before {
+  content: "";
+  z-index: -2;
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(60deg);
+  position: absolute;
+  width: 999px;
+  height: 999px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+
+  background-image: conic-gradient(
+    #000,
+    #402fb5 5%,
+    #000 38%,
+    #000 50%,
+    #cf30aa 60%,
+    #000 87%
+  );
+
+
+  transition: all 2s;
+}
+
+@keyframes cf-input-rotate {
+  100% {
+    transform: translate(-50%, -50%) rotate(450deg);
+  }
+}
+@keyframes cf-input-leftright {
+  0% {
+    transform: translate(0px, 0px);
+    opacity: 1;
+  }
+
+  49% {
+    transform: translate(250px, 0px);
+    opacity: 0;
+  }
+  80% {
+    transform: translate(-40px, 0px);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translate(0px, 0px);
+    opacity: 1;
+  }
+}
+
+.cf-search-filter-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  max-height: 40px;
+  max-width: 38px;
   height: 100%;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 18px 0 48px !important;
-  border: 0 !important;
-  border-radius: inherit !important;
-  outline: 0;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--cf-search-ink) !important;
-  font: inherit;
-  font-size: 14px;
-}
-.cf-search-input::placeholder { color: var(--cf-search-muted); opacity: 1; }
-.cf-search-mask, .cf-search-pink-mask, .cf-search-filter-border { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
-.cf-search-mask { z-index: 1; }
-.cf-search-pink-mask { z-index: 1; opacity: 0; transition: opacity .2s ease; }
-.cf-search-icon { position: absolute; z-index: 2; left: 16px; top: 50%; display: grid; width: 20px; height: 20px; place-items: center; color: var(--cf-search-muted); transform: translateY(-50%); pointer-events: none; }
-.cf-search-icon svg { display: block; width: 20px; height: 20px; }
-.cf-search-main:focus-within { outline: 2px solid #c8a449; outline-offset: 2px; }
-.clipflow-search:focus-within > .cf-search-glow { opacity: .72; }
-.clipflow-search:focus-within .cf-search-pink-mask { opacity: .12; background: linear-gradient(110deg, transparent 45%, #c8a449 100%); }
-html:not(.theme-dark) .clipflow-search { --cf-search-bg: #fbfaf7; --cf-search-ink: #20211f; --cf-search-muted: #676860; --cf-search-edge: #c7c2b2; }
-html:not(.theme-dark) .clipflow-search > .cf-search-dark-border { background: #ece9e0; }
+  width: 100%;
 
-@keyframes cf-search-rotate { to { transform: rotate(360deg); } }
+  isolation: isolate;
+  overflow: hidden;
 
-@media (prefers-reduced-motion: reduce) {
-  .clipflow-search > .cf-search-glow { animation: none; }
-  .cf-search-pink-mask { transition: none; }
+  border-radius: 10px;
+  background: linear-gradient(180deg, #161329, black, #1d1b4b);
+  border: 1px solid transparent;
 }
-/* Uiverse.io by Lakshay-art: shared violet/pink edge treatment for primary fields. */
-input:is([type=text],[type=url],[type=email],[type=password]), textarea { border: 1px solid #76628b !important; box-shadow: -2px 0 9px #402fb530, 2px 0 9px #cf30aa25; border-radius: 12px; transition: border-color .2s ease, box-shadow .2s ease; }
-input:is([type=text],[type=url],[type=email],[type=password]):focus-visible, textarea:focus-visible { outline: 2px solid #c5a7e2 !important; outline-offset: 2px; box-shadow: -3px 0 12px #402fb550, 3px 0 12px #cf30aa40; }
+.cf-search-filter-border {
+  height: 42px;
+  width: 40px;
+  position: absolute;
+  overflow: hidden;
+  top: 7px;
+  right: 7px;
+  border-radius: 10px;
+}
+
+.cf-search-filter-border::before {
+  content: "";
+
+  text-align: center;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  filter: brightness(1.35);
+  background-image: conic-gradient(
+    rgba(0, 0, 0, 0),
+    #3d3a4f,
+    rgba(0, 0, 0, 0) 50%,
+    rgba(0, 0, 0, 0) 50%,
+    #3d3a4f,
+    rgba(0, 0, 0, 0) 100%
+  );
+  animation: cf-input-rotate 4s linear infinite;
+}
+.cf-search-main {
+  position: relative;
+}
+.cf-search-icon {
+  position: absolute;
+  left: 20px;
+  top: 15px;
+}
+
+.clipflow-search { position:relative; isolation:isolate; width:100%; min-width:0; height:56px; }
+.clipflow-search > :is(.cf-search-white,.cf-search-border,.cf-search-dark-border,.cf-search-glow) { max-width:none; width:100%; pointer-events:none; }
+.cf-search-main { width:100%; min-width:0; }
+.cf-search-input { width:100% !important; box-sizing:border-box; margin:0 !important; padding:0 48px !important; background:#010201 !important; color:white !important; height:56px !important; border:0 !important; }
+.cf-search-icon { pointer-events:none; }
+.cf-search-icon svg { width:24px;height:24px; }
+.cf-search-main:focus-within { outline:2px solid #a099d8; outline-offset:3px; border-radius:12px; }
+input:is([type=text],[type=url],[type=email],[type=password]):not(.cf-search-input),textarea { border:1px solid #a099d8 !important; border-radius:12px; background:#010201; color:white; box-shadow:-2px 0 8px #402fb550,2px 0 8px #cf30aa40; }
+@media(prefers-reduced-motion:reduce) { .clipflow-search *,.clipflow-search *::before { animation:none !important; transition:none !important; } }

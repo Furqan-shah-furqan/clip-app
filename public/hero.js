@@ -19,7 +19,7 @@
   function paint(value) {
     displayed = value;
     percent.textContent = `${Math.round(value)}%`;
-    arc.style.strokeDasharray = `${231 * value / 100} 308`;
+    if (arc) arc.style.strokeDasharray = `${231 * value / 100} 308`;
   }
   function sync() {
     const isGenerating = Boolean(window.state?.isGenerating);
