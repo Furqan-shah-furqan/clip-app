@@ -1,8 +1,8 @@
 
-  /* From Uiverse.clip-card-io by satyamchaudharydev - https://uiverse.clip-card-io/satyamchaudharydev/ugly-bulldog-75
+  /* From Uiverse.io by satyamchaudharydev - https://uiverse.io/satyamchaudharydev/ugly-bulldog-75
      MIT License, Copyright (c) satyamchaudharydev (satyam) */
 
-  /* From Uiverse.clip-card-io by ayman-ashine - https://uiverse.clip-card-io/ayman-ashine/wicked-liger-39
+  /* From Uiverse.io by ayman-ashine - https://uiverse.io/ayman-ashine/wicked-liger-39
      MIT License, Copyright (c) ayman-ashine (Ayman Ashine)
      Adapted: Tailwind utilities converted to plain CSS; gradient glow used in place of flat colors. */
 
@@ -155,81 +155,6 @@
     100% { background-position: -100% 0; }
   }
 
-  /* ---------- Checklist steps (light colors) ---------- */
-  .clip-card-steps {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    width: calc(100% - 10px);
-  }
-
-  .clip-card-step {
-    --c1: #ffb3b3;
-    --c2: #ff7a7a;
-    --tint: #ffe3e3;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 30px;
-    padding: 3px 8px 3px 3px;
-    border-radius: 15px;
-    background: var(--tint);
-    color: #444452;
-    font-size: 10.5px;
-    font-weight: 600;
-    white-space: nowrap;
-    transition: background 0.4s ease, color 0.4s ease;
-  }
-
-  .clip-card-step[data-step="1"] { --c1: #b3f0c4; --c2: #6fd98f; --tint: #e3fbea; }
-  .clip-card-step[data-step="2"] { --c1: #ffd4a3; --c2: #ffa94d; --tint: #fff1e0; }
-  .clip-card-step[data-step="3"] { --c1: #b3d9ff; --c2: #6fb3ff; --tint: #e3f0ff; }
-
-  .clip-card-step-icon {
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #ffffff;
-    color: #444452;
-    transition: background 0.4s ease, color 0.4s ease;
-  }
-
-  .clip-card-step-icon svg {
-    width: 13px;
-    height: 13px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-  }
-
-  .clip-card-step.clip-card-active,
-  .clip-card-step.clip-card-done {
-    color: #ffffff;
-    background: linear-gradient(90deg, var(--c1), var(--c2));
-  }
-
-  .clip-card-step.clip-card-active .clip-card-step-icon {
-    background: rgba(255, 255, 255, 0.3);
-    color: #ffffff;
-    animation: clip-card-pulse 1s ease-in-out infinite;
-  }
-
-  .clip-card-step.clip-card-done .clip-card-step-icon {
-    background: rgba(255, 255, 255, 0.35);
-    color: #ffffff;
-  }
-
-  @keyframes clip-card-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.12); }
-  }
-
   .clip-card-generate-row {
     width: calc(100% - 10px);
     display: flex;
@@ -270,3 +195,29 @@
 .hero-reference:not([data-loading="true"]) .clip-card-status { animation:none; }
 @media(max-width:700px) { .hero-reference #heroInputCard { grid-template-columns:1fr; justify-items:center; } .hero-reference .hero-showcase { width:100%; min-height:220px; } }
 @media(prefers-reduced-motion:reduce) { .clip-card-wrap * { animation:none !important; transition:none !important; } }
+
+/* Compact progress and matching bottom actions. */
+.hero-reference .clip-card-wrap { justify-content:flex-start; padding:16px 12px; gap:14px; }
+.hero-reference .clip-card-progress { width:calc(100% - 10px); justify-content:flex-start; gap:14px; margin:12px 5px 0; }
+.hero-reference .clip-card-ring { flex:0 0 78.4px; width:78.4px; height:78.4px; }
+.hero-reference .clip-card-pct { font-size:18px; }
+.hero-reference .clip-card-loading { flex:1; width:auto; min-width:0; gap:5px; height:78.4px; }
+.hero-reference .clip-card-loading span { flex:0 0 6px; width:6px; border-radius:3px; }
+.hero-reference .clip-card-loading span:nth-child(3n) { background:#a855f7; }
+.hero-reference .clip-card-loading span:nth-child(3n + 1) { background:#ff4fa3; }
+.hero-reference .clip-card-stage { min-height:38px; margin:0 5px; width:calc(100% - 10px); font-size:12px; line-height:1.5; color:#626274; text-align:left; overflow-wrap:anywhere; }
+.hero-reference .clip-card-generate-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); width:calc(100% - 10px); margin: auto 5px 5px; gap:10px; position:relative; }
+.hero-reference .clip-card-wrap :is(#heroLoadingStatus,#smartClipBtn) { box-sizing:border-box; display:flex; justify-content:center; align-items:center; width:100%; height:36px; min-height:36px; padding:0 6px; border-radius:12px !important; font-size:12px; font-weight:600; line-height:1; letter-spacing:0; cursor:pointer; }
+.hero-reference .clip-card-wrap #heroLoadingStatus { background:#fff; color:#363142; box-shadow:-3px 3px 12px #ff4fa32b,3px 3px 12px #a855f72b; }
+.hero-reference .clip-card-wrap #heroLoadingStatus:disabled { opacity:.55; cursor:default; }
+.hero-reference .clip-card-wrap #smartClipBtn { background:linear-gradient(90deg,#ff4fa3,#a855f7) !important; color:#fff; box-shadow:none !important; }
+.hero-reference .clip-card-wrap #cancelGenerationBtn { position:absolute; bottom:46px; right:0; width:auto; min-height:28px; padding:5px 10px; font-size:11px; }
+/* Both previews use one measured height, preserving 9:16 and 16:9 surfaces. */
+#clipEditorDialog .clip-editor-layout { --editor-preview-height: min(55dvh,420px); display:grid; grid-template-columns:calc(var(--editor-preview-height) * 9 / 16) calc(var(--editor-preview-height) * 16 / 9) !important; justify-content:center; align-items:end !important; gap:16px; }
+#clipEditorDialog :is(.clip-editor-left-rail,.clip-editor-preview-column,.clip-editor-source-column) { min-width:0; min-height:0; height:var(--editor-preview-height); padding:0; margin:0; display:flex; align-items:flex-end; justify-content:center; }
+#clipEditorDialog .clip-editor-left-rail { flex-direction:column; gap:0; }
+#clipEditorDialog .clip-editor-frames { display:none; }
+#clipEditorDialog .phone-preview-frame { box-sizing:border-box; flex:none; width:calc(var(--editor-preview-height) * 9 / 16) !important; height:var(--editor-preview-height) !important; max-height:none !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+#clipEditorDialog #editorSourceSlot { flex:none; box-sizing:border-box; width:calc(var(--editor-preview-height) * 16 / 9) !important; height:var(--editor-preview-height) !important; max-height:none !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+#clipEditorDialog .clip-editor-section-head { display:none; }
+#clipEditorDialog :is(.phone-preview-frame canvas,.editor-youtube-composition) { inset:0 !important; width:100% !important; height:100% !important; }

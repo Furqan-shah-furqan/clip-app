@@ -5,6 +5,7 @@
   if (!hero) return;
   const gauge = byId('heroLoadingGauge'), percent = byId('heroLoadingPercent');
   const arc = byId('heroLoadingArc'), status = byId('heroLoadingStatus');
+  const generationStage = byId('heroGenerationStage');
   const video = byId('heroMediaVideo'), poster = byId('heroMediaPoster');
   const empty = byId('heroMediaEmpty'), thumb = byId('ytThumb');
   const generateButton = byId('smartClipBtn');
@@ -22,10 +23,6 @@
     [[0,10],[10,40],[40,80],[80,100]].forEach(([a,b],i) => {
       document.getElementById('clipCardSeg'+i)?.setAttribute('stroke-dasharray', `${Math.max(0, Math.min(value,b)-a)*circumference/100} ${circumference}`);
     });
-    document.querySelectorAll('#clipCardSteps .clip-card-step').forEach((step,i) => {
-      step.classList.toggle('clip-card-active', Boolean(window.state?.isGenerating) && i === Math.min(3,Math.floor(value/25)));
-      step.classList.toggle('clip-card-done', value >= (i+1)*25);
-    });
     displayed = value;
     percent.textContent = `${Math.round(value)}%`;
     if (arc) arc.style.strokeDasharray = `${231 * value / 100} 308`;
@@ -40,7 +37,8 @@
       paint(0);
       percent.textContent = 'Ready';
       gauge.setAttribute('aria-valuenow', '0');
-      status.textContent = window.state?.uploadedProject ? 'Open the editor to frame your clip' : 'Add a video to get started';
+      status.textContent = 'Frame Editor';
+      generationStage.textContent = window.state?.uploadedProject ? 'Ready to frame your clip' : 'Add a video to get started';
       status.disabled = !window.state?.uploadedProject;
       return;
     }
@@ -56,7 +54,8 @@
       }
       frame = requestAnimationFrame(tick);
     }
-    status.textContent = byId('progressLabel').textContent.trim().replace(/^•\s*/, '') || 'Finding strong moments';
+    status.disabled = true;
+    generationStage.textContent = byId('progressLabel').textContent.trim().replace(/^•\s*/, '') || 'Finding strong moments';
     const image = thumb.getAttribute('src');
     if (!objectUrl && image && thumb.style.display !== 'none') {
       if (poster.getAttribute('src') !== image) poster.src = image;
@@ -87,5 +86,24 @@
   video.addEventListener('error', () => { clearMedia(); byId('heroMediaBadge').textContent = 'Preview unavailable'; });
   addEventListener('pagehide', () => { cancelAnimationFrame(frame); video.pause(); });
   addEventListener('pageshow', () => { target = -1; sync(); });
+  const editor = byId('clipEditorDialog');
+  const layout = editor?.querySelector('.clip-editor-layout');
+  let sizingFrame = 0;
+  const sizeEditorPreviews = () => {
+    cancelAnimationFrame(sizingFrame);
+    sizingFrame = requestAnimationFrame(() => {
+      if (!editor?.open || !layout) return;
+      const style = getComputedStyle(layout);
+      const width = layout.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      const height = layout.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const gap = parseFloat(style.columnGap) || 16;
+      const sharedHeight = Math.max(1, Math.floor(Math.min(height, (width - gap) / (9 / 16 + 16 / 9))));
+      layout.style.setProperty('--editor-preview-height', `${sharedHeight}px`);
+    });
+  };
+  if (editor && layout) {
+    new ResizeObserver(sizeEditorPreviews).observe(layout);
+    new MutationObserver(sizeEditorPreviews).observe(editor, { attributes:true, attributeFilter:['open'] });
+  }
   sync();
 })();

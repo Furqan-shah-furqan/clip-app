@@ -71,3 +71,6 @@ body .workspace-sidebar-scrim { background: transparent !important; border: 0 !i
 body .workspace-sidebar-toggle, body .workspace-sidebar-close { display: grid !important; place-items: center !important; width: 50px !important; height: 50px !important; min-width: 50px !important; min-height: 50px !important; flex: 0 0 50px !important; padding: 0 !important; border-radius: 50% !important; }
 body .workspace-sidebar-toggle svg, body .workspace-sidebar-close svg { display: block; margin: 0; width: 20px; height: 20px; }
 body .workspace-sidebar-toggle,body .workspace-sidebar-close { width:35px !important; height:35px !important; min-width:35px !important; min-height:35px !important; flex-basis:35px !important; }
+/* Allow navigation overflow without displaying scrollbar chrome. */
+.workspace-sidebar { scrollbar-width:none; -ms-overflow-style:none; }
+.workspace-sidebar::-webkit-scrollbar { display:none; width:0; height:0; }
