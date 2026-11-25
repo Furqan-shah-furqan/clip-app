@@ -66,3 +66,7 @@ body.workspace-sidebar-open .workspace-sidebar { transform: translateX(0); visib
 .workspace-sidebar-link[aria-current="page"] { background: color-mix(in srgb, #c8a449 17%, var(--workspace-menu-surface)); color: var(--workspace-menu-ink) !important; }
 .workspace-sidebar-link[aria-current="page"]::after { width: 5px; height: 5px; margin-left: auto; border-radius: 50%; background: #c8a449; content: ""; }
 @media (prefers-reduced-motion: reduce) { .workspace-sidebar, .workspace-sidebar-scrim, .workspace-sidebar-link, .workspace-sidebar-toggle { transition-duration: .01ms; } }
+/* Keep shared customer button rules from painting the navigation backdrop. */
+body .workspace-sidebar-scrim { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; backdrop-filter: none !important; }
+body .workspace-sidebar-toggle, body .workspace-sidebar-close { display: grid !important; place-items: center !important; width: 50px !important; height: 50px !important; min-width: 50px !important; min-height: 50px !important; flex: 0 0 50px !important; padding: 0 !important; border-radius: 50% !important; }
+body .workspace-sidebar-toggle svg, body .workspace-sidebar-close svg { display: block; margin: 0; width: 20px; height: 20px; }

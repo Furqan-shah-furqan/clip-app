@@ -6,9 +6,9 @@
     <meta name="description" content="Monitor YouTube creators and automatically queue clips from new uploads in ClipFlow Studio." />
     <title>Creator Monitor · ClipFlow Studio</title>
     <link rel="stylesheet" href="/customer.css" />
-    <link rel="stylesheet" href="/creator-monitor.css?v=2" />
-    <link rel="stylesheet" href="/clipflow-input.css?v=1" />
-    <link rel="stylesheet" href="/workspace-sidebar.css?v=2" />
+    <link rel="stylesheet" href="/creator-monitor.css?v=3" />
+    <link rel="stylesheet" href="/clipflow-input.css?v=2" />
+    <link rel="stylesheet" href="/workspace-sidebar.css?v=3" />
     <script src="/customer.js" defer></script>
     <script src="/public-site.js" defer></script>
     <script src="/workspace-sidebar.js?v=2" defer></script>
@@ -35,7 +35,7 @@
           <h1 id="creatorTitle">Creator Monitor</h1>
           <p>Track a YouTube channel. When it publishes a new video, ClipFlow queues three vertical clips automatically.</p>
         </div>
-        <span class="creator-live-note"><i aria-hidden="true"></i> Upload notifications</span>
+        <a class="creator-activity-jump" href="#recentUploads">Recent new uploads <span aria-hidden="true">↓</span></a>
       </section>
 
       <section class="creator-add-card" aria-labelledby="addCreatorTitle">
@@ -69,7 +69,7 @@
         <p class="creator-status" id="creatorStatus" role="status" aria-live="polite"></p>
       </section>
 
-      <section class="creator-list-section" aria-labelledby="monitoredTitle">
+      <section id="recentUploads" class="creator-list-section" aria-labelledby="monitoredTitle">
         <div class="creator-section-heading">
           <div>
             <p class="creator-kicker">Your workspace</p>

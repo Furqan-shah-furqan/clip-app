@@ -116,3 +116,17 @@ html:not(.theme-dark) .creator-brand-mark { background: #20211f; color: #fff; }
   .creator-upload-status { text-align: left; }
 }
 @media (prefers-reduced-motion: reduce) { .creator-monitor-page *, .creator-monitor-page *::before, .creator-monitor-page *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+/* Desktop workspace: controls and activity share the first screen. */
+@media (min-width: 900px) {
+  .creator-main { width: min(100%, 1240px); display: grid !important; grid-template-columns: 310px minmax(0,1fr); align-items: start; gap: 20px; padding: 24px 28px !important; }
+  .creator-intro { grid-column: 1 / -1; margin: 0; }
+  .creator-intro-copy > p { max-width: 760px; }
+  .creator-add-card { padding: 20px; }
+  .creator-form { grid-template-columns: 1fr; }
+  .creator-form .creator-primary { min-height: 44px !important; }
+  .creator-list-section { margin-top: 0; min-width: 0; }
+  .creator-list { max-height: calc(100dvh - 250px); overflow-y: auto; padding-right: 5px; scrollbar-width: thin; }
+  .creator-scope-note { grid-column: 1 / -1; margin: 0; }
+}
+.creator-activity-jump { display: inline-flex; align-items: center; gap: 8px; color: var(--customer-text); text-decoration: none; font-size: 12px; border: 1px solid #c8a44960; border-radius: 18px; padding: 10px 14px; }
+.creator-activity-jump:focus-visible { outline: 2px solid #c8a449; outline-offset: 3px; }

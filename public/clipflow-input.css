@@ -84,3 +84,6 @@ html:not(.theme-dark) .clipflow-search > .cf-search-dark-border { background: #e
   .clipflow-search > .cf-search-glow { animation: none; }
   .cf-search-pink-mask { transition: none; }
 }
+/* Uiverse.io by Lakshay-art: shared violet/pink edge treatment for primary fields. */
+input:is([type=text],[type=url],[type=email],[type=password]), textarea { border: 1px solid #76628b !important; box-shadow: -2px 0 9px #402fb530, 2px 0 9px #cf30aa25; border-radius: 12px; transition: border-color .2s ease, box-shadow .2s ease; }
+input:is([type=text],[type=url],[type=email],[type=password]):focus-visible, textarea:focus-visible { outline: 2px solid #c5a7e2 !important; outline-offset: 2px; box-shadow: -3px 0 12px #402fb550, 3px 0 12px #cf30aa40; }
