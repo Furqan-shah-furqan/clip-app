@@ -69,3 +69,106 @@
   .hero-reference .hero-toolbar-note { width: 100%; text-align: center; }
 }
 @media(prefers-reduced-motion: reduce) { .hero-reference .hero-wave i { animation: none !important; } }
+
+/* Requested animated button treatment, adapted to ClipFlow's warm gold/purple accent. */
+.hero-reference .hero-cta-wrapper { align-items: center; }
+.hero-reference .btn-wrapper {
+  --rad: 20px;
+  --color-layer-a: #f0d995;
+  --color-layer-b: #765f9b;
+  position: relative;
+  display: flex;
+  flex: 0 0 190px;
+  width: 190px;
+  height: 54px;
+  align-items: center;
+  justify-content: center;
+  overflow: clip;
+  overflow-clip-margin: 4px;
+  isolation: isolate;
+  border: 1px solid #b89a4f;
+  border-radius: var(--rad);
+  background: #c8a449;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+.hero-reference .btn-wrapper .light {
+  position: absolute;
+  z-index: 0;
+  width: 70%;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff8d6a8;
+  filter: blur(7px);
+  animation: cf-button-pulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+.hero-reference .btn-wrapper .gradient-layer {
+  position: absolute;
+  z-index: 0;
+  top: -185%;
+  left: -155%;
+  width: 410%;
+  aspect-ratio: 1;
+  background: radial-gradient(ellipse at 65% 180%, var(--color-layer-a), var(--color-layer-b), var(--color-layer-a), var(--color-layer-b), var(--color-layer-a));
+  mix-blend-mode: soft-light;
+  animation: cf-button-rotate 18s linear infinite;
+  pointer-events: none;
+}
+.hero-reference .btn-wrapper .gradient-layer:nth-of-type(3n) { mix-blend-mode: color-dodge; opacity: .6; }
+.hero-reference #smartClipBtn.gradient-btn {
+  position: absolute !important;
+  z-index: 1 !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: var(--rad) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  font: inherit !important;
+  text-shadow: 0 0 0 transparent !important;
+  cursor: pointer;
+  transition: color .25s ease, text-shadow .25s ease;
+}
+.hero-reference #smartClipBtn.gradient-btn:focus-visible { outline: 3px solid #f5e8c2; outline-offset: -5px; }
+.hero-reference #smartClipBtn.gradient-btn:disabled { cursor: wait; opacity: .75; }
+.hero-reference .btn-wrapper .text-overlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 14px;
+  border-radius: var(--rad);
+  color: #171716;
+  font: inherit;
+  letter-spacing: .025em;
+  text-shadow: 0 1px 2px #fff5;
+  pointer-events: none;
+  transition: transform .25s ease, opacity .2s ease;
+}
+.hero-reference .btn-wrapper:hover .text-overlay { transform: scale(1.04); }
+.hero-reference .btn-wrapper:active .text-overlay { transform: scale(.97); }
+.hero-reference .btn-wrapper:has(#smartClipBtn:disabled) .text-overlay { opacity: .82; }
+.hero-reference .hero-pill-input-box { display: none !important; }
+.hero-reference .hero-showcase { margin-top: 14px; }
+.hero-reference .hero-media-empty span { max-width: 300px; }
+@keyframes cf-button-rotate { to { transform: rotate(360deg); } }
+@keyframes cf-button-pulse { 50% { opacity: .4; } }
+
+@media (max-width: 760px) {
+  .hero-reference .btn-wrapper { flex: 1 1 100%; width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-reference .btn-wrapper .light,
+  .hero-reference .btn-wrapper .gradient-layer { animation: none !important; }
+  .hero-reference .btn-wrapper .text-overlay,
+  .hero-reference #smartClipBtn.gradient-btn { transition: none !important; }
+}

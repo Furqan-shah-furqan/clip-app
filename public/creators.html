@@ -6,12 +6,13 @@
     <meta name="description" content="Monitor YouTube creators and automatically queue clips from new uploads in ClipFlow Studio." />
     <title>Creator Monitor · ClipFlow Studio</title>
     <link rel="stylesheet" href="/customer.css" />
-    <link rel="stylesheet" href="/creator-monitor.css?v=1" />
-    <link rel="stylesheet" href="/workspace-sidebar.css?v=1" />
+    <link rel="stylesheet" href="/creator-monitor.css?v=2" />
+    <link rel="stylesheet" href="/clipflow-input.css?v=1" />
+    <link rel="stylesheet" href="/workspace-sidebar.css?v=2" />
     <script src="/customer.js" defer></script>
     <script src="/public-site.js" defer></script>
-    <script src="/workspace-sidebar.js?v=1" defer></script>
-    <script src="/creator-monitor.js?v=1" defer></script>
+    <script src="/workspace-sidebar.js?v=2" defer></script>
+    <script src="/creator-monitor.js?v=2" defer></script>
   </head>
   <body class="customer-page creator-monitor-page">
     <header class="creator-topbar">
@@ -47,7 +48,20 @@
         </div>
         <form id="creatorForm" class="creator-form">
           <label class="sr-only" for="creatorUrl">YouTube channel or public video URL</label>
-          <input id="creatorUrl" name="url" type="url" placeholder="Paste a YouTube channel or video link" autocomplete="url" required />
+          <div class="clipflow-search creator-search">
+            <div class="cf-search-glow" aria-hidden="true"></div>
+            <div class="cf-search-dark-border" aria-hidden="true"></div>
+            <div class="cf-search-dark-border" aria-hidden="true"></div>
+            <div class="cf-search-dark-border" aria-hidden="true"></div>
+            <div class="cf-search-white" aria-hidden="true"></div>
+            <div class="cf-search-border" aria-hidden="true"></div>
+            <div class="cf-search-main">
+              <input id="creatorUrl" name="url" type="url" class="cf-search-input" placeholder="Paste a YouTube channel or video link" autocomplete="url" aria-label="YouTube channel or public video URL" required />
+              <div class="cf-search-mask" aria-hidden="true"></div>
+              <div class="cf-search-pink-mask" aria-hidden="true"></div>
+              <span class="cf-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2"/></svg></span>
+            </div>
+          </div>
           <button class="creator-primary" id="addCreatorButton" type="submit">Start monitoring</button>
         </form>
         <p class="creator-form-note">Channel links, @handles, and public video links work. Existing videos are skipped; only new uploads start clipping.</p>

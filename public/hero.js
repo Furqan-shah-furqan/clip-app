@@ -7,8 +7,15 @@
   const arc = byId('heroLoadingArc'), status = byId('heroLoadingStatus');
   const video = byId('heroMediaVideo'), poster = byId('heroMediaPoster');
   const empty = byId('heroMediaEmpty'), thumb = byId('ytThumb');
+  const generateButton = byId('smartClipBtn');
+  const generateLabel = generateButton?.parentElement.querySelector('.text-overlay');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let displayed = 0, target = -1, frame = 0, objectUrl = '';
+  if (generateButton && generateLabel) {
+    const syncGenerateLabel = () => { generateLabel.textContent = generateButton.textContent.trim() || 'Generate clips'; };
+    new MutationObserver(syncGenerateLabel).observe(generateButton, { childList: true, characterData: true, subtree: true });
+    syncGenerateLabel();
+  }
   function paint(value) {
     displayed = value;
     percent.textContent = `${Math.round(value)}%`;

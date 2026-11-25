@@ -1,11 +1,11 @@
 body { --workspace-menu-bg: #17191c; --workspace-menu-surface: #202226; --workspace-menu-ink: #f4f4f1; --workspace-menu-muted: #a7a9ad; --workspace-menu-line: #ffffff14; --workspace-menu-hover: #ffffff0d; }
 body.home-page.theme-light, html:not(.theme-dark) body.creator-monitor-page { --workspace-menu-bg: #f4f3ef; --workspace-menu-surface: #fff; --workspace-menu-ink: #222321; --workspace-menu-muted: #65675f; --workspace-menu-line: #1719171a; --workspace-menu-hover: #1719170a; }
 .workspace-sidebar-toggle, .workspace-sidebar-close {
-  display: inline-grid;
+  display: grid;
   place-items: center;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
+  flex: 0 0 50px;
+  width: 50px;
+  height: 50px;
   padding: 0;
   border: 1px solid var(--workspace-menu-line);
   border-radius: 50%;
@@ -25,7 +25,7 @@ body.home-page.theme-light, html:not(.theme-dark) body.creator-monitor-page { --
   height: 100%;
   padding: 0;
   border: 0;
-  background: #0008;
+  background: transparent;
   opacity: 0;
   visibility: hidden;
   transition: opacity .24s ease, visibility .24s ease;
@@ -57,7 +57,7 @@ body.workspace-sidebar-open .workspace-sidebar { transform: translateX(0); visib
 .workspace-sidebar-brand strong { font-size: 14px; }
 .workspace-sidebar-brand small { margin-top: 3px; color: var(--workspace-menu-muted); font-size: 11px; }
 .workspace-sidebar-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: #e5e3dc; color: #171717; font-size: 11px; font-weight: 700; }
-.workspace-sidebar-close { width: 32px; height: 32px; flex-basis: 32px; }
+.workspace-sidebar-close { flex-basis: 50px; width: 50px; height: 50px; }
 .workspace-sidebar-label { margin: 22px 9px 8px; color: var(--workspace-menu-muted); font-size: 11px; font-weight: 550; }
 .workspace-sidebar nav { display: grid; gap: 4px; }
 .workspace-sidebar-link { display: flex; min-height: 42px; align-items: center; gap: 11px; padding: 0 11px; border-radius: 14px; color: var(--workspace-menu-muted) !important; font-size: 13px; text-decoration: none; transition: background-color .18s ease, color .18s ease; }

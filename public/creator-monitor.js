@@ -140,7 +140,12 @@
 
     if (channel.lastError) card.append(make("p", "creator-channel-error", channel.lastError));
     const activity = make("div", "creator-upload-list");
-    activity.append(make("h3", "", "Recent new uploads"));
+    const uploadsHeading = make("h3", "creator-upload-heading");
+    uploadsHeading.append(make("span", "", "Recent new uploads"));
+    const uploadCount = make("span", "creator-upload-count", String(channel.videos.length));
+    uploadCount.setAttribute("aria-label", `${channel.videos.length} recent uploads`);
+    uploadsHeading.append(uploadCount);
+    activity.append(uploadsHeading);
     if (channel.videos.length) channel.videos.forEach(video => {
       video.creatorChannelId = channel.id;
       activity.append(renderUpload(video));

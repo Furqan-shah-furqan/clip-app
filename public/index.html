@@ -7,8 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="style.css?v=clip-editor-13" />
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
-    <link rel="stylesheet" href="hero.css?v=hero-70" />
-  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=1"><script src="/workspace-sidebar.js?v=1" defer></script></head>
+    <link rel="stylesheet" href="hero.css?v=hero-pro-2" />
+    <link rel="stylesheet" href="/clipflow-input.css?v=1" />
+  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=2"><script src="/workspace-sidebar.js?v=2" defer></script></head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
     <div class="scene scene-a"></div>
@@ -92,23 +93,32 @@
                 What do you want to clip today?
               </h1>
               <p class="hero-subtitle">
-                Paste a link or drop in videos. You get captioned shorts back.
+                Paste a YouTube link. Get captioned vertical clips.
               </p>
             </div>
 
             <div class="hero-card-container" id="heroInputCard">
               <div class="hero-entry-row">
               <!-- Primary Input: Pill Container -->
-              <div class="hero-pill-input-box">
-                <span class="hero-link-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13.5 8.5 15a4 4 0 0 1-5.7-5.7l4-4a4 4 0 0 1 5.7 0M14 10.5l1.5-1.5a4 4 0 0 1 5.7 5.7l-4 4a4 4 0 0 1-5.7 0M8.5 15l7-7"/></svg></span>
+              <div class="clipflow-search">
+                <div class="cf-search-glow" aria-hidden="true"></div>
+                <div class="cf-search-dark-border" aria-hidden="true"></div>
+                <div class="cf-search-dark-border" aria-hidden="true"></div>
+                <div class="cf-search-dark-border" aria-hidden="true"></div>
+                <div class="cf-search-white" aria-hidden="true"></div>
+                <div class="cf-search-border" aria-hidden="true"></div>
+                <div class="cf-search-main">
                 <input
                   type="url"
                   id="ytUrlInput"
-                  class="hero-link-field"
+                  class="hero-link-field cf-search-input"
                   placeholder="Paste a YouTube link here..."
                   autocomplete="off"
                   spellcheck="false"
+                  aria-label="YouTube video link"
                 />
+                <div class="cf-search-mask" aria-hidden="true"></div>
+                <div class="cf-search-pink-mask" aria-hidden="true"></div>
                 <button
                   type="button"
                   id="clearUrlBtn"
@@ -127,6 +137,8 @@
                 >
                   Fetch
                 </button>
+                <span class="cf-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2"/></svg></span>
+                </div>
               </div>
 
               <!-- CTA Button & Cancel Button on Exact Same Row -->
@@ -143,40 +155,22 @@
                   </svg>
                   <span>Cancel</span>
                 </button>
-                <button
-                  class="hero-gradient-cta-btn"
-                  id="smartClipBtn"
-                  type="button"
-                >
-                  <span>Generate clips</span>
-                  <span class="cta-arrow">→</span>
-                </button>
+                <div class="btn-wrapper" aria-label="Generate clips">
+                  <div class="light" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:0s;animation-duration:25s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:.15s;animation-duration:15.9s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:.53s;animation-duration:26.4s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:.45s;animation-duration:17.8s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:19.2s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:29.2s" aria-hidden="true"></div>
+                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:20.2s" aria-hidden="true"></div>
+                  <button class="gradient-btn" id="smartClipBtn" type="button">Generate clips</button>
+                  <div class="text-overlay" aria-hidden="true">Generate clips</div>
+                </div>
               </div>
 
               </div>
-              <div class="hero-source-toolbar">
-              <!-- Hidden file upload -->
               <input type="file" id="videoInput" accept="video/*" hidden />
-
-              <!-- Source Selectors: Two rounded selection pills underneath -->
-              <div class="hero-sources-row">
-                <label class="hero-source-pill" for="videoInput">
-                  <svg class="pill-icon text-indigo" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                  </svg>
-                  <span><strong>Upload:</strong> Video file (MP4, MOV, etc.)</span>
-                </label>
-
-                <button class="hero-source-pill is-disabled" type="button" disabled title="Google Drive import is unavailable">
-                  <svg class="pill-icon text-drive" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M7.71 3.5L1.15 15l3.43 6 6.55-11.5L7.71 3.5zm4.87 0l6.55 11.5h-6.86L5.72 3.5h6.86zm7.71 12.5L16.86 21H3.14l3.43-5h13.72z"/>
-                  </svg>
-                  <span><strong>Google Drive:</strong> Import unavailable</span>
-                </button>
-              </div>
-
-                <span class="hero-toolbar-note">Gameplay and facecam, framed for mobile.</span>
-              </div>
               <div class="hero-showcase">
                 <section class="hero-loading-card" aria-label="Clip generation progress">
                   <div class="hero-loading-main">
@@ -189,7 +183,7 @@
                   <button class="hero-loading-status" id="heroLoadingStatus" type="button" disabled>Add a video to get started</button>
                 </section>
                 <div class="hero-media-card">
-                  <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a link or upload a video below.</span></div>
+                  <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a YouTube link above to get started.</span></div>
                   <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
                   <div class="dual-crop-stage" id="dualCropStage">
                     <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
@@ -727,6 +721,6 @@
     <script src="captionClient.js?v=20260922"></script>
     <script src="app.js?v=clip-editor-7"></script>
     <script src="dropdowns.js?v=20260922"></script>
-    <script src="hero.js?v=clip-editor-3"></script>
+    <script src="hero.js?v=hero-pro-2"></script>
   </body>
 </html>

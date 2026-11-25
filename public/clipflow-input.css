@@ -1,0 +1,86 @@
+/* Compact, namespaced adaptation of the requested Uiverse field treatment. */
+.clipflow-search {
+  --cf-search-bg: #111318;
+  --cf-search-ink: #f3f2ed;
+  --cf-search-muted: #a6a8b0;
+  --cf-search-edge: #77728b;
+  position: relative;
+  display: flex;
+  min-width: 0;
+  height: 56px;
+  padding: 1px;
+  overflow: visible;
+  isolation: isolate;
+  border-radius: 22px;
+  background: transparent;
+}
+.clipflow-search > .cf-search-glow,
+.clipflow-search > .cf-search-dark-border,
+.clipflow-search > .cf-search-white,
+.clipflow-search > .cf-search-border {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.clipflow-search > .cf-search-glow {
+  z-index: -1;
+  inset: -3px;
+  background: conic-gradient(from 25deg, #e4c777, #756393, #d5b468, #494156, #e4c777);
+  filter: blur(7px);
+  opacity: .42;
+  animation: cf-search-rotate 18s linear infinite;
+}
+.clipflow-search > .cf-search-dark-border { z-index: 0; inset: 0; background: #191a20; }
+.clipflow-search > .cf-search-dark-border:nth-of-type(3) { inset: 1px; background: #29252f; }
+.clipflow-search > .cf-search-dark-border:nth-of-type(4) { inset: 2px; background: #40354d; }
+.clipflow-search > .cf-search-white { z-index: 0; inset: 3px; background: linear-gradient(145deg, #ddd8c7, #615a72 50%, #c9af6a); }
+.clipflow-search > .cf-search-border { z-index: 0; inset: 4px; background: #171820; }
+.cf-search-main {
+  position: relative;
+  z-index: 1;
+  margin: 5px;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--cf-search-bg);
+}
+.cf-search-input {
+  display: block;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 18px 0 48px !important;
+  border: 0 !important;
+  border-radius: inherit !important;
+  outline: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--cf-search-ink) !important;
+  font: inherit;
+  font-size: 14px;
+}
+.cf-search-input::placeholder { color: var(--cf-search-muted); opacity: 1; }
+.cf-search-mask, .cf-search-pink-mask, .cf-search-filter-border { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.cf-search-mask { z-index: 1; }
+.cf-search-pink-mask { z-index: 1; opacity: 0; transition: opacity .2s ease; }
+.cf-search-icon { position: absolute; z-index: 2; left: 16px; top: 50%; display: grid; width: 20px; height: 20px; place-items: center; color: var(--cf-search-muted); transform: translateY(-50%); pointer-events: none; }
+.cf-search-icon svg { display: block; width: 20px; height: 20px; }
+.cf-search-main:focus-within { outline: 2px solid #c8a449; outline-offset: 2px; }
+.clipflow-search:focus-within > .cf-search-glow { opacity: .72; }
+.clipflow-search:focus-within .cf-search-pink-mask { opacity: .12; background: linear-gradient(110deg, transparent 45%, #c8a449 100%); }
+html:not(.theme-dark) .clipflow-search { --cf-search-bg: #fbfaf7; --cf-search-ink: #20211f; --cf-search-muted: #676860; --cf-search-edge: #c7c2b2; }
+html:not(.theme-dark) .clipflow-search > .cf-search-dark-border { background: #ece9e0; }
+
+@keyframes cf-search-rotate { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .clipflow-search > .cf-search-glow { animation: none; }
+  .cf-search-pink-mask { transition: none; }
+}
