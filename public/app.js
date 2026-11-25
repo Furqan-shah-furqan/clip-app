@@ -2416,13 +2416,13 @@ function positionYouTubePreviewCrops() {
 }
 
 function syncYouTubePreviewPlayers() {
-  if (!editorYouTubeSourcePlayer || editorYouTubePlayers.length !== 2) return;
+  if (!editorYouTubeSourcePlayer?.cfReady || !editorYouTubePlayers.length) return;
   const YT = window.YT;
   const sourceState = editorYouTubeSourcePlayer.getPlayerState?.();
   const time = editorYouTubeSourcePlayer.getCurrentTime?.() || 0;
   if (sourceState === YT?.PlayerState?.PLAYING) {
     editorYouTubePlayers.forEach((player) => {
-      if (!player?.playVideo) return;
+      if (!player?.cfReady || !player?.playVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
       if (drift > 1.5 && Date.now() - (player.cfLastSeek || 0) > 3000) { player.seekTo(time, true); player.cfLastSeek = Date.now(); }
       player.mute();
@@ -2430,7 +2430,7 @@ function syncYouTubePreviewPlayers() {
     });
   } else {
     editorYouTubePlayers.forEach((player) => {
-      if (!player?.pauseVideo) return;
+      if (!player?.cfReady || !player?.pauseVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
       if (drift > 0.3 && player.seekTo && sourceState !== YT?.PlayerState?.BUFFERING) player.seekTo(time, true);
       player.pauseVideo();
@@ -2472,7 +2472,7 @@ async function mountYouTubeEditor(videoId) {
     const YT = await loadYouTubeIframeApi();
     if (!clipEditorDialog.open) return;
     editorYouTubeSourcePlayer = new YT.Player(editorYouTubeFrame, {
-      events: { onStateChange: () => { syncYouTubePreviewPlayers(); updateEditorPlayButton(); } },
+      events: { onReady: event => { event.target.cfReady = true; syncYouTubePreviewPlayers(); }, onStateChange: () => { syncYouTubePreviewPlayers(); updateEditorPlayButton(); } },
     });
     const mainFrame = document.createElement("div");
     const insetFrame = document.createElement("div");
@@ -2480,18 +2480,22 @@ async function mountYouTubeEditor(videoId) {
     insetFrame.id = "clipEditorPreviewInsetPlayer";
     editorYoutubeMain.replaceChildren(mainFrame);
     editorYoutubeInset.replaceChildren(insetFrame);
-    const playerOptions = { width: "1280", height: "720", videoId, playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, modestbranding: 1, cc_load_policy: 0, iv_load_policy: 3 }, events: {
+    const playerOptions = { host: "https://www.youtube-nocookie.com", width: "1280", height: "720", videoId, playerVars: { origin: window.location.origin, autoplay: 1, mute: 1, controls: 0, disablekb: 1, fs: 0, playsinline: 1, rel: 0, modestbranding: 1, cc_load_policy: 0, iv_load_policy: 3 }, events: {
       onReady: (event) => {
+        event.target.cfReady = true;
         event.target.mute();
+        try { event.target.getIframe().allow = "autoplay; encrypted-media; picture-in-picture"; } catch {}
         try { event.target.unloadModule("captions"); event.target.setOption("captions", "track", {}); } catch {}
         editorYouTubePreviewReady += 1;
-        if (editorYouTubePreviewReady === 2) {
+        if (event.target.getIframe().id === "clipEditorPreviewMainPlayer") {
           editorYoutubeComposition.hidden = false;
           editorPreviewCanvas.hidden = true;
           positionYouTubePreviewCrops();
           syncYouTubePreviewPlayers();
         }
       },
+      onAutoplayBlocked: () => showClipEditorError("Your browser blocked phone preview playback. Allow autoplay for this site and reopen the editor."),
+      onError: () => showClipEditorError("YouTube could not play the phone preview. Reopen the editor or upload the video to preview it directly."),
     } };
     editorYouTubePlayers = [
       new YT.Player(mainFrame, playerOptions),

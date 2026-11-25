@@ -221,3 +221,23 @@
 #clipEditorDialog #editorSourceSlot { flex:none; box-sizing:border-box; width:calc(var(--editor-preview-height) * 16 / 9) !important; height:var(--editor-preview-height) !important; max-height:none !important; max-width:none !important; margin:0 !important; padding:0 !important; }
 #clipEditorDialog .clip-editor-section-head { display:none; }
 #clipEditorDialog :is(.phone-preview-frame canvas,.editor-youtube-composition) { inset:0 !important; width:100% !important; height:100% !important; }
+/* Match the results width and shorten both source cards by 100px. */
+.hero-reference { width:100%; max-width:none; margin:0; padding:12px 0; min-height:260px; height:auto; }
+.hero-reference #heroInputCard { grid-template-columns:minmax(350px,.85fr) minmax(0,1.15fr); gap:24px; height:260px; }
+.hero-reference .clip-card-wrap { width:100%; height:260px; gap:7px; padding:12px; }
+.hero-reference .hero-showcase { min-height:260px; height:260px; }
+.hero-reference .clip-card-progress { margin:0 5px; }
+.hero-reference .clip-card-ring { flex-basis:98.4px; width:98.4px; height:98.4px; }
+.hero-reference .clip-card-ring .clip-card-pct { font-size:18px; }
+.hero-reference .clip-card-stage { min-height:18px; line-height:1.3; }
+.hero-reference .clip-card-wrap .cf-search-main { position:relative; }
+.hero-reference .clip-card-wrap .cf-search-icon { left:12px; top:50%; transform:translateY(-50%); display:grid; place-items:center; height:24px; width:24px; }
+.hero-reference .clip-card-wrap .cf-search-input { padding-left:44px !important; }
+#clipEditorDialog .clip-editor-option-row { display:flex; align-items:center; gap:8px; padding:8px; margin:0; flex-wrap:wrap; background:#f7f5fa; border-radius:16px; color:#393241; }
+#clipEditorDialog .clip-editor-option-row button { white-space:nowrap; line-height:1.1; min-height:34px; padding:8px 12px; border-radius:12px; background:#fff; color:#403448; font-size:12px; flex-shrink:0; }
+#clipEditorDialog .clip-editor-source-name { flex:1; min-width:80px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#clipEditorDialog .clip-editor-option-row .clip-editor-generate,#clipEditorDialog .clip-editor-option-row .is-active { background:linear-gradient(90deg,#ff4fa3,#a855f7); color:#fff; }
+#clipEditorDialog .clip-editor-toggle { white-space:nowrap; }
+#clipEditorDialog .clip-editor-actions { display:flex; gap:8px; margin-left:auto; }
+#clipEditorDialog .clip-editor-crop-button small { display:none; }
+@media(max-width:700px) { .hero-reference #heroInputCard { grid-template-columns:1fr; height:auto; } .hero-reference .clip-card-wrap { max-width:100%; } .hero-reference .hero-showcase { height:260px; width:100%; } }
