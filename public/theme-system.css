@@ -72,3 +72,12 @@ body.home-page .cf-back-control { display:none; }
 @media(prefers-reduced-motion:reduce) {
   .hero-reference .clip-card-ring::before,.hero-reference .clip-card-loading span { animation:none !important; }
 }
+
+/* Frame editor toolbar: space is reserved for every action, including close. */
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row { border-radius:35px; padding:10px 14px; gap:8px; align-items:center; }
+#clipEditorSourceName { display:none !important; }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-close { position:static !important; inset:auto !important; transform:none !important; flex:0 0 35px; width:35px; height:35px; padding:0; margin:0; }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row button { background:#fff; color:#111; box-shadow:0 3px 12px #8c37d026; white-space:nowrap; }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row :is(.clip-editor-generate,.is-active) { background:var(--cf-action); color:white; }
+#clipEditorDialog .clip-editor-top-crops { display:flex; flex-wrap:wrap; gap:6px; }
+#clipEditorDialog .clip-editor-actions { flex-shrink:0; }

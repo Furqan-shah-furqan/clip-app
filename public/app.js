@@ -430,7 +430,7 @@ const clipEditorSourceNote = document.getElementById("clipEditorSourceNote");
 const clipEditorPreviewNote = document.getElementById("clipEditorPreviewNote");
 const clipEditorPlay = document.getElementById("clipEditorPlay");
 const dualViewEnabled = document.getElementById("dualViewEnabled");
-const dualCropRegions = { main: null, inset: null };
+const dualCropRegions = { main: null, inset: null, inset2: null };
 let activeCropRegion = "main";
 let cropSelectionMode = false;
 let activeCropPointerId = null;
@@ -2059,7 +2059,7 @@ async function fetchYoutubeSource(url, options = {}) {
     const currentVideoId = state.uploadedProject?.videoId || getVideoIdFromUrl(state.uploadedProject?.sourceUrl || state.uploadedProject?.youtubeUrl || "");
     if (currentVideoId !== incomingVideoId) {
       dualCropRegions.main = null;
-      dualCropRegions.inset = null;
+      dualCropRegions.inset = null; dualCropRegions.inset2 = null;
       state.dualViewCrop = null;
     }
 
@@ -2242,11 +2242,11 @@ function validEditorCrop(crop) {
 
 function renderDualCropRegions() {
   if (!dualCropOverlay) return;
-  for (const name of ["main", "inset"]) {
+  for (const name of ["main", "inset", "inset2"]) {
     const box = dualCropOverlay.querySelector(`[data-crop="${name}"]`);
     const crop = dualCropRegions[name];
     if (!box) continue;
-    box.hidden = !crop || (name === "inset" && !dualViewEnabled?.checked);
+    box.hidden = !crop || (name !== "main" && !dualViewEnabled?.checked);
     if (crop) {
       box.style.left = `${crop.x * 100}%`;
       box.style.top = `${crop.y * 100}%`;
@@ -2268,7 +2268,7 @@ function renderDualCropRegions() {
 }
 
 function setActiveCropRegion(name) {
-  if (name === "inset" && !dualViewEnabled?.checked) return;
+  if (name !== "main" && !dualViewEnabled?.checked) return;
   activeCropRegion = name;
   cropSelectionMode = true;
   if (clipEditorSelectHint) clipEditorSelectHint.textContent = `Drag on the video to set the ${name === "main" ? "gameplay" : "facecam"} crop`;
@@ -2282,7 +2282,7 @@ document.querySelectorAll("[data-crop-select]").forEach((button) => {
 });
 
 dualViewEnabled?.addEventListener("change", () => {
-  if (!dualViewEnabled.checked && activeCropRegion === "inset") setActiveCropRegion("main");
+  if (!dualViewEnabled.checked && activeCropRegion !== "main") setActiveCropRegion("main");
   renderDualCropRegions();
 });
 
@@ -2322,17 +2322,18 @@ function drawEditorPreview() {
   }
   const mainCrop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
   drawCropToCanvas(context, source, mainCrop, 0, 0, width, height);
-  if (dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset)) {
+  for (const [index, crop] of [dualCropRegions.inset, dualCropRegions.inset2].entries()) {
+    if (!dualViewEnabled?.checked || !validEditorCrop(crop)) continue;
     const sourceW = source.videoWidth || source.naturalWidth;
     const sourceH = source.videoHeight || source.naturalHeight;
-    const cropW = sourceW * dualCropRegions.inset.width;
-    const cropH = sourceH * dualCropRegions.inset.height;
+    const cropW = sourceW * crop.width;
+    const cropH = sourceH * crop.height;
     const scale = Math.min((width * 0.32) / cropW, (height * 0.28) / cropH);
     const insetW = cropW * scale, insetH = cropH * scale;
-    const x = width - insetW - 18, y = 18;
+    const x = index === 0 ? width - insetW - 8 : 8, y = 8;
     context.fillStyle = "#f0ede6";
     context.fillRect(x - 3, y - 3, insetW + 6, insetH + 6);
-    drawCropToCanvas(context, source, dualCropRegions.inset, x, y, insetW, insetH);
+    drawCropToCanvas(context, source, crop, x, y, insetW, insetH);
   }
 }
 
@@ -2541,6 +2542,7 @@ function openClipEditor() {
   const isYoutube = project.source === "youtube" || project.sourceType === "youtube" || Boolean(project.videoId);
   editorSourceType = isYoutube ? "youtube" : "upload";
   if (state.dualViewCrop?.main) dualCropRegions.main = { ...state.dualViewCrop.main };
+  dualCropRegions.inset2 = state.dualViewCrop?.inset2 || null;
   if (state.dualViewCrop?.inset) dualCropRegions.inset = { ...state.dualViewCrop.inset };
   if (dualViewEnabled) dualViewEnabled.checked = state.dualViewCrop?.inset !== null;
   activeCropRegion = validEditorCrop(dualCropRegions.main) ? (dualViewEnabled?.checked ? "inset" : "main") : "main";
@@ -2552,7 +2554,7 @@ function openClipEditor() {
   if (isYoutube) {
     const videoId = project.videoId || getVideoIdFromUrl(project.sourceUrl || project.youtubeUrl || "");
     if (!videoId) throw new Error("I couldn't identify the YouTube video. Paste its full watch or youtu.be link again.");
-    mountYouTubeEditor(videoId);
+    mountSharedVideoEditor(videoId);
   } else {
     destroyYouTubeEditorPlayers();
     editorYouTubeFrame?.remove();
@@ -2603,7 +2605,7 @@ function showClipEditorError(message) {
 
 dualCropOverlay?.addEventListener("pointerdown", (event) => {
   if (activeCropPointerId !== null) return;
-  if (!dualViewEnabled?.checked && activeCropRegion === "inset") return;
+  if (!dualViewEnabled?.checked && activeCropRegion !== "main") return;
   const bounds = dualCropStage.getBoundingClientRect();
   if (!bounds.width || !bounds.height) return;
   const box = event.target.closest(".dual-crop-box");
@@ -2693,7 +2695,7 @@ document.getElementById("clipEditorGenerate")?.addEventListener("click", () => {
     showClipEditorError("Draw the floating facecam crop, or turn off “Include floating facecam” to make a single-view clip.");
     return;
   }
-  state.dualViewCrop = { main: { ...dualCropRegions.main }, inset: dualViewEnabled?.checked ? { ...dualCropRegions.inset } : null };
+  state.dualViewCrop = { main: { ...dualCropRegions.main }, inset: dualViewEnabled?.checked ? { ...dualCropRegions.inset } : null, inset2: dualViewEnabled?.checked && validEditorCrop(dualCropRegions.inset2) ? { ...dualCropRegions.inset2 } : null };
   state.clipEditorConfirmed = true;
   clipEditorDialog?.close();
   smartClipBtn?.click();
@@ -2716,7 +2718,7 @@ videoInput?.addEventListener("change", async (e) => {
     state.smartSuggestions = [];
     state.clipCaptions = {};
     dualCropRegions.main = null;
-    dualCropRegions.inset = null;
+    dualCropRegions.inset = null; dualCropRegions.inset2 = null;
     state.dualViewCrop = null;
     if (dualCropOverlay) dualCropOverlay.hidden = true;
 
@@ -4316,7 +4318,7 @@ smartClipBtn?.addEventListener("click", async () => {
           };
           state.dualViewCrop = null;
           dualCropRegions.main = null;
-          dualCropRegions.inset = null;
+          dualCropRegions.inset = null; dualCropRegions.inset2 = null;
         }
       }
       const isUploadSource = state.uploadedProject?.source === "upload" || state.uploadedProject?.sourceType === "upload";
@@ -4927,3 +4929,41 @@ persistStudioSession();
     });
   }
 })();
+
+let sharedPreviewRequest = 0;
+async function mountSharedVideoEditor(videoId) {
+  const request = ++sharedPreviewRequest;
+  destroyYouTubeEditorPlayers();
+  editorYouTubeFrame?.remove(); editorYouTubeFrame = null;
+  editorYoutubeComposition.hidden = true; editorPreviewCanvas.hidden = false;
+  editorSourceType = "upload";
+  heroMediaVideo.pause(); heroMediaVideo.removeAttribute("src"); heroMediaVideo.load();
+  heroMediaVideo.hidden = false; editorPreviewImage = null;
+  showClipEditorError("Preparing the source video for synchronized preview…");
+  try {
+    await Promise.resolve();
+    while (request === sharedPreviewRequest && clipEditorDialog.open) {
+      const response = await fetch("/api/youtube/editor-source", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoId})});
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not prepare the video");
+      if (request !== sharedPreviewRequest || !clipEditorDialog.open) return;
+      if (data.previewUrl) {
+        heroMediaVideo.src = data.previewUrl;
+        heroMediaVideo.load();
+        clipEditorError.hidden = true;
+        heroMediaVideo.play().catch(() => {});
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 2500));
+    }
+  } catch (error) {
+    if (request === sharedPreviewRequest && clipEditorDialog.open) showClipEditorError("Source preview unavailable. Upload the source video to preview both views together. " + error.message);
+  }
+}
+document.getElementById("removeSecondFacecam")?.addEventListener("click", () => { dualCropRegions.inset2 = null; setActiveCropRegion("main"); renderDualCropRegions(); });
+clipEditorDialog?.addEventListener("close", () => { sharedPreviewRequest++; });
+if (heroMediaVideo?.requestVideoFrameCallback) {
+  const drawFrame = () => { if (clipEditorDialog.open) drawEditorPreview(); heroMediaVideo.requestVideoFrameCallback(drawFrame); };
+  heroMediaVideo.requestVideoFrameCallback(drawFrame);
+}
+heroMediaVideo?.addEventListener("seeked", drawEditorPreview);

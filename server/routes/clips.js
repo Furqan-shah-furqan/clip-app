@@ -383,7 +383,7 @@ router.post("/smart-generate", async (req, res) => {
       const validCrop = (crop) => crop && [crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) &&
         crop.x >= 0 && crop.y >= 0 && crop.width >= 0.04 && crop.height >= 0.04 &&
         crop.x + crop.width <= 1 && crop.y + crop.height <= 1;
-      if (!validCrop(dualView.main) || (dualView.inset && !validCrop(dualView.inset))) {
+      if (!validCrop(dualView.main) || (dualView.inset && !validCrop(dualView.inset)) || (dualView.inset2 && (!validCrop(dualView.inset2) || !validCrop(dualView.inset)))) {
         return res.status(400).json({ error: "Each crop region must be inside the video frame and at least 4% of its size." });
       }
     }

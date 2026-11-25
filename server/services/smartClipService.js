@@ -470,7 +470,10 @@ async function smartGenerateClip({
         const insetHeight = Math.max(120, Math.round(targetH * 0.28));
         const mainW = cropExpr(dualView.main);
         const baseFilter = `${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`;
-        if (dualView.inset) {
+        if (dualView.inset2) {
+          const filter = `[0:v]split=3[a][b][c];[a]${baseFilter}[base];[b]${cropExpr(dualView.inset)},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease[f1];[c]${cropExpr(dualView.inset2)},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease[f2];[base][f1]overlay=W-w-24:24[tmp];[tmp][f2]overlay=24:24[v]`;
+          args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
+        } else if (dualView.inset) {
           const insetW = cropExpr(dualView.inset);
           const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
           args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");

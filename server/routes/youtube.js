@@ -143,4 +143,27 @@ router.post("/fetch", async (req, res) => {
   }
 });
 
+// Per-account preparation avoids duplicate downloads while the editor polls.
+const editorSources = new Map();
+router.post("/editor-source", async (req, res) => {
+  const videoId = String(req.body?.videoId || "");
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return res.status(400).json({error:"Invalid video ID"});
+  const owner = req.user?.id || "local";
+  const key = `${owner}:${videoId}`;
+  let entry = editorSources.get(key);
+  if (!entry) {
+    if ([...editorSources.values()].some(e => e.owner === owner && e.status === "preparing")) return res.status(429).json({error:"Another source video is still preparing. Try again shortly."});
+    entry = {owner,status:"preparing",created:Date.now()};
+    editorSources.set(key, entry);
+    const {downloadYouTubeSource} = require("../services/youtubeDownloader");
+    downloadYouTubeSource(`https://www.youtube.com/watch?v=${videoId}`).then(filePath => {
+      entry.filePath = filePath;
+      entry.previewUrl = `/api/files/download/${encodeURIComponent(require("node:path").basename(filePath))}`;
+      entry.status = "ready";
+    }).catch(error => { console.warn("[Editor source]",error.message); entry.status="failed"; });
+  }
+  if (entry.status === "failed") { editorSources.delete(key); return res.status(502).json({error:"The video provider could not prepare this source."}); }
+  if (entry.status === "ready") return res.json({previewUrl:entry.previewUrl,filePath:entry.filePath});
+  return res.status(202).json({status:"preparing"});
+});
 module.exports = router;
