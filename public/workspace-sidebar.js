@@ -57,6 +57,15 @@
   sectionLabel.textContent = "Workspace";
   sidebar.append(head, sectionLabel, nav);
   document.body.prepend(scrim, sidebar);
+  if (document.body.classList.contains("home-page")) {
+    const controls = document.createElement("div");
+    controls.className = "workspace-moved-controls";
+    for (const selector of [".home-nav-tabs", ".home-topbar-right"]) {
+      const element = document.querySelector(selector);
+      if (element) controls.append(element);
+    }
+    sidebar.append(controls);
+  }
 
   let previousFocus = null;
   const setOpen = open => {

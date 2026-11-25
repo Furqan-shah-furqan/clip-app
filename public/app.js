@@ -2424,7 +2424,7 @@ function syncYouTubePreviewPlayers() {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.playVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
-      if (drift > 0.2) player.seekTo(time, true);
+      if (drift > 1.5 && Date.now() - (player.cfLastSeek || 0) > 3000) { player.seekTo(time, true); player.cfLastSeek = Date.now(); }
       player.mute();
       if (player.getPlayerState?.() !== YT?.PlayerState?.PLAYING) player.playVideo();
     });
@@ -2432,7 +2432,7 @@ function syncYouTubePreviewPlayers() {
     editorYouTubePlayers.forEach((player) => {
       if (!player?.pauseVideo) return;
       const drift = Math.abs((player.getCurrentTime?.() || 0) - time);
-      if (drift > 0.2 && player.seekTo) player.seekTo(time, true);
+      if (drift > 0.3 && player.seekTo && sourceState !== YT?.PlayerState?.BUFFERING) player.seekTo(time, true);
       player.pauseVideo();
     });
   }
@@ -2497,13 +2497,40 @@ async function mountYouTubeEditor(videoId) {
       new YT.Player(mainFrame, playerOptions),
       new YT.Player(insetFrame, playerOptions),
     ];
-    editorYouTubeSyncTimer = setInterval(syncYouTubePreviewPlayers, 200);
+    editorYouTubeSyncTimer = setInterval(syncYouTubePreviewPlayers, 750);
   } catch (error) {
     console.warn("YouTube live crop preview unavailable; showing its thumbnail instead:", error.message);
     if (clipEditorPreviewNote) clipEditorPreviewNote.textContent = "The crop layout is previewed from the thumbnail; generated clips use the selected video frames.";
     drawEditorPreview();
   }
 }
+
+async function detectEditorFacecam() {
+  const button = document.getElementById("detectFacecamButton");
+  if (!window.FaceDetector) {
+    showClipEditorError("Automatic face detection is unavailable in this browser. Select the Facecam crop manually.");
+    return;
+  }
+  button.disabled = true;
+  try {
+    const source = editorSourceType === "youtube" ? editorPreviewImage : heroMediaVideo;
+    const width = source?.videoWidth || source?.naturalWidth;
+    const height = source?.videoHeight || source?.naturalHeight;
+    if (!width || !height) throw new Error("Wait for the source preview to load, then try Detect facecam again.");
+    const faces = await new FaceDetector({ fastMode: false, maxDetectedFaces: 8 }).detect(source);
+    if (!faces.length) throw new Error("No face was detected in this frame. Select the facecam manually.");
+    const box = faces.sort((a,b) => b.boundingBox.width * b.boundingBox.height - a.boundingBox.width * a.boundingBox.height)[0].boundingBox;
+    const x = Math.max(0, (box.x - box.width * .35) / width);
+    const y = Math.max(0, (box.y - box.height * .3) / height);
+    dualCropRegions.inset = { x, y, width: Math.min(1-x, box.width * 1.7 / width), height: Math.min(1-y, box.height * 1.8 / height) };
+    dualViewEnabled.checked = true;
+    renderDualCropRegions();
+    positionYouTubePreviewCrops();
+    if (editorSourceType === "youtube") showClipEditorError("Face crop suggested from the thumbnail. Check it against the playing video and adjust if needed.");
+  } catch (error) { showClipEditorError(error.message || "Face detection failed. Select the facecam manually."); }
+  finally { button.disabled = false; }
+}
+document.addEventListener("DOMContentLoaded", () => document.getElementById("detectFacecamButton")?.addEventListener("click", detectEditorFacecam));
 
 function openClipEditor() {
   const project = state.uploadedProject || {};

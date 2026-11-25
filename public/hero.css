@@ -192,3 +192,34 @@ MIT License, Copyright (c) dexter-st */
 .hero-reference .hero-media-card #heroMediaPoster { object-fit:cover !important; }
 body :where(div,section,article,header,footer,nav,aside,button,a,video) { border:0 !important; }
 @media(prefers-reduced-motion:reduce) { .cf-ai-orbit,.cf-ai-letter { animation:none; } }
+/* Compact studio workspace. */
+body.home-page .home-topbar { position:fixed; top:16px; left:16px; width:35px; min-height:35px; height:35px; padding:0; background:transparent; z-index:100; }
+body.home-page .home-topbar .home-brand,body.home-page .home-topbar .cf-back-control,body.home-page .home-topbar-center { display:none; }
+.workspace-moved-controls { display:grid; gap:20px; padding:20px 0; }
+.workspace-moved-controls .home-nav-tabs,.workspace-moved-controls .home-topbar-right { display:flex; flex-direction:column; align-items:stretch; gap:12px; }
+.workspace-moved-controls .home-nav-tab { justify-content:flex-start; }
+.home-page .home-content-scroll { padding-top:12px; }
+.hero-reference { zoom:1; width:100%; max-width:none; height:35dvh; min-height:230px; padding:12px 24px 12px 68px; }
+.hero-reference .hero-headings { display:none; }
+.hero-reference #heroInputCard { height:100%; display:grid !important; grid-template-columns:200px minmax(0,1fr); align-items:center; gap:24px; }
+.hero-reference .hero-entry-row { display:flex; flex-direction:column; width:200px; gap:14px; }
+.hero-reference .hero-cta-wrapper,.hero-reference .btn-wrapper { width:200px; }
+.hero-reference .btn-wrapper { background:linear-gradient(120deg,#402fb5,#cf30aa); border-radius:12px; }
+.hero-reference .btn-wrapper :is(.gradient-layer,.light,.text-overlay) { display:none; }
+.hero-reference #smartClipBtn { position:relative; z-index:1; width:100%; font-size:16.8px; color:white !important; text-shadow:none; mix-blend-mode:normal; background:linear-gradient(120deg,#402fb5,#cf30aa) !important; box-shadow:0 0 8px #cf30aa50 !important; }
+.hero-reference .hero-showcase { margin:0; height:100%; min-height:0; display:grid; grid-template-columns:minmax(150px,.65fr) minmax(0,1.35fr); background:var(--hero-surface); border-radius:22px; overflow:hidden; gap:0; }
+.hero-reference .hero-loading-card { padding:12px; border-radius:0; box-shadow:none; }
+.hero-reference .hero-media-card { height:100%; aspect-ratio:auto; border-radius:0; }
+.hero-reference .cf-ai-loader { width:100px; height:100px; font-size:12px; }
+.clipflow-search { overflow:hidden; border-radius:12px; padding:3px; }
+.clipflow-search .cf-search-main { height:56px; display:flex; align-items:center; border-radius:10px; overflow:hidden; }
+.clipflow-search .cf-search-input { flex:1; width:0 !important; min-width:0; padding:0 32px !important; font-size:13px; }
+.clipflow-search #clearUrlBtn { position:absolute; right:5px; top:50%; transform:translateY(-50%); width:26px; height:26px; padding:0; margin:0; }
+.clipflow-search .cf-search-main:focus-within { outline:none; box-shadow:inset 0 0 0 1px #cf30aa; }
+.clipflow-search .cf-search-mask { display:none; }
+.clip-editor-layout { align-items:end !important; justify-content:center; grid-template-columns:minmax(0,9fr) minmax(0,28.44fr) !important; }
+.clip-editor-left-rail,.clip-editor-preview-column,.clip-editor-source-column { height:100%; min-height:0; display:flex; align-items:flex-end; justify-content:center; }
+.clip-editor-preview-column .phone-preview-frame { height:min(60dvh,520px) !important; width:auto !important; aspect-ratio:9/16; margin:0 !important; padding:0 !important; }
+#editorSourceSlot { height:min(60dvh,520px) !important; width:100%; margin:0 !important; padding:0 !important; display:flex; align-items:center; justify-content:center; }
+#editorSourceSlot #dualCropStage { width:100% !important; height:100% !important; margin:0 !important; }
+@media(max-width:700px) { .hero-reference { height:auto; min-height:35dvh; padding:55px 12px 12px; } .hero-reference #heroInputCard { grid-template-columns:1fr; } .hero-reference .hero-entry-row { width:100%; } .hero-reference .hero-showcase { min-height:210px; } }
