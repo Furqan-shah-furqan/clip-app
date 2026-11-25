@@ -982,10 +982,10 @@ function updateSteppedProgressUI(p, label) {
   const momentMatch = s.match(/moment\s+(\d+)\s+of\s+(\d+)/i) || s.match(/clip\s+(\d+)\s+of\s+(\d+)/i);
   if (progressLabel) {
     if (momentMatch) {
-      progressLabel.textContent = `• Downloading & clipping moment ${momentMatch[1]} of ${momentMatch[2]}...`;
+      progressLabel.textContent = `Preparing clip ${momentMatch[1]} of ${momentMatch[2]}`;
     } else if (label) {
       const clean = String(label).trim();
-      progressLabel.textContent = clean.startsWith("•") ? clean : `• ${clean}`;
+      progressLabel.textContent = window.clipflowGenerationCopy(clean);
     }
   }
 }
@@ -1003,7 +1003,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
   }
 
   if (progressLabel) {
-    progressLabel.textContent = label;
+    progressLabel.textContent = window.clipflowGenerationCopy(label);
   }
 
   if (progressEta) {
@@ -1049,7 +1049,7 @@ function updateProgress(percent, label = "Processing...", etaSeconds = null) {
 
 function animateProgressTo(targetPercent, label = "Generating...") {
   return new Promise((resolve) => {
-    if (progressLabel) progressLabel.textContent = label;
+    if (progressLabel) progressLabel.textContent = window.clipflowGenerationCopy(label);
     let current = _currentProgress;
     const clampedTarget = Math.max(
       0,

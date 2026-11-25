@@ -16,6 +16,7 @@
   document.addEventListener('click', event => { if (!menu.contains(event.target)) menu.open = false; });
   menu.addEventListener('toggle', () => { if (menu.open) for (const other of navigation.querySelectorAll('details')) if (other !== menu) other.open = false; });
   }
+  if (document.body.classList.contains("home-page")) return;
   let back = header.querySelector('#backBtn, .ce-back-btn');
   if (!back) {
     back = document.createElement('a');

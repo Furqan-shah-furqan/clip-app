@@ -1,0 +1,74 @@
+/* Design polish informed by unslop by Damir Sokolovsky (@heydamir), CC BY 4.0,
+   and Emil Kowalski's design-engineering skill. Requested gradients are retained
+   only for inputs, actions and processing feedback. */
+:root body[data-cf-theme] {
+  --cf-bg:#09090b; --cf-surface:#17171b; --cf-raised:#242429;
+  --cf-ink:#f5f5f7; --cf-muted:#b4b4bd; --cf-inverse:#fff;
+  --cf-on-inverse:#101014; --cf-inverse-muted:#575762;
+  --cf-action:linear-gradient(100deg,#d91b72,#8c37d0);
+  --bg:var(--cf-bg); --bg-2:var(--cf-bg); --panel:var(--cf-surface);
+  --panel-2:var(--cf-raised); --panel-3:var(--cf-raised);
+  --text:var(--cf-ink); --muted:var(--cf-muted);
+  --customer-bg:var(--cf-bg); --customer-surface:var(--cf-surface);
+  --customer-control:var(--cf-raised); --customer-text:var(--cf-ink); --customer-muted:var(--cf-muted);
+  --workspace-menu-bg:var(--cf-surface); --workspace-menu-surface:var(--cf-raised);
+  --workspace-menu-ink:var(--cf-ink); --workspace-menu-muted:var(--cf-muted);
+  --cf-nav-surface:var(--cf-raised); --cf-nav-text:var(--cf-ink);
+  color:var(--cf-ink); background:var(--cf-bg) !important; color-scheme:dark;
+}
+:root body[data-cf-theme="light"] {
+  --cf-bg:#f1f1f4; --cf-surface:#fff; --cf-raised:#e9e9ef;
+  --cf-ink:#16161b; --cf-muted:#595963; --cf-inverse:#111115;
+  --cf-on-inverse:#fff; --cf-inverse-muted:#c5c5cf; color-scheme:light;
+}
+:root body[data-cf-theme] :is(.home-main-container,.ce-main-container,.publish-main-container) { background:var(--cf-bg) !important; color:var(--cf-ink) !important; }
+:root body[data-cf-theme] :is(.home-topbar,.ce-topbar,.publish-topbar,.creator-topbar) { background:var(--cf-bg) !important; color:var(--cf-ink) !important; }
+:root body[data-cf-theme] :is(.customer-card,.creator-card,.creator-add-card,.publish-card,.stat-card,.ce-card,.public-feature-grid article,.public-document,.clip-editor-dialog,.workspace-sidebar) { background:var(--cf-surface) !important; color:var(--cf-ink) !important; }
+:root body[data-cf-theme] :is(.ce-label,.ce-field-label,.ce-card-title,.card-head,.creator-upload-title,.creator-card h3) { color:var(--cf-ink) !important; }
+:root body[data-cf-theme] :is(.cf-settings-links,.cf-select-menu,.cf-select-trigger,.ce-input,.ce-input-num,.ce-select,.ce-status-chip,.ce-pill-group,.ce-color-block,.ce-shadow-block,.ce-shadow-subcard,.preset-card) { background:var(--cf-raised) !important; color:var(--cf-ink) !important; }
+:root body[data-cf-theme] :is(input:not([type="range"]):not([type="color"]):not([type="checkbox"]),textarea,select) { color:var(--cf-ink); background-color:var(--cf-surface); }
+:root body[data-cf-theme] :is(input,textarea)::placeholder { color:var(--cf-muted); opacity:1; }
+:root body[data-cf-theme] :is(.scene,.scene-grid) { display:none; }
+:root body[data-cf-theme] :is(.workspace-sidebar-toggle,.workspace-sidebar-close) {
+  width:35px !important; height:35px !important; border-radius:50% !important;
+  background:var(--cf-inverse) !important; color:var(--cf-on-inverse) !important;
+  border:0 !important; box-shadow:none !important; display:grid; place-items:center;
+}
+body.home-page .home-main-container { position:relative; padding:10px !important; }
+body.home-page .home-topbar { position:absolute; inset:10px auto auto 10px; padding:0 !important; }
+body.home-page .home-content-scroll { padding:45px 0 10px !important; }
+body.home-page .hero-reference { padding-top:0; }
+body.home-page .cf-back-control { display:none; }
+:root body[data-cf-theme] .hero-reference .clip-card-wrap { background:var(--cf-inverse); color:var(--cf-on-inverse); }
+:root body[data-cf-theme] .hero-reference .clip-card-stage { color:var(--cf-inverse-muted); }
+:root body[data-cf-theme] .hero-reference .clip-card-pct { color:var(--cf-on-inverse); }
+:root body[data-cf-theme] .hero-reference .clip-card-track { stroke:var(--cf-inverse-muted); opacity:.2; }
+:root body[data-cf-theme] .hero-reference .clip-card-wrap #heroLoadingStatus { background:var(--cf-inverse); color:var(--cf-on-inverse); }
+:root body[data-cf-theme] .hero-reference .clip-card-wrap #smartClipBtn { background:var(--cf-action) !important; color:white; }
+:root body[data-cf-theme] .hero-reference .cf-search-input { background:var(--cf-bg) !important; color:var(--cf-ink) !important; }
+:root body[data-cf-theme] .hero-reference .cf-search-icon { color:var(--cf-ink); }
+:root body[data-cf-theme] .hero-reference .cf-search-icon :is(path,circle,line) { stroke:currentColor; }
+:root body[data-cf-theme] .hero-reference #clearUrlBtn { color:var(--cf-ink); background:var(--cf-raised); }
+:root body[data-cf-theme] .expected-output-card { background:var(--cf-surface) !important; color:var(--cf-ink) !important; border:0 !important; box-shadow:none !important; }
+:root body[data-cf-theme] .expected-output-card :is(h2,h3,p,.expected-output-kicker) { color:inherit; }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row { background:var(--cf-inverse); color:var(--cf-on-inverse); }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row button { background:var(--cf-inverse); color:var(--cf-on-inverse); }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row :is(.clip-editor-generate,.is-active) { background:var(--cf-action); color:white; }
+/* A separate masked border turns without rotating progress values or the actual arc. */
+.hero-reference .clip-card-ring::before {
+  content:""; position:absolute; inset:0; border-radius:50%; padding:3px;
+  background:conic-gradient(from 0deg,#ff4fa3,#a855f7,#ff4fa3);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask-composite:exclude; pointer-events:none;
+}
+.hero-reference[data-loading="true"] .clip-card-ring::before { animation:cf-ring-turn 6s linear infinite; }
+@keyframes cf-ring-turn { to { transform:rotate(360deg); } }
+.hero-reference .clip-card-loading { --speed-of-animation:2.4s; gap:5px; overflow:hidden; }
+.hero-reference .clip-card-loading span { flex:0 1 9px; width:9px; min-width:3px; height:54px; border-radius:5px; animation-duration:2.4s; }
+.hero-reference:not([data-loading="true"]) .clip-card-loading span { animation:none; transform:scaleY(.35); }
+.hero-reference:not([data-loading="true"]) .clip-card-loading span:nth-child(3n) { transform:scaleY(.65); }
+.hero-reference:not([data-loading="true"]) .clip-card-loading span:nth-child(3n + 1) { transform:scaleY(.2); }
+:root body[data-cf-theme] button:focus-visible,:root body[data-cf-theme] a:focus-visible { outline:2px solid #a855f7; outline-offset:3px; }
+@media(prefers-reduced-motion:reduce) {
+  .hero-reference .clip-card-ring::before,.hero-reference .clip-card-loading span { animation:none !important; }
+}

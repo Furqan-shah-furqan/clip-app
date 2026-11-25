@@ -55,7 +55,11 @@
       frame = requestAnimationFrame(tick);
     }
     status.disabled = true;
-    generationStage.textContent = byId('progressLabel').textContent.trim().replace(/^•\s*/, '') || 'Finding strong moments';
+    const nextStage = byId('progressLabel').textContent.trim() || 'Analyzing your video';
+    if (generationStage.textContent !== nextStage) {
+      generationStage.textContent = nextStage;
+      if (!reduced.matches) generationStage.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'translateY(0)'}],{duration:220,easing:'cubic-bezier(.23,1,.32,1)'});
+    }
     const image = thumb.getAttribute('src');
     if (!objectUrl && image && thumb.style.display !== 'none') {
       if (poster.getAttribute('src') !== image) poster.src = image;
