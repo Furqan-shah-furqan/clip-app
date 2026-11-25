@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
     <link rel="stylesheet" href="hero.css?v=20261125-layout" />
     <link rel="stylesheet" href="/clipflow-input.css?v=20261125" />
-  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=20261125"><script src="/workspace-sidebar.js?v=20261125-layout" defer></script></head>
+  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=20261125"><script src="/workspace-sidebar.js?v=20261125-layout" defer></script><link rel="stylesheet" href="clip-input-card.css?v=1"></head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
     <div class="scene scene-a"></div>
@@ -98,9 +98,9 @@
             </div>
 
             <div class="hero-card-container" id="heroInputCard">
-              <div class="hero-entry-row">
-              <!-- Primary Input: Pill Container -->
-              <div class="clipflow-search">
+<div class="clip-card-wrap">
+
+    <div class="clipflow-search">
                 <div class="cf-search-glow" aria-hidden="true"></div>
                 <div class="cf-search-dark-border" aria-hidden="true"></div>
                 <div class="cf-search-dark-border" aria-hidden="true"></div>
@@ -137,53 +137,78 @@
                 >
                   Fetch
                 </button>
-                <span class="cf-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2"/></svg></span>
+                <button class="clip-card-upload-btn" type="button" id="clipCardUpload" aria-label="Upload video">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/>
+          </svg>
+        </button><span class="cf-search-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.2 4.2"/></svg></span>
                 </div>
               </div>
+    <div class="clip-card-progress clip-card-row">
+      <div class="clip-card-ring" id="heroLoadingGauge" role="progressbar" aria-label="Clip generation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <svg viewBox="0 0 140 140">
+          <defs>
+            <linearGradient id="clipCardRingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ff4fa3"/>
+              <stop offset="50%" stop-color="#a855f7"/>
+              <stop offset="100%" stop-color="#3b0764"/>
+            </linearGradient>
+          </defs>
+          <circle class="clip-card-track" cx="70" cy="70" r="60" fill="none" stroke-width="10"/>
+          <circle class="clip-card-seg" id="clipCardSeg0" cx="70" cy="70" r="60" transform="rotate(0 70 70)"/>
+          <circle class="clip-card-seg" id="clipCardSeg1" cx="70" cy="70" r="60" transform="rotate(36 70 70)"/>
+          <circle class="clip-card-seg" id="clipCardSeg2" cx="70" cy="70" r="60" transform="rotate(144 70 70)"/>
+          <circle class="clip-card-seg" id="clipCardSeg3" cx="70" cy="70" r="60" transform="rotate(288 70 70)"/>
+        </svg>
+        <div class="clip-card-pct"><span id="heroLoadingPercent">Ready</span></div>
+      </div>
 
-              <!-- CTA Button & Cancel Button on Exact Same Row -->
-              <div class="hero-cta-wrapper" id="generationActionRow">
-                <button
-                  class="cancel-generation-btn is-hidden"
-                  id="cancelGenerationBtn"
-                  type="button"
-                  aria-label="Cancel clip generation"
-                  title="Cancel generation"
-                >
-                  <svg class="neo-cancel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                  <span>Cancel</span>
-                </button>
-                <div class="btn-wrapper" aria-label="Generate clips">
-                  <div class="light" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:0s;animation-duration:25s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:.15s;animation-duration:15.9s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:.53s;animation-duration:26.4s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:.45s;animation-duration:17.8s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:19.2s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:29.2s" aria-hidden="true"></div>
-                  <div class="gradient-layer" style="animation-delay:1.6s;animation-duration:20.2s" aria-hidden="true"></div>
-                  <button class="gradient-btn" id="smartClipBtn" type="button">Generate clips</button>
-                  <div class="text-overlay" aria-hidden="true">Generate clips</div>
-                </div>
-              </div>
+      <div class="clip-card-loading">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
 
-              </div>
+    <button type="button" class="clip-card-status clip-card-row" id="heroLoadingStatus" disabled>Add a video to get started</button>
+
+    <div class="clip-card-steps clip-card-row" id="clipCardSteps">
+      <div class="clip-card-step" data-step="0">
+        <span class="clip-card-step-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5l4 2.5-4 2.5z"/></svg>
+        </span>
+        Analyzing video
+      </div>
+      <div class="clip-card-step" data-step="1">
+        <span class="clip-card-step-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M8 10.5a2 2 0 0 0 0 3M13 10.5a2 2 0 0 0 0 3"/></svg>
+        </span>
+        Generating captions
+      </div>
+      <div class="clip-card-step" data-step="2">
+        <span class="clip-card-step-icon">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </span>
+        Finalizing process
+      </div>
+      <div class="clip-card-step" data-step="3">
+        <span class="clip-card-step-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7.5 10.5L12 15l4.5-4.5"/><path d="M5 19h14"/></svg>
+        </span>
+        Exporting clips
+      </div>
+    </div>
+
+    <div id="generationActionRow" class="clip-card-generate-row clip-card-row"><button id="cancelGenerationBtn" type="button" class="cancel-generation-btn is-hidden" aria-label="Cancel clip generation">Cancel</button>
+      <button id="smartClipBtn" class="clip-card-generate-btn" type="button">Generate clips</button>
+    </div>
+
+  </div>
               <input type="file" id="videoInput" accept="video/*" hidden />
               <div class="hero-showcase">
-                <section class="hero-loading-card" aria-label="Clip generation progress">
-                  <!-- From Uiverse.io by dexter-st - https://uiverse.io/dexter-st/bright-lizard-8
-MIT License, Copyright (c) dexter-st -->
-<div class="cf-ai-loader" role="status" aria-label="Generating"><span class="cf-ai-letter" style="animation-delay:0.0s">G</span><span class="cf-ai-letter" style="animation-delay:0.1s">e</span><span class="cf-ai-letter" style="animation-delay:0.2s">n</span><span class="cf-ai-letter" style="animation-delay:0.3s">e</span><span class="cf-ai-letter" style="animation-delay:0.4s">r</span><span class="cf-ai-letter" style="animation-delay:0.5s">a</span><span class="cf-ai-letter" style="animation-delay:0.6s">t</span><span class="cf-ai-letter" style="animation-delay:0.7s">i</span><span class="cf-ai-letter" style="animation-delay:0.8s">n</span><span class="cf-ai-letter" style="animation-delay:0.9s">g</span><div class="cf-ai-orbit"></div></div><div class="hero-loading-main">
-                    <div class="hero-loading-gauge" role="progressbar" aria-label="Loading" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="heroLoadingGauge">
 
-                      <div class="hero-loading-value"><strong id="heroLoadingPercent">Ready</strong><span>Clips</span></div>
-                    </div>
-                    <div class="hero-loading-copy"><h2>Clip generation</h2><div class="hero-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
-                  </div>
-                  <button class="hero-loading-status" id="heroLoadingStatus" type="button" disabled>Add a video to get started</button>
-                </section>
                 <div class="hero-media-card">
                   <div class="hero-media-empty" id="heroMediaEmpty"><svg viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="5" y="12" width="54" height="40" rx="12" stroke="currentColor" stroke-width="2"/><path d="m27 23 15 9-15 9V23Z" fill="currentColor"/></svg><strong>Your video, ready for its next chapter.</strong><span>Paste a YouTube link above to get started.</span></div>
                   <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
@@ -723,6 +748,6 @@ MIT License, Copyright (c) dexter-st -->
     <script src="captionClient.js?v=20260922"></script>
     <script src="app.js?v=20261125-layout"></script>
     <script src="dropdowns.js?v=20260922"></script>
-    <script src="hero.js?v=20261125"></script>
+    <script src="hero.js?v=card-1"></script>
   </body>
 </html>

@@ -1,0 +1,272 @@
+
+  /* From Uiverse.clip-card-io by satyamchaudharydev - https://uiverse.clip-card-io/satyamchaudharydev/ugly-bulldog-75
+     MIT License, Copyright (c) satyamchaudharydev (satyam) */
+
+  /* From Uiverse.clip-card-io by ayman-ashine - https://uiverse.clip-card-io/ayman-ashine/wicked-liger-39
+     MIT License, Copyright (c) ayman-ashine (Ayman Ashine)
+     Adapted: Tailwind utilities converted to plain CSS; gradient glow used in place of flat colors. */
+
+  
+
+
+
+  .clip-card-wrap {
+    width: 300px;
+    height: 360px;
+    padding: 7px;
+    background: #ffffff;
+    border-radius: 35px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* every row gets 5px margin on all sides */
+  .clip-card-row { margin: 5px; }
+
+  /* ---------- Input with gradient border ---------- */
+  .clip-card-field {
+    width: calc(100% - 10px);
+    padding: 2px;
+    border-radius: 20px;
+    background: linear-gradient(90deg, #ff4fa3, #a855f7);
+  }
+
+  .clip-card-field-inner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    height: 46px;
+    border-radius: 18px;
+    background: #15151c;
+  }
+
+  .clip-card-field input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #f5f5f7;
+    font-size: 15px;
+  }
+
+  .clip-card-field input::placeholder { color: #7d7d8c; }
+
+  .clip-card-upload-btn {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(90deg, #ff4fa3, #a855f7);
+    color: #fff;
+  }
+
+  .clip-card-upload-btn svg { width: 16px; height: 16px; }
+
+  /* ---------- Circular progress ---------- */
+  .clip-card-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .clip-card-ring {
+    position: relative;
+    width: 112px;
+    height: 112px;
+  }
+
+  .clip-card-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+
+  .clip-card-ring .clip-card-track { stroke: #2a2a35; }
+
+  .clip-card-ring .clip-card-seg { fill: none; stroke-width: 10; stroke-linecap: butt; stroke: url(#clipCardRingGrad); }
+
+  .clip-card-ring .clip-card-pct {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #111111;
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Bar loader (scoped .clip-card-loading) */
+  .clip-card-loading {
+    --speed-of-animation: 0.9s;
+    --gap: 6px;
+    --first-color: #ff4fa3;
+    --second-color: #d946ef;
+    --third-color: #a855f7;
+    --fourth-color: #a855f7;
+    --fifth-color: #ff4fa3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100px;
+    gap: var(--gap);
+    height: 100px;
+  }
+
+  .clip-card-loading span {
+    width: 4px;
+    height: 40px;
+    background: var(--first-color);
+    animation: clip-card-scale var(--speed-of-animation) ease-in-out infinite;
+  }
+
+  .clip-card-loading span:nth-child(2) { background: var(--second-color); animation-delay: -0.8s; }
+  .clip-card-loading span:nth-child(3) { background: var(--third-color); animation-delay: -0.7s; }
+  .clip-card-loading span:nth-child(4) { background: var(--fourth-color); animation-delay: -0.6s; }
+  .clip-card-loading span:nth-child(5) { background: var(--fifth-color); animation-delay: -0.5s; }
+
+  @keyframes clip-card-scale {
+    0%, 40%, 100% { transform: scaleY(0.05); }
+    20% { transform: scaleY(1); }
+  }
+
+  .clip-card-status {
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    background: linear-gradient(90deg, #ff4fa3, #a855f7, #ff4fa3);
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: clip-card-shimmer 2.4s linear infinite;
+  }
+
+  @keyframes clip-card-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+
+  /* ---------- Checklist steps (light colors) ---------- */
+  .clip-card-steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    width: calc(100% - 10px);
+  }
+
+  .clip-card-step {
+    --c1: #ffb3b3;
+    --c2: #ff7a7a;
+    --tint: #ffe3e3;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    padding: 3px 8px 3px 3px;
+    border-radius: 15px;
+    background: var(--tint);
+    color: #444452;
+    font-size: 10.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  .clip-card-step[data-step="1"] { --c1: #b3f0c4; --c2: #6fd98f; --tint: #e3fbea; }
+  .clip-card-step[data-step="2"] { --c1: #ffd4a3; --c2: #ffa94d; --tint: #fff1e0; }
+  .clip-card-step[data-step="3"] { --c1: #b3d9ff; --c2: #6fb3ff; --tint: #e3f0ff; }
+
+  .clip-card-step-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #ffffff;
+    color: #444452;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  .clip-card-step-icon svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .clip-card-step.clip-card-active,
+  .clip-card-step.clip-card-done {
+    color: #ffffff;
+    background: linear-gradient(90deg, var(--c1), var(--c2));
+  }
+
+  .clip-card-step.clip-card-active .clip-card-step-icon {
+    background: rgba(255, 255, 255, 0.3);
+    color: #ffffff;
+    animation: clip-card-pulse 1s ease-in-out infinite;
+  }
+
+  .clip-card-step.clip-card-done .clip-card-step-icon {
+    background: rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+  }
+
+  @keyframes clip-card-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+
+  .clip-card-generate-row {
+    width: calc(100% - 10px);
+    display: flex;
+    justify-content: center;
+  }
+
+  /* ---------- Generate button ---------- */
+  .clip-card-generate-btn {
+    width: 50%;
+    height: 51px;
+    padding: 10px;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    background: linear-gradient(90deg, #ff4fa3, #a855f7);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  .clip-card-generate-btn:hover { filter: brightness(1.08); }
+  .clip-card-generate-btn:active { transform: scale(0.98); }
+
+.hero-reference #heroInputCard { grid-template-columns:300px minmax(0,1fr); }
+.hero-reference { height:auto; min-height:360px; }
+.hero-reference .hero-showcase { display:block; min-height:360px; }
+.hero-reference .clip-card-wrap { box-sizing:border-box; width:300px; height:360px; gap:0; }
+.hero-reference .clip-card-wrap .clipflow-search { width:calc(100% - 10px); flex-shrink:0; }
+.hero-reference .clip-card-wrap .cf-search-main { height:46px; }
+.hero-reference .clip-card-wrap .cf-search-input { height:46px !important; padding-right:70px !important; }
+.hero-reference .clip-card-wrap #clearUrlBtn { right:38px; }
+.hero-reference .clip-card-upload-btn { position:absolute; right:5px; top:8px; z-index:4; }
+.hero-reference .clip-card-status { border:0; background-color:transparent; max-width:270px; padding:0; min-height:20px; cursor:pointer; }
+.hero-reference .clip-card-wrap #smartClipBtn { width:65%; font-size:16px; min-height:44px; height:44px; padding:8px; }
+.hero-reference .clip-card-generate-row { gap:8px; }
+.hero-reference:not([data-loading="true"]) .clip-card-loading span { animation-play-state:paused; transform:scaleY(.15); }
+.hero-reference:not([data-loading="true"]) .clip-card-status { animation:none; }
+@media(max-width:700px) { .hero-reference #heroInputCard { grid-template-columns:1fr; justify-items:center; } .hero-reference .hero-showcase { width:100%; min-height:220px; } }
+@media(prefers-reduced-motion:reduce) { .clip-card-wrap * { animation:none !important; transition:none !important; } }

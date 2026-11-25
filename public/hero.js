@@ -16,7 +16,16 @@
     new MutationObserver(syncGenerateLabel).observe(generateButton, { childList: true, characterData: true, subtree: true });
     syncGenerateLabel();
   }
+  document.getElementById('clipCardUpload')?.addEventListener('click', () => document.getElementById('videoInput').click());
   function paint(value) {
+    const circumference = 2 * Math.PI * 60;
+    [[0,10],[10,40],[40,80],[80,100]].forEach(([a,b],i) => {
+      document.getElementById('clipCardSeg'+i)?.setAttribute('stroke-dasharray', `${Math.max(0, Math.min(value,b)-a)*circumference/100} ${circumference}`);
+    });
+    document.querySelectorAll('#clipCardSteps .clip-card-step').forEach((step,i) => {
+      step.classList.toggle('clip-card-active', Boolean(window.state?.isGenerating) && i === Math.min(3,Math.floor(value/25)));
+      step.classList.toggle('clip-card-done', value >= (i+1)*25);
+    });
     displayed = value;
     percent.textContent = `${Math.round(value)}%`;
     if (arc) arc.style.strokeDasharray = `${231 * value / 100} 308`;
