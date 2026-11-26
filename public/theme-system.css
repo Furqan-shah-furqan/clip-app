@@ -81,3 +81,15 @@ body.home-page .cf-back-control { display:none; }
 :root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row :is(.clip-editor-generate,.is-active) { background:var(--cf-action); color:white; }
 #clipEditorDialog .clip-editor-top-crops { display:flex; flex-wrap:wrap; gap:6px; }
 #clipEditorDialog .clip-editor-actions { flex-shrink:0; }
+
+/* Shared preview edges determine toolbar width in hero.js. */
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-option-row { margin:10px auto !important; max-width:calc(100% - 20px); box-sizing:border-box; background:#fff; }
+:root body[data-cf-theme] #clipEditorDialog .clip-editor-toggle { color:#111 !important; }
+#clipEditorDialog #dualViewEnabled { appearance:auto; width:20px !important; height:20px !important; min-width:20px; accent-color:#9333ea !important; margin:0 6px 0 0; }
+.home-page .created-clips-strip { margin-top:10px !important; padding-top:0 !important; }
+.home-page .hero-reference { margin-bottom:0 !important; padding-bottom:0 !important; }
+:root body[data-cf-theme] .expected-output-card { position:relative; padding-top:64px !important; background:#4a173c !important; color:#fff !important; }
+.expected-output-card .created-clips-strip-head { position:absolute; top:12px; left:16px; right:16px; margin:0 !important; }
+.expected-output-card .created-clips-strip-head h3 { color:#fff !important; font-size:16px; }
+.hero-reference .clip-card-ring::before { inset:7px; padding:5px; background:conic-gradient(transparent 0%,#402fb5 5%,transparent 14%,transparent 50%,#cf30aa 60%,transparent 64%); filter:brightness(1.3); }
+.hero-reference[data-loading="true"] .clip-card-ring::before { animation-duration:4s; }

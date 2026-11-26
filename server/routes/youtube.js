@@ -160,9 +160,16 @@ router.post("/editor-source", async (req, res) => {
       entry.filePath = filePath;
       entry.previewUrl = `/api/files/download/${encodeURIComponent(require("node:path").basename(filePath))}`;
       entry.status = "ready";
-    }).catch(error => { console.warn("[Editor source]",error.message); entry.status="failed"; });
+    }).catch(error => { console.warn("[Editor source]",error.message); entry.status="failed";
+      const message = String(error.message || "");
+      entry.error = /429|quota|limit reached/i.test(message) ? "Video provider request limit reached."
+        : /sign in|bot|cookies|login|403/i.test(message) ? "YouTube rejected the server's video request."
+        : /timeout|timed out/i.test(message) ? "Source preparation timed out."
+        : /401|api.key|unauthorized/i.test(message) ? "Video provider authentication failed."
+        : /private|unavailable|removed/i.test(message) ? "This source video is unavailable to the server."
+        : "All configured source download methods failed. Check the Render editor-source logs."; });
   }
-  if (entry.status === "failed") { editorSources.delete(key); return res.status(502).json({error:"The video provider could not prepare this source."}); }
+  if (entry.status === "failed") { editorSources.delete(key); return res.status(502).json({error:entry.error}); }
   if (entry.status === "ready") return res.json({previewUrl:entry.previewUrl,filePath:entry.filePath});
   return res.status(202).json({status:"preparing"});
 });

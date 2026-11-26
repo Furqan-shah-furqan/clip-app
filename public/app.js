@@ -4939,6 +4939,7 @@ async function mountSharedVideoEditor(videoId) {
   editorSourceType = "upload";
   heroMediaVideo.pause(); heroMediaVideo.removeAttribute("src"); heroMediaVideo.load();
   heroMediaVideo.hidden = false; editorPreviewImage = null;
+  document.getElementById("retryEditorSource").hidden = true;
   showClipEditorError("Preparing the source video for synchronized preview…");
   try {
     await Promise.resolve();
@@ -4957,7 +4958,10 @@ async function mountSharedVideoEditor(videoId) {
       await new Promise(resolve => setTimeout(resolve, 2500));
     }
   } catch (error) {
-    if (request === sharedPreviewRequest && clipEditorDialog.open) showClipEditorError("Source preview unavailable. Upload the source video to preview both views together. " + error.message);
+    if (request === sharedPreviewRequest && clipEditorDialog.open) {
+      showClipEditorError(error.message + " Retry or upload the source video.");
+      document.getElementById("retryEditorSource").hidden = false;
+    }
   }
 }
 document.getElementById("removeSecondFacecam")?.addEventListener("click", () => { dualCropRegions.inset2 = null; setActiveCropRegion("main"); renderDualCropRegions(); });
@@ -4967,3 +4971,9 @@ if (heroMediaVideo?.requestVideoFrameCallback) {
   heroMediaVideo.requestVideoFrameCallback(drawFrame);
 }
 heroMediaVideo?.addEventListener("seeked", drawEditorPreview);
+
+document.getElementById("retryEditorSource")?.addEventListener("click", () => {
+  const project = state.uploadedProject || {};
+  const id = project.videoId || getVideoIdFromUrl(project.sourceUrl || project.youtubeUrl || "");
+  if (id) mountSharedVideoEditor(id);
+});
