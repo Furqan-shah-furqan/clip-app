@@ -4938,9 +4938,15 @@ async function mountSharedVideoEditor(videoId) {
   editorYoutubeComposition.hidden = true; editorPreviewCanvas.hidden = false;
   editorSourceType = "upload";
   heroMediaVideo.pause(); heroMediaVideo.removeAttribute("src"); heroMediaVideo.load();
-  heroMediaVideo.hidden = false; editorPreviewImage = null;
+  heroMediaVideo.hidden = true;
+  editorSourceType = "youtube";
+  editorYouTubeFrame = createYouTubeIframe(videoId, "clipEditorSourcePlayer", true);
+  dualCropStage.insertBefore(editorYouTubeFrame, dualCropOverlay);
+  editorPreviewImage = new Image();
+  editorPreviewImage.onload = drawEditorPreview;
+  editorPreviewImage.src = state.uploadedProject?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
   document.getElementById("retryEditorSource").hidden = true;
-  showClipEditorError("Preparing the source video for synchronized preview…");
+  showClipEditorError("Phone shows the crop on the thumbnail while the shared video loads.");
   try {
     await Promise.resolve();
     while (request === sharedPreviewRequest && clipEditorDialog.open) {
@@ -4949,10 +4955,19 @@ async function mountSharedVideoEditor(videoId) {
       if (!response.ok) throw new Error(data.error || "Could not prepare the video");
       if (request !== sharedPreviewRequest || !clipEditorDialog.open) return;
       if (data.previewUrl) {
+        const ready = () => {
+          if (request !== sharedPreviewRequest || !clipEditorDialog.open) return;
+          editorYouTubeFrame?.remove();
+          editorYouTubeFrame = null;
+          editorSourceType = "upload";
+          heroMediaVideo.hidden = false;
+          clipEditorError.hidden = true;
+          drawEditorPreview();
+          heroMediaVideo.play().catch(() => {});
+        };
+        heroMediaVideo.addEventListener("loadeddata", ready, {once:true});
         heroMediaVideo.src = data.previewUrl;
         heroMediaVideo.load();
-        clipEditorError.hidden = true;
-        heroMediaVideo.play().catch(() => {});
         return;
       }
       await new Promise(resolve => setTimeout(resolve, 2500));

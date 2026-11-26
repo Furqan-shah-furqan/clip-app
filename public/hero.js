@@ -102,8 +102,6 @@
       const height = layout.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       const gap = parseFloat(style.columnGap) || 16;
       const sharedHeight = Math.max(1, Math.floor(Math.min(height, (width - gap) / (9 / 16 + 16 / 9))));
-      const toolbar = editor.querySelector(".clip-editor-option-row");
-      toolbar.style.width = `${Math.floor(sharedHeight * (9 / 16 + 16 / 9) + gap)}px`;
       layout.style.setProperty('--editor-preview-height', `${sharedHeight}px`);
     });
   };
