@@ -101,7 +101,7 @@
       const width = layout.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       const height = layout.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       const gap = parseFloat(style.columnGap) || 16;
-      const sharedHeight = Math.max(1, Math.floor(Math.min(height, (width - gap) / (9 / 16 + 16 / 9))));
+      const sharedHeight = Math.max(1, Math.floor(Math.min(height, Math.min(180, width * .3) * 16 / 9)));
       layout.style.setProperty('--editor-preview-height', `${sharedHeight}px`);
     });
   };

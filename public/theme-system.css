@@ -121,3 +121,5 @@ body.home-page .cf-back-control { display:none; }
 #clipEditorDialog .crop-resize-handle[data-corner=ne] { right:-5px; top:-5px; left:auto; bottom:auto; cursor:nesw-resize; }
 #clipEditorDialog .crop-resize-handle[data-corner=sw] { left:-5px; bottom:-5px; right:auto; top:auto; cursor:nesw-resize; }
 #clipEditorDialog .crop-resize-handle[data-corner=se] { right:-5px; bottom:-5px; left:auto; top:auto; cursor:nwse-resize; }
+
+#clipEditorDialog .clip-editor-option-row [hidden] { display:none !important; }
