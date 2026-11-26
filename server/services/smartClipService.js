@@ -438,8 +438,8 @@ async function smartGenerateClip({
     return await new Promise((resolve, reject) => {
       const ratio = aspectRatio || "9:16";
       const [rW, rH] = ratio.split(":").map(Number);
-      const targetW = 720;
-      const targetH = Math.round((targetW * (rH || 16)) / (rW || 9));
+      const targetW = dualView ? 1080 : 720;
+      const targetH = dualView ? 1920 : Math.round((targetW * (rH || 16)) / (rW || 9));
       const duration = Math.max(1, toSeconds(reframeEndTime) - toSeconds(reframeStartTime));
 
       const prefix = jobId ? `smart_clip_${String(jobId).replace(/[^\w-]/g, "_")}` : "smart_clip";
@@ -460,22 +460,22 @@ async function smartGenerateClip({
       if (dualView) {
         const cropExpr = (crop) => {
           const values = [crop?.x, crop?.y, crop?.width, crop?.height].map(Number);
-          if (values.some((value) => !Number.isFinite(value)) || values[0] < 0 || values[1] < 0 || values[2] < 0.04 || values[3] < 0.04 || values[0] + values[2] > 1 || values[1] + values[3] > 1) {
+          if (values.some((value) => !Number.isFinite(value)) || values[0] < 0 || values[1] < 0 || values[2] <= 0 || values[3] <= 0 || values[0] + values[2] > 1 || values[1] + values[3] > 1) {
             throw new Error("Invalid dual view crop region.");
           }
           const [x, y, width, height] = values.map((value) => value.toFixed(5));
           return `crop=trunc(iw*${width}/2)*2:trunc(ih*${height}/2)*2:trunc(iw*${x}/2)*2:trunc(ih*${y}/2)*2`;
         };
-        const insetWidth = Math.max(120, Math.round(targetW * 0.32));
-        const insetHeight = Math.max(120, Math.round(targetH * 0.28));
+        const insetWidth = Math.max(120, Math.round(targetW * 0.30));
         const mainW = cropExpr(dualView.main);
         const baseFilter = `${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`;
-        if (dualView.inset2) {
-          const filter = `[0:v]split=3[a][b][c];[a]${baseFilter}[base];[b]${cropExpr(dualView.inset)},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease[f1];[c]${cropExpr(dualView.inset2)},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease[f2];[base][f1]overlay=W-w-24:24[tmp];[tmp][f2]overlay=24:24[v]`;
+        const facecam = dualView.inset || dualView.inset2;
+        if (dualView.inset2 && dualView.inset) {
+          const filter = `[0:v]split=3[a][b][c];[a]${baseFilter}[base];[b]${cropExpr(dualView.inset)},scale=${insetWidth}:-2[f1];[c]${cropExpr(dualView.inset2)},scale=${insetWidth}:-2[f2];[base][f1]overlay=W-w-16:H-h-16[tmp];[tmp][f2]overlay=16:H-h-16[v]`;
           args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
-        } else if (dualView.inset) {
-          const insetW = cropExpr(dualView.inset);
-          const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
+        } else if (facecam) {
+          const insetW = cropExpr(facecam);
+          const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:-2[inset];[base][inset]overlay=x=W-w-16:y=H-h-16[v]`;
           args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
         } else {
           args.push("-vf", baseFilter);
