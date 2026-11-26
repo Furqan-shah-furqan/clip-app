@@ -181,9 +181,9 @@
                   <img id="heroMediaPoster" alt="Selected video thumbnail" hidden />
                   <div class="dual-crop-stage" id="dualCropStage">
                     <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
-                    <div class="dual-crop-overlay" id="dualCropOverlay" hidden>
-                      <div class="dual-crop-box is-main" data-crop="main"><span>Gameplay</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
-                      <div class="dual-crop-box is-inset" data-crop="inset2" hidden><span>Facecam 2</span><i class="crop-resize-handle"></i></div><div class="dual-crop-box is-inset" data-crop="inset"><span>Facecam</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
+                    <div class="dual-crop-overlay" id="dualCropOverlay" tabindex="0" aria-label="Crop selection. Use arrow keys to move the selected crop." hidden>
+                      <div class="dual-crop-box is-main" data-crop="main"><span>Gameplay</span><i class="crop-resize-handle" data-corner="nw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="ne" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="sw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="se" aria-hidden="true"></i></div>
+                      <div class="dual-crop-box is-inset" data-crop="inset2" hidden><span>Facecam 2</span><i class="crop-resize-handle" data-corner="nw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="ne" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="sw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="se" aria-hidden="true"></i></div><div class="dual-crop-box is-inset" data-crop="inset"><span>Facecam</span><i class="crop-resize-handle" data-corner="nw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="ne" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="sw" aria-hidden="true"></i><i class="crop-resize-handle" data-corner="se" aria-hidden="true"></i></div>
                     </div>
                   </div>
                   <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>

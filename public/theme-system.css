@@ -115,3 +115,9 @@ body.home-page .cf-back-control { display:none; }
 #clipEditorDialog .dual-crop-box[data-crop=inset2] { border-color:#22d3ee; }
 #clipEditorDialog button:disabled { opacity:.45; cursor:not-allowed; }
 @media(min-width:1000px) { #clipEditorDialog .clip-editor-top-crops { flex-wrap:nowrap; } }
+
+#clipEditorDialog .dual-crop-box:not(.is-active) .crop-resize-handle { display:none; }
+#clipEditorDialog .crop-resize-handle[data-corner=nw] { left:-5px; top:-5px; right:auto; bottom:auto; cursor:nwse-resize; }
+#clipEditorDialog .crop-resize-handle[data-corner=ne] { right:-5px; top:-5px; left:auto; bottom:auto; cursor:nesw-resize; }
+#clipEditorDialog .crop-resize-handle[data-corner=sw] { left:-5px; bottom:-5px; right:auto; top:auto; cursor:nesw-resize; }
+#clipEditorDialog .crop-resize-handle[data-corner=se] { right:-5px; bottom:-5px; left:auto; top:auto; cursor:nwse-resize; }

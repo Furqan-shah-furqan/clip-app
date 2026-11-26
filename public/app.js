@@ -2315,7 +2315,7 @@ function drawEditorPreview() {
   context.fillRect(0, 0, width, height);
   const videoReady = heroMediaVideo && heroMediaVideo.readyState >= 2 && heroMediaVideo.videoWidth;
   const imageReady = editorPreviewImage && editorPreviewImage.complete && editorPreviewImage.naturalWidth;
-  const source = videoReady ? heroMediaVideo : imageReady ? editorPreviewImage : null;
+  const source = videoReady && !heroMediaVideo.hidden ? heroMediaVideo : imageReady ? editorPreviewImage : null;
   if (!source) {
     context.fillStyle = "#a5a49f";
     context.font = "500 14px system-ui";
@@ -2335,8 +2335,6 @@ function drawEditorPreview() {
     const insetW = cropW * scale, insetH = cropH * scale;
     const inset = width * 16 / 1080;
     const x = index === 0 ? width - insetW - inset : inset, y = height - insetH - inset;
-    context.fillStyle = "#f0ede6";
-    context.fillRect(x - 3, y - 3, insetW + 6, insetH + 6);
     drawCropToCanvas(context, source, crop, x, y, insetW, insetH);
   }
 }
@@ -2547,7 +2545,7 @@ function openClipEditor() {
   editorSourceType = isYoutube ? "youtube" : "upload";
   dualCropRegions.main = state.dualViewCrop?.main ? { ...state.dualViewCrop.main } : null;
   dualCropRegions.inset = state.dualViewCrop?.inset ? { ...state.dualViewCrop.inset } : null;
-  dualCropRegions.inset2 = state.dualViewCrop?.inset2 || null;
+  dualCropRegions.inset2 = state.dualViewCrop?.inset2 ? { ...state.dualViewCrop.inset2 } : null;
   if (state.dualViewCrop?.inset) dualCropRegions.inset = { ...state.dualViewCrop.inset };
   if (dualViewEnabled) dualViewEnabled.checked = state.dualViewCrop?.inset !== null;
   activeCropRegion = validEditorCrop(dualCropRegions.main) ? (dualViewEnabled?.checked ? "inset" : "main") : "main";
@@ -2621,6 +2619,7 @@ dualCropOverlay?.addEventListener("pointerdown", (event) => {
   const isDrawing = cropSelectionMode && event.target === dualCropOverlay;
   if (!box && !isDrawing) return;
   event.preventDefault();
+  dualCropOverlay.focus();
   const startX = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
   const startY = Math.max(0, Math.min(1, (event.clientY - bounds.top) / bounds.height));
   const cropName = isDrawing ? activeCropRegion : name;
@@ -2628,7 +2627,9 @@ dualCropOverlay?.addEventListener("pointerdown", (event) => {
   try { dualCropOverlay.setPointerCapture(event.pointerId); } catch {}
   const previousCrop = dualCropRegions[cropName] ? { ...dualCropRegions[cropName] } : null;
   const initial = dualCropRegions[cropName] ? { ...dualCropRegions[cropName] } : null;
-  const resizing = Boolean(box && event.target.closest(".crop-resize-handle") && initial);
+  const handle = event.target.closest(".crop-resize-handle");
+  const corner = handle?.dataset.corner || "se";
+  const resizing = Boolean(box && handle && initial);
   const moving = Boolean(box && !resizing && initial);
   const draw = (moveEvent) => {
     if (moveEvent.pointerId !== event.pointerId) return;
@@ -2637,10 +2638,19 @@ dualCropOverlay?.addEventListener("pointerdown", (event) => {
     if (moving) {
       dualCropRegions[cropName] = { ...initial, x: Math.max(0, Math.min(1 - initial.width, initial.x + x - startX)), y: Math.max(0, Math.min(1 - initial.height, initial.y + y - startY)) };
     } else if (resizing) {
-      dualCropRegions[cropName] = { ...initial, width: Math.max(0.04, Math.min(1 - initial.x, initial.width + x - startX)), height: Math.max(0.04, Math.min(1 - initial.y, initial.height + y - startY)) };
+      const minW = Math.min(1, 80 / (heroMediaVideo.videoWidth || 1280));
+      const minH = Math.min(1, 80 / (heroMediaVideo.videoHeight || 720));
+      const left = corner.includes("w") ? Math.max(0, Math.min(initial.x + initial.width - minW, initial.x + x - startX)) : initial.x;
+      const top = corner.includes("n") ? Math.max(0, Math.min(initial.y + initial.height - minH, initial.y + y - startY)) : initial.y;
+      const right = corner.includes("e") ? Math.min(1, Math.max(left + minW, initial.x + initial.width + x - startX)) : initial.x + initial.width;
+      const bottom = corner.includes("s") ? Math.min(1, Math.max(top + minH, initial.y + initial.height + y - startY)) : initial.y + initial.height;
+      dualCropRegions[cropName] = {x:left,y:top,width:right-left,height:bottom-top};
     } else {
-      const left = Math.min(startX, x), top = Math.min(startY, y);
-      dualCropRegions[cropName] = { x: left, y: top, width: Math.abs(x - startX), height: Math.abs(y - startY) };
+      const minW = Math.min(1, 80 / (heroMediaVideo.videoWidth || 1280));
+      const minH = Math.min(1, 80 / (heroMediaVideo.videoHeight || 720));
+      const width = Math.max(minW, Math.abs(x-startX));
+      const height = Math.max(minH, Math.abs(y-startY));
+      dualCropRegions[cropName] = {x:Math.min(Math.min(startX,x),1-width),y:Math.min(Math.min(startY,y),1-height),width,height};
     }
     renderDualCropRegions();
   };
