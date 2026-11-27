@@ -458,28 +458,8 @@ async function smartGenerateClip({
         String(duration),
       ];
       if (dualView) {
-        const cropExpr = (crop) => {
-          const values = [crop?.x, crop?.y, crop?.width, crop?.height].map(Number);
-          if (values.some((value) => !Number.isFinite(value)) || values[0] < 0 || values[1] < 0 || values[2] <= 0 || values[3] <= 0 || values[0] + values[2] > 1 || values[1] + values[3] > 1) {
-            throw new Error("Invalid dual view crop region.");
-          }
-          const [x, y, width, height] = values.map((value) => value.toFixed(5));
-          return `crop=trunc(iw*${width}/2)*2:trunc(ih*${height}/2)*2:trunc(iw*${x}/2)*2:trunc(ih*${y}/2)*2`;
-        };
-        const insetWidth = Math.max(120, Math.round(targetW * 0.30));
-        const mainW = cropExpr(dualView.main);
-        const baseFilter = `${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`;
-        const facecam = dualView.inset || dualView.inset2;
-        if (dualView.inset2 && dualView.inset) {
-          const filter = `[0:v]split=3[a][b][c];[a]${baseFilter}[base];[b]${cropExpr(dualView.inset)},scale=${insetWidth}:-2[f1];[c]${cropExpr(dualView.inset2)},scale=${insetWidth}:-2[f2];[base][f1]overlay=W-w-16:H-h-16[tmp];[tmp][f2]overlay=16:H-h-16[v]`;
-          args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
-        } else if (facecam) {
-          const insetW = cropExpr(facecam);
-          const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:-2[inset];[base][inset]overlay=x=W-w-16:y=H-h-16[v]`;
-          args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
-        } else {
-          args.push("-vf", baseFilter);
-        }
+        const filter = require("./frameEditorRegions").compositionFilter(dualView, targetW, targetH);
+        args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
       } else {
         args.push("-vf", `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`);
       }
