@@ -152,3 +152,6 @@ body.home-page .cf-back-control { display:none; }
 #clipEditorDialog .editor-live-layer[hidden] { display:none !important; }
 #clipEditorDialog .clip-editor-left-rail { align-self:stretch; }
 #clipEditorDialog .clip-editor-preview-column { display:flex; }
+
+#clipEditorDialog [hidden] { display:none !important; }
+#clipEditorDialog .clip-editor-layout { grid-template-rows:minmax(0,1fr); align-content:stretch; }

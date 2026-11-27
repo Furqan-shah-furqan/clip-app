@@ -1151,7 +1151,8 @@ function setProjectInfo(name, meta) {
 }
 
 function clearLocalVideoPreview() {
-  if (heroMediaVideo) {
+  // Metadata can finish after the frame editor starts loading its playable source.
+  if (heroMediaVideo && !clipEditorDialog?.open) {
     heroMediaVideo.pause();
     heroMediaVideo.removeAttribute("src");
     heroMediaVideo.hidden = true;
