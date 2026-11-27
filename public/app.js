@@ -1151,7 +1151,8 @@ function setProjectInfo(name, meta) {
 }
 
 function clearLocalVideoPreview() {
-  if (heroMediaVideo) {
+  // Metadata can finish after the frame editor starts loading its playable source.
+  if (heroMediaVideo && !clipEditorDialog?.open) {
     heroMediaVideo.pause();
     heroMediaVideo.removeAttribute("src");
     heroMediaVideo.hidden = true;
@@ -2258,15 +2259,12 @@ function renderDualCropRegions() {
   document.querySelectorAll("[data-crop-select]").forEach((button) => button.classList.toggle("is-active", button.dataset.cropSelect === activeCropRegion));
   const insetButton = document.getElementById("insetCropButton");
   if (insetButton) insetButton.disabled = !dualViewEnabled?.checked;
-  document.getElementById("clipEditorGenerate").disabled = !editorSourceLoaded() || !validEditorCrop(dualCropRegions.main);
+  const facesValid = !dualViewEnabled.checked || [dualCropRegions.inset,dualCropRegions.inset2].filter(Boolean).every(validEditorCrop);
+  document.getElementById("clipEditorGenerate").disabled = !editorSourceLoaded() || !validEditorCrop(dualCropRegions.main) || !facesValid;
   document.querySelectorAll("[data-crop-select]:not([data-crop-select=main])").forEach(button => { button.hidden = !dualViewEnabled.checked; });
   document.getElementById("removeSecondFacecam").hidden = !dualViewEnabled.checked || !dualCropRegions.inset2;
-  if (editorYoutubeComposition) {
-    editorYoutubeComposition.hidden = !editorYouTubeFrame || !editorYouTubePreviewReady;
-    if (editorPreviewCanvas) editorPreviewCanvas.hidden = !editorYoutubeComposition.hidden;
-    if (editorYoutubeInset) editorYoutubeInset.hidden = !dualViewEnabled?.checked;
-    positionYouTubePreviewCrops();
-  }
+  editorYoutubeComposition.hidden = true;
+  editorPreviewCanvas.hidden = true;
   drawEditorPreview();
 }
 
@@ -2307,36 +2305,7 @@ function drawCropToCanvas(context, source, crop, dx, dy, dw, dh) {
 }
 
 function drawEditorPreview() {
-  if (!editorPreviewCanvas || editorYoutubeComposition?.hidden === false) return;
-  const context = editorPreviewCanvas.getContext("2d");
-  if (!context) return;
-  const width = editorPreviewCanvas.width, height = editorPreviewCanvas.height;
-  context.fillStyle = "#121313";
-  context.fillRect(0, 0, width, height);
-  const videoReady = heroMediaVideo && heroMediaVideo.readyState >= 2 && heroMediaVideo.videoWidth;
-  const imageReady = editorPreviewImage && editorPreviewImage.complete && editorPreviewImage.naturalWidth;
-  const source = videoReady && !heroMediaVideo.hidden ? heroMediaVideo : imageReady ? editorPreviewImage : null;
-  if (!source) {
-    context.fillStyle = "#a5a49f";
-    context.font = "500 14px system-ui";
-    context.textAlign = "center";
-    context.fillText("Select crop areas", width / 2, height / 2);
-    return;
-  }
-  const mainCrop = validEditorCrop(dualCropRegions.main) ? dualCropRegions.main : { x: 0, y: 0, width: 1, height: 1 };
-  drawCropToCanvas(context, source, mainCrop, 0, 0, width, height);
-  for (const [index, crop] of [dualCropRegions.inset, dualCropRegions.inset2].entries()) {
-    if (!dualViewEnabled?.checked || !validEditorCrop(crop)) continue;
-    const sourceW = source.videoWidth || source.naturalWidth;
-    const sourceH = source.videoHeight || source.naturalHeight;
-    const cropW = sourceW * crop.width;
-    const cropH = sourceH * crop.height;
-    const scale = (width * 0.30) / cropW;
-    const insetW = cropW * scale, insetH = cropH * scale;
-    const inset = width * 16 / 1080;
-    const x = index === 0 ? width - insetW - inset : inset, y = height - insetH - inset;
-    drawCropToCanvas(context, source, crop, x, y, insetW, insetH);
-  }
+  updateLiveEditorPreview();
 }
 
 function updateEditorSourceSize(width, height) {
@@ -2545,8 +2514,8 @@ function openClipEditor() {
   editorSourceType = isYoutube ? "youtube" : "upload";
   dualCropRegions.main = state.dualViewCrop?.main ? { ...state.dualViewCrop.main } : null;
   dualCropRegions.inset = state.dualViewCrop?.inset ? { ...state.dualViewCrop.inset } : null;
-  dualCropRegions.inset2 = state.dualViewCrop?.inset2 ? { ...state.dualViewCrop.inset2 } : null;
-  if (state.dualViewCrop?.inset) dualCropRegions.inset = { ...state.dualViewCrop.inset };
+  dualCropRegions.inset2 = state.dualViewCrop?.inset2 ? structuredClone(state.dualViewCrop.inset2) : null;
+  if (state.dualViewCrop?.inset) dualCropRegions.inset = structuredClone(state.dualViewCrop.inset);
   if (dualViewEnabled) dualViewEnabled.checked = state.dualViewCrop?.inset !== null;
   activeCropRegion = validEditorCrop(dualCropRegions.main) ? (dualViewEnabled?.checked ? "inset" : "main") : "main";
   cropSelectionMode = false;
@@ -2596,6 +2565,7 @@ function closeClipEditor() {
   }
   if (dualCropOverlay) { dualCropOverlay.hidden = true; dualCropOverlay.dataset.drawing = "false"; }
   if (heroMediaVideo) heroMediaVideo.pause();
+  document.querySelectorAll("#editorLiveComposition video").forEach(video => video.pause());
   if (editorStageHome && dualCropStage) {
     if (editorStageBadge?.parentElement === editorStageHome) editorStageHome.insertBefore(dualCropStage, editorStageBadge);
     else editorStageHome.appendChild(dualCropStage);
@@ -3894,7 +3864,8 @@ function buildSmartSuggestBody() {
   }
   if (state.dualViewCrop?.main) {
     const region = crop => crop ? { x:crop.x, y:crop.y, w:crop.width, h:crop.height } : null;
-    body.regions = { gameplay:region(state.dualViewCrop.main), facecam1:region(state.dualViewCrop.inset), facecam2:region(state.dualViewCrop.inset2) };
+    const facecam = crop => crop ? { source:region(crop), placement:crop.placement } : null;
+    body.regions = { gameplay:{source:region(state.dualViewCrop.main)}, facecam1:facecam(state.dualViewCrop.inset), facecam2:facecam(state.dualViewCrop.inset2) };
     body.includeFloatingFacecam = Boolean(state.dualViewCrop.inset);
   }
 
@@ -4958,24 +4929,30 @@ persistStudioSession();
 let sharedPreviewRequest = 0;
 async function mountSharedVideoEditor(videoId) {
   const request = ++sharedPreviewRequest;
+  const deadline = Date.now() + 12 * 60 * 1000;
   destroyYouTubeEditorPlayers();
   editorYouTubeFrame?.remove(); editorYouTubeFrame = null;
   editorYoutubeComposition.hidden = true; editorPreviewCanvas.hidden = false;
   editorSourceType = "upload";
-  heroMediaVideo.pause(); heroMediaVideo.removeAttribute("src"); heroMediaVideo.load();
-  heroMediaVideo.hidden = true;
-  editorSourceType = "youtube";
-  editorYouTubeFrame = createYouTubeIframe(videoId, "clipEditorSourcePlayer", true);
-  dualCropStage.insertBefore(editorYouTubeFrame, dualCropOverlay);
-  editorPreviewImage = new Image();
-  editorPreviewImage.onload = drawEditorPreview;
-  editorPreviewImage.src = state.uploadedProject?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  heroMediaVideo.pause();
+  heroMediaVideo.removeAttribute("src");
+  heroMediaVideo.load();
+  heroMediaVideo.hidden = false;
+  const poster = state.uploadedProject?.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  heroMediaVideo.poster = poster;
+  document.querySelectorAll("#editorLiveComposition video").forEach(video => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    video.poster = poster;
+  });
   document.getElementById("retryEditorSource").hidden = true;
-  showClipEditorError("Phone shows the crop on the thumbnail while the shared video loads.");
+  showClipEditorError("Preparing source video…");
   try {
     await Promise.resolve();
     while (request === sharedPreviewRequest && clipEditorDialog.open) {
-      const response = await fetch("/api/youtube/editor-source", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoId})});
+      if (Date.now() > deadline) throw new Error("Source preparation timed out.");
+      const response = await fetch("/api/youtube/editor-source", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({videoId}),signal:AbortSignal.timeout(30000)});
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not prepare the video");
       if (request !== sharedPreviewRequest || !clipEditorDialog.open) return;
@@ -5044,4 +5021,123 @@ clipEditorDialog?.addEventListener("keydown", event => {
   crop.x = Math.max(0,Math.min(1-crop.width,crop.x + (event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0)/(heroMediaVideo.videoWidth || 1280)));
   crop.y = Math.max(0,Math.min(1-crop.height,crop.y + (event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0)/(heroMediaVideo.videoHeight || 720)));
   renderDualCropRegions();
+});
+
+// Source crop coordinates belong to the original video. Placement belongs to the
+// portrait output. Moving an inset never changes which source pixels it contains.
+function updateLiveEditorPreview() {
+  const composition = document.getElementById("editorLiveComposition");
+  if (!composition || !clipEditorDialog.open) return;
+  const sourceWidth = heroMediaVideo.videoWidth || 16;
+  const sourceHeight = heroMediaVideo.videoHeight || 9;
+  for (const layer of composition.querySelectorAll("[data-live-region]")) {
+    const name = layer.dataset.liveRegion;
+    const crop = dualCropRegions[name];
+    layer.hidden = !crop || (name !== "main" && !dualViewEnabled.checked);
+    if (layer.hidden) continue;
+    if (name !== "main" && !crop.placement) {
+      const w = .3;
+      const h = Math.min(.8, w * 9 / 16 * (sourceHeight * crop.height) / (sourceWidth * crop.width));
+      crop.placement = {x:name === "inset" ? 1-w-16/1080 : 16/1080,y:1-h-16/1920,w,h};
+    }
+    const placement = name === "main" ? {x:0,y:0,w:1,h:1} : crop.placement;
+    Object.assign(layer.style, {left:`${placement.x*100}%`,top:`${placement.y*100}%`,width:`${placement.w*100}%`,height:`${placement.h*100}%`});
+    layer.classList.toggle("is-active", name === activeCropRegion);
+    const video = layer.querySelector("video");
+    const sourceUrl = heroMediaVideo.currentSrc || heroMediaVideo.getAttribute("src");
+    if (sourceUrl && video.getAttribute("src") !== sourceUrl) {
+      video.src = sourceUrl;
+      video.muted = true;
+      video.load();
+    }
+    const scale = Math.max(layer.clientWidth/(sourceWidth*crop.width),layer.clientHeight/(sourceHeight*crop.height));
+    Object.assign(video.style, {
+      width:`${sourceWidth*scale}px`,height:`${sourceHeight*scale}px`,
+      left:`${(layer.clientWidth-sourceWidth*crop.width*scale)/2-crop.x*sourceWidth*scale}px`,
+      top:`${(layer.clientHeight-sourceHeight*crop.height*scale)/2-crop.y*sourceHeight*scale}px`
+    });
+    if (name !== "main" && !layer.querySelector(".placement-handle")) {
+      for (const corner of ["nw","ne","sw","se"]) {
+        const handle = document.createElement("i");
+        handle.className = "placement-handle";
+        handle.dataset.corner = corner;
+        layer.append(handle);
+      }
+    }
+  }
+}
+function synchronizeEditorVideos(force = false) {
+  if (!clipEditorDialog.open || !editorSourceLoaded()) return;
+  document.querySelectorAll("#editorLiveComposition video").forEach(video => {
+    if (video.parentElement.hidden || video.readyState < 2) return;
+    if (force || Math.abs(video.currentTime-heroMediaVideo.currentTime) > .25) video.currentTime = heroMediaVideo.currentTime;
+    if (heroMediaVideo.paused || heroMediaVideo.ended) video.pause();
+    else if (video.paused) video.play().catch(() => {});
+    video.playbackRate = heroMediaVideo.playbackRate;
+  });
+}
+for (const event of ["play","pause","seeking","seeked","timeupdate","ratechange","ended"]) {
+  heroMediaVideo.addEventListener(event, () => synchronizeEditorVideos(event === "seeked"));
+}
+document.querySelectorAll("#editorLiveComposition video").forEach(video => {
+  video.muted = true;
+  video.addEventListener("loadeddata", () => {
+    video.removeAttribute("poster");
+    synchronizeEditorVideos(true);
+  });
+});
+const liveComposition = document.getElementById("editorLiveComposition");
+liveComposition.addEventListener("pointerdown", event => {
+  const layer = event.target.closest("[data-live-region]");
+  const name = layer?.dataset.liveRegion;
+  if (!name || name === "main" || name !== activeCropRegion) return;
+  const crop = dualCropRegions[name];
+  if (!crop?.placement) return;
+  event.preventDefault();
+  liveComposition.focus();
+  const bounds = liveComposition.getBoundingClientRect();
+  const initial = {...crop.placement};
+  const corner = event.target.dataset.corner;
+  const startX = event.clientX, startY = event.clientY;
+  liveComposition.setPointerCapture(event.pointerId);
+  const move = next => {
+    if (next.pointerId !== event.pointerId) return;
+    const dx = (next.clientX-startX)/bounds.width;
+    const dy = (next.clientY-startY)/bounds.height;
+    if (!corner) {
+      crop.placement.x = Math.max(0,Math.min(1-initial.w,initial.x+dx));
+      crop.placement.y = Math.max(0,Math.min(1-initial.h,initial.y+dy));
+    } else {
+      // Keep the placement aspect ratio, with a minimum 20% output width.
+      const ratio = initial.h/initial.w;
+      const fixedX = corner.includes("w") ? initial.x+initial.w : initial.x;
+      const fixedY = corner.includes("n") ? initial.y+initial.h : initial.y;
+      const maxW = Math.min(corner.includes("w") ? fixedX : 1-fixedX,(corner.includes("n") ? fixedY : 1-fixedY)/ratio);
+      const w = Math.min(maxW,Math.max(.2,initial.w+(corner.includes("w") ? -dx : dx)));
+      const h = w*ratio;
+      crop.placement = {x:corner.includes("w") ? fixedX-w : fixedX,y:corner.includes("n") ? fixedY-h : fixedY,w,h};
+    }
+    updateLiveEditorPreview();
+  };
+  const finish = next => {
+    if (next.pointerId !== event.pointerId) return;
+    liveComposition.removeEventListener("pointermove",move);
+    liveComposition.removeEventListener("pointerup",finish);
+    liveComposition.removeEventListener("pointercancel",finish);
+    liveComposition.releasePointerCapture(event.pointerId);
+  };
+  liveComposition.addEventListener("pointermove",move);
+  liveComposition.addEventListener("pointerup",finish);
+  liveComposition.addEventListener("pointercancel",finish);
+});
+liveComposition.addEventListener("keydown", event => {
+  if (!event.key.startsWith("Arrow")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const placement = dualCropRegions[activeCropRegion]?.placement;
+  if (activeCropRegion === "main" || !placement) return;
+  const step = event.shiftKey ? 10 : 1;
+  placement.x = Math.max(0,Math.min(1-placement.w,placement.x+(event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0)/1080));
+  placement.y = Math.max(0,Math.min(1-placement.h,placement.y+(event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0)/1920));
+  updateLiveEditorPreview();
 });

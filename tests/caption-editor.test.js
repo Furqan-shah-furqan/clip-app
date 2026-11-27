@@ -274,7 +274,7 @@ test('layout loops through all four grids and pauses for editing/reduced motion'
     setTimeout:fn=>{next=fn;return 1;},clearTimeout(){},stagger:()=>0,
     addEventListener:(name,fn)=>events[name]=fn,
     createLayout:()=>({update(fn,options){fn({root});states.push(root.dataset.grid);options.onComplete();return {pause(){}};}})});
-  const code=fs.readFileSync(path.join(rootPath(),'public/captionLayout.js'),'utf8').replace(/^import .*;\n/,'');
+  const code=fs.readFileSync(path.join(rootPath(),'public/captionLayout.js'),'utf8').replace(/\r\n/g,'\n').replace(/^import .*;\n/,'');
   vm.runInContext(code,ctx);
   for(let i=0;i<4;i++)next();
   assert.deepEqual(states,['2','3','4','1']);

@@ -10,7 +10,7 @@ const root = path.resolve(__dirname, '..');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 function editorFunctions(names, extra = {}) {
-  const source = fs.readFileSync(path.join(root, 'public/captions.js'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'public/captions.js'), 'utf8').replace(/\r\n/g, '\n');
   const context = vm.createContext({ uniqueId: () => 'id', clamp: (v, a, b) => Math.max(a, Math.min(v, b)), ...extra });
   for (const name of names) {
     const match = new RegExp(`^(?:async )?function ${name}\\(`, 'm').exec(source);

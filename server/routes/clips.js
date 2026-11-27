@@ -372,10 +372,11 @@ router.post("/smart-generate", async (req, res) => {
     } = req.body || {};
     let dualView = req.body?.dualView;
     if (regions !== undefined) {
-      const valid = crop => crop && [crop.x,crop.y,crop.w,crop.h].every(Number.isFinite) && crop.x >= 0 && crop.y >= 0 && crop.w > 0 && crop.h > 0 && crop.x + crop.w <= 1 && crop.y + crop.h <= 1;
-      if (typeof includeFloatingFacecam !== "boolean" || !regions || !valid(regions.gameplay) || (regions.facecam1 != null && !valid(regions.facecam1)) || (regions.facecam2 != null && !valid(regions.facecam2))) return res.status(400).json({error:"Regions must contain a gameplay crop and optional facecam crops with finite normalized x, y, w, h inside the source video. includeFloatingFacecam must be boolean."});
-      const convert = crop => crop ? {x:crop.x,y:crop.y,width:crop.w,height:crop.h} : null;
-      dualView = {main:convert(regions.gameplay),inset:includeFloatingFacecam ? convert(regions.facecam1) : null,inset2:includeFloatingFacecam ? convert(regions.facecam2) : null};
+      try {
+        dualView = require("../services/frameEditorRegions").normalizeRegions(regions, includeFloatingFacecam);
+      } catch (error) {
+        return res.status(400).json({error:error.message});
+      }
     }
 
     const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
