@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="dropdowns.css?v=20260922" />
     <link rel="stylesheet" href="hero.css?v=20261125-layout" />
     <link rel="stylesheet" href="/clipflow-input.css?v=20261125" />
-  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js?v=theme-1" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=card-2"><script src="/workspace-sidebar.js?v=20261125-layout" defer></script><link rel="stylesheet" href="clip-input-card.css?v=card-3"><link rel="stylesheet" href="/theme-system.css?v=rollback-88c7f2c"><script src="/theme-system.js?v=1" defer></script></head>
+  <link rel="stylesheet" href="/customer.css"><script src="/customer.js" defer></script><link rel="stylesheet" href="/navigation.css"><script src="/navigation.js?v=theme-1" defer></script><link rel="stylesheet" href="/workspace-sidebar.css?v=card-2"><script src="/workspace-sidebar.js?v=20261125-layout" defer></script><link rel="stylesheet" href="clip-input-card.css?v=card-3"><link rel="stylesheet" href="/theme-system.css?v=toolbar-facecams-1"><script src="/theme-system.js?v=1" defer></script></head>
   <body class="home-page theme-dark">
     <!-- Ambient glowing lights matching captions page -->
     <div class="scene scene-a"></div>
@@ -183,7 +183,7 @@
                     <video id="heroMediaVideo" controls playsinline preload="metadata" hidden></video>
                     <div class="dual-crop-overlay" id="dualCropOverlay" hidden>
                       <div class="dual-crop-box is-main" data-crop="main"><span>Gameplay</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
-                      <div class="dual-crop-box is-inset" data-crop="inset"><span>Facecam</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
+                      <div class="dual-crop-box is-inset" data-crop="inset2" hidden><span>Facecam 2</span><i class="crop-resize-handle" aria-hidden="true"></i></div><div class="dual-crop-box is-inset" data-crop="inset"><span>Facecam</span><i class="crop-resize-handle" aria-hidden="true"></i></div>
                     </div>
                   </div>
                   <span class="hero-media-badge" id="heroMediaBadge">Source preview</span>
@@ -614,16 +614,17 @@
     </main>
     </div>
 
-    <dialog class="clip-editor-dialog" id="clipEditorDialog" aria-labelledby="clipEditorTitle">
+    <dialog class="clip-editor-dialog" id="clipEditorDialog" aria-label="Frame Editor">
       <div class="clip-editor-shell">
         <div class="clip-editor-option-row">
           <label class="clip-editor-toggle"><input type="checkbox" id="dualViewEnabled" checked /> Include floating facecam</label>
           <div class="clip-editor-top-crops" role="group" aria-label="Choose crop">
             <button class="clip-editor-crop-button is-active" type="button" data-crop-select="main"><strong>1 Gameplay</strong><small>Main vertical view</small></button>
             <button class="clip-editor-crop-button" id="insetCropButton" type="button" data-crop-select="inset"><strong>2 Facecam</strong><small>Floating inset</small></button>
+            <button class="clip-editor-crop-button" type="button" data-crop-select="inset2">3 Facecam 2</button>
           </div>
-          <span id="clipEditorSourceName">Uploaded video</span>
-          <button id="detectFacecamButton" type="button">Detect facecam</button><button class="clip-editor-source-play" id="clipEditorPlay" type="button">Play source</button>
+          <span hidden id="clipEditorSourceName">Uploaded video</span>
+          <button id="detectFacecamButton" class="editor-icon-button" type="button" aria-label="Detect facecam" title="Detect facecam"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8V3h5m8 0h5v5M3 16v5h5m8 0h5v-5"/><path d="M7 10a5 5 0 0 1 10 0v3a5 5 0 0 1-10 0z"/><path d="M10 12h4m-2-2v4"/></svg></button><button class="clip-editor-source-play editor-icon-button" id="clipEditorPlay" type="button" aria-label="Play source" title="Play source"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4v16l13-8z"/></svg></button>
           <div class="clip-editor-actions"><button class="clip-editor-cancel" id="clipEditorCancel" type="button">Cancel</button><button class="clip-editor-generate" id="clipEditorGenerate" type="button">Generate clips <span aria-hidden="true">→</span></button></div>
           <button class="clip-editor-close" id="clipEditorClose" type="button" aria-label="Close editor">×</button>
         </div>
@@ -634,8 +635,9 @@
                 <canvas id="editorPreviewCanvas" width="360" height="640" aria-label="Preview of the vertical clip"></canvas>
                 <div class="editor-youtube-composition" id="editorYoutubeComposition" hidden>
                   <div class="editor-youtube-main yt-crop-window" id="editorYoutubeMain"></div>
-                  <div class="editor-youtube-inset yt-crop-window" id="editorYoutubeInset"></div>
+                  <div class="editor-youtube-inset yt-crop-window" id="editorYoutubeInset"></div><div class="editor-youtube-inset yt-crop-window" id="editorYoutubeInset2"></div>
                 </div>
+                <div id="phoneFacecamDragLayer"><div data-facecam-move="inset" hidden></div><div data-facecam-move="inset2" hidden></div></div>
                 <span class="phone-preview-live" aria-hidden="true"></span>
               </div>
             </section>
@@ -713,8 +715,8 @@
     </div>
 
     <script src="captionClient.js?v=20260922"></script>
-    <script src="/generation-copy.js?v=1"></script><script src="app.js?v=rollback-88c7f2c"></script>
+    <script src="/generation-copy.js?v=1"></script><script src="app.js?v=toolbar-facecams-1"></script>
     <script src="dropdowns.js?v=20260922"></script>
-    <script src="hero.js?v=rollback-88c7f2c"></script>
+    <script src="hero.js?v=toolbar-facecams-1"></script>
   </body>
 </html>

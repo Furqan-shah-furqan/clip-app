@@ -470,12 +470,24 @@ async function smartGenerateClip({
         const insetHeight = Math.max(120, Math.round(targetH * 0.28));
         const mainW = cropExpr(dualView.main);
         const baseFilter = `${mainW},scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`;
-        if (dualView.inset) {
-          const insetW = cropExpr(dualView.inset);
-          const filter = `[0:v]split=2[mainIn][insetIn];[mainIn]${baseFilter}[base];[insetIn]${insetW},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease,drawbox=x=0:y=0:w=iw:h=ih:color=white@0.95:t=4[inset];[base][inset]overlay=x=W-w-24:y=24[v]`;
-          args.push("-filter_complex", filter, "-map", "[v]", "-map", "0:a?");
+        const facecams = [dualView.inset,dualView.inset2].map((crop,index)=>({crop,index})).filter(item=>item.crop);
+        if (facecams.length) {
+          const outputs = ['[mainIn]',...facecams.map((_,index)=>`[faceIn${index}]`)];
+          const filters = [`[0:v]split=${outputs.length}${outputs.join('')}`,`[mainIn]${baseFilter}[base]`];
+          let base = 'base';
+          facecams.forEach(({crop,index},layer) => {
+            filters.push(`[faceIn${layer}]${cropExpr(crop)},scale=${insetWidth}:${insetHeight}:force_original_aspect_ratio=decrease[face${layer}]`);
+            const position = crop.position;
+            if (position && (![position.x,position.y].every(Number.isFinite) || position.x < 0 || position.y < 0 || position.x > 1 || position.y > 1)) throw new Error('Invalid facecam position');
+            const x = position ? `min(max(W*${position.x},0),W-w)` : index === 0 ? 'W-w-24' : '24';
+            const y = position ? `min(max(H*${position.y},0),H-h)` : '24';
+            const output = layer === facecams.length-1 ? 'v' : `composed${layer}`;
+            filters.push(`[${base}][face${layer}]overlay=x='${x}':y='${y}'[${output}]`);
+            base = output;
+          });
+          args.push('-filter_complex',filters.join(';'),'-map','[v]','-map','0:a?');
         } else {
-          args.push("-vf", baseFilter);
+          args.push('-vf',baseFilter);
         }
       } else {
         args.push("-vf", `scale=${targetW}:${targetH}:force_original_aspect_ratio=increase,crop=${targetW}:${targetH}`);
