@@ -368,16 +368,8 @@ router.post("/smart-generate", async (req, res) => {
       sourceType, inputPath, sourceUrl, storageUrl, segments,
       maxClips, minScore, clipLengthSec, minDurationSec,
       maxDurationSec, aspectRatio, videoDurationSec,
-      regions, includeFloatingFacecam,
+      dualView,
     } = req.body || {};
-    let dualView = req.body?.dualView;
-    if (regions !== undefined) {
-      try {
-        dualView = require("../services/frameEditorRegions").normalizeRegions(regions, includeFloatingFacecam);
-      } catch (error) {
-        return res.status(400).json({error:error.message});
-      }
-    }
 
     const normalizedSourceType = sourceType === "youtube" ? "youtube" : "upload";
 
@@ -389,10 +381,10 @@ router.post("/smart-generate", async (req, res) => {
     }
     if (dualView) {
       const validCrop = (crop) => crop && [crop.x, crop.y, crop.width, crop.height].every(Number.isFinite) &&
-        crop.x >= 0 && crop.y >= 0 && crop.width > 0 && crop.height > 0 &&
+        crop.x >= 0 && crop.y >= 0 && crop.width >= 0.04 && crop.height >= 0.04 &&
         crop.x + crop.width <= 1 && crop.y + crop.height <= 1;
-      if (!validCrop(dualView.main) || (dualView.inset && !validCrop(dualView.inset)) || (dualView.inset2 && (!validCrop(dualView.inset2)))) {
-        return res.status(400).json({ error: "Each crop region must have positive dimensions and stay inside the source video." });
+      if (!validCrop(dualView.main) || (dualView.inset && !validCrop(dualView.inset))) {
+        return res.status(400).json({ error: "Each crop region must be inside the video frame and at least 4% of its size." });
       }
     }
 
@@ -419,8 +411,6 @@ router.post("/smart-generate", async (req, res) => {
           minDurationSec: Number(minDurationSec) || 25,
           maxDurationSec: Number(maxDurationSec) || 90,
           aspectRatio: aspectRatio || "9:16",
-          regions: regions || null,
-          includeFloatingFacecam: includeFloatingFacecam ?? Boolean(dualView?.inset),
           dualView: dualView || null,
           videoDurationSec: Number(videoDurationSec) || 0,
           metadata: req.body?.metadata || (videoDurationSec ? { duration: Number(videoDurationSec) } : null),
